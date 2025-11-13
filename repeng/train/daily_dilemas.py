@@ -231,7 +231,7 @@ def process_daily_dilemma_results(df_res, dd_dataset, df_labels):
         df_res2[f'logscore_{col}'] = df_res2['logratio_act'] * df_res2[col]
 
     cols_labels = [c for c in df_res2.columns if c.startswith("score_")]
-    return df_res2, df_res2[cols_labels].mean()
+    return df_res2.copy(), df_res2[cols_labels].mean()
 
 
 # sort the dataset by values
@@ -378,25 +378,32 @@ def compute_transfer_summary(df_results, target_col='logscore_Virtue/Truthfulnes
             best_coeff = max(effects.items(), key=lambda x: abs(x[1]))[0]
             max_transfer = effects[best_coeff]
             
-            # Test monotonic dose-response using LOG-SPACE metric (linear in intervention space)
-            # Collect all samples at -c, 0, +c with their coefficient labels
-            dose_response_data = []
-            for coeff in [-coeff_mag, 0, coeff_mag]:
-                samples = df_m.query('coeff == @coeff')[target_col_log].dropna().values
-                for sample_val in samples:
-                    dose_response_data.append({'coeff': coeff, 'score': sample_val})
+            # Test monotonic dose-response in TRAINING RANGE [-1, 0, 1] only
+            # Use Spearman's rho to measure monotonicity + effect size together
+            training_coeffs = [-1.0, 0.0, 1.0]
+            mean_scores = []
+            for coeff in training_coeffs:
+                vals = df_m.query('coeff == @coeff')[target_col_log].dropna()
+                if len(vals) > 0:
+                    mean_scores.append(vals.mean())
+                else:
+                    mean_scores.append(np.nan)
             
-            if len(dose_response_data) >= 10:  # Need reasonable sample size
+            # Spearman correlation: 1.0 = perfect monotonic, -1.0 = reversed, 0 = random
+            if not any(np.isnan(mean_scores)):
                 try:
-                    df_dose = pd.DataFrame(dose_response_data)
-                    # Linear regression: logscore ~ coeff (tests if effect scales with dose)
-                    result = stats.linregress(df_dose['coeff'], df_dose['score'])
-                    p_value = result.pvalue  # Two-tailed test for slope != 0
+                    from scipy.stats import spearmanr
+                    rho, p_value = spearmanr(training_coeffs, mean_scores)
+                    # We want positive steering (coeff=1) to increase truthfulness
+                    # So rho should be positive. If negative, steering is backwards.
+                    monotonicity_score = rho
                 except Exception:
-                    logger.exception("Error computing dose-response p-value")
+                    logger.exception("Error computing Spearman correlation")
                     p_value = np.nan
+                    monotonicity_score = 0.0
             else:
                 p_value = np.nan
+                monotonicity_score = 0.0
             
             # Get degradation at best coeff
             # FIXME should be mean of both signs at that magnitude?
@@ -426,6 +433,7 @@ def compute_transfer_summary(df_results, target_col='logscore_Virtue/Truthfulnes
                 'best_coeff': best_coeff,
                 'transfer_effect': max_transfer,
                 'p_value': p_value,
+                'monotonicity': monotonicity_score,
                 'degradation_nll': degradation,
                 'mean_collateral': mean_collateral,
                 'total_values': len(score_cols),
@@ -468,7 +476,12 @@ def format_results_table(df_results, config, target_col='score_Virtue/Truthfulne
         })
 
     df_table = pd.DataFrame(rows).sort_values("Target Effect\nΔ Truth ↑", ascending=False).set_index("Method")
-    df_table['Normalized Gain (%)'] = 100 * df_table['Target Effect\nΔ Truth ↑'] / (1 + df_table['Output Quality\nΔ NLL ↓'])
+    
+    # Normalized Gain: Effect weighted by monotonicity (Spearman rho), divided by cost
+    # rho ∈ [-1, 1]: 1.0 = perfect monotonic, -1.0 = reversed, 0 = random
+    # Only positive rho contributes (negative = steering backwards)
+    df_table['Monotonicity\nρ'] = summary.set_index('method')['monotonicity']
+    df_table['Normalized Gain (%)'] = 100 * df_table['Target Effect\nΔ Truth ↑'] * np.maximum(0, df_table['Monotonicity\nρ']) / (1 + df_table['Output Quality\nΔ NLL ↓'])
     df_table = df_table.sort_values('Normalized Gain (%)', ascending=False)
 
     # TODO consider tabulet or great_tables

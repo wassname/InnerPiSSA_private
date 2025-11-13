@@ -139,17 +139,24 @@ def contrastive_steering_loss_with_ref(
         loss_mask = hs_mask[:, :-1].clone()
 
     
-    # Compute projections onto frozen PCA direction (all k directions initially)
-    # Handle both 1D [d] and 2D [k, d] inputs
+    # Compute projections onto per-sample reference direction
+    # Handle both fixed direction [k, d] and per-sample direction [b, t, d]
     if pref_dir.ndim == 1:
         pref_dir = pref_dir.unsqueeze(0)  # [d] -> [1, d]
-    pref_dir = safe_norm(pref_dir, p=p, dim=-1, eps=eps)  # (k, d) normalized
     
     pref_dir_pi = hs_pi_pos - hs_pi_neg
     pref_dir_ref = hs_ref_cho - hs_ref_rej
     
-    signed_proj_pi = torch.einsum("...d,kd->...k", pref_dir_pi, pref_dir)  # (b,t,k)
-    signed_proj_ref = torch.einsum("...d,kd->...k", pref_dir_ref, pref_dir)
+    if pref_dir.ndim == 2:
+        # Fixed direction case: (k, d)
+        pref_dir = safe_norm(pref_dir, p=p, dim=-1, eps=eps)  # (k, d) normalized
+        signed_proj_pi = torch.einsum("...d,kd->...k", pref_dir_pi, pref_dir)  # (b,t,k)
+        signed_proj_ref = torch.einsum("...d,kd->...k", pref_dir_ref, pref_dir)
+    else:
+        # Per-sample direction case: (b, t, d)
+        pref_dir = safe_norm(pref_dir, p=p, dim=-1, eps=eps)  # (b, t, d) normalized
+        signed_proj_pi = (pref_dir_pi * pref_dir).sum(dim=-1, keepdim=True)  # (b, t, 1)
+        signed_proj_ref = (pref_dir_ref * pref_dir).sum(dim=-1, keepdim=True)  # (b, t, 1)
     
     # # Select top-k directions per sample based on ref magnitude
     # if top_k_directions is not None and top_k_directions < signed_proj_ref.shape[-1]:

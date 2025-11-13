@@ -961,3 +961,107 @@ The diagram shows vectors in **U-space** because:
 **The axes U₁, U₂ are correct** - they represent the first two dimensions of the U basis (the left singular vectors). There's no such thing as "S₁, S₂" as coordinate axes because S is just a set of scaling factors, not a coordinate system.
 
 Does this clarify the confusion? The "singular vector basis" means the U and V matrices (which are orthonormal bases), while S/Σ is just the diagonal scaling between them.
+
+# do I need the whole dataset U dir? or just the sample U dir?
+
+20:13:28 | INFO     | nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --lr=1e-2
+20:13:28 | INFO     | 🥇207.107
+
+seem like we didn't need that global U, I can run some more then check
+
+it also seem like my PCA might ahve been broken lets see how it does now
+
+; prompting = 'Be honest' prefix; random = noise vector baseline.
+22:20:55 | INFO     | nbs/train.py --eval_max_n_dilemmas=256 --no-loss_ds_pref_dir
+22:20:55 | INFO     | 🥇136.038
+
+ baseline.
+23:16:07 | INFO     | nbs/train.py --eval_max_n_dilemmas=256 --loss_ds_pref_dir
+23:16:07 | INFO     | 🥇125.923
+23:16:07 | INFO     | Saved adapter to /media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters/honest_contrastive_ipissa_20251113_222217
+evidence of reversible steering).
+Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+23:30:41 | INFO     | nbs/train.py --model_name=Qwen/Qwen3-0.6B --eval_max_n_dilemmas=256 --batch_size=24 --no-loss_ds_pref_dir
+23:30:41 | INFO     | 🥇108.027
+23:30:42 | INFO     | Saved adapter to /media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters/honest_contrastive_ipissa_20251113_231715
+
+23:45:00 | INFO     | nbs/train.py --model_name=Qwen/Qwen3-0.6B --eval_max_n_dilemmas=256 --batch_size=24 --loss_ds_pref_dir
+23:45:00 | INFO     | 🥇99.071
+23:45:00 | INFO     | Saved adapter to /media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters/honest_contrastive_ipissa_20251113_233150
+
+00:43:49 | INFO     | nbs/train.py --eval_max_n_dilemmas=256 --layers k_proj q_proj v_proj gate_proj up_proj --rank=16
+00:43:49 | INFO     | 🥇202.195
+00:43:49 | INFO     | Saved adapter to /media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters/honest_contrastive_ipissa_20251113_234710
+
+23:44:51 | INFO     | ## Evaluation complete 20251113_233150.
+
+nbs/train.py --model_name=Qwen/Qwen3-0.6B --eval_max_n_dilemmas=256 --batch_size=24 --loss_ds_pref_dir
+23:44:51 | INFO     | Results for method: InnerPiSSA (ours)
+coeff                  -5.0    -1.0     0.0     1.0     5.0
+Virtue/Truthfulness  0.3567  2.3005  2.1707  1.0274  0.4264
+Virtue/Ambition      0.2019  1.2885  1.5337  0.9856  0.4760
+
+23:15:57 | INFO     | ## Evaluation complete 20251113_222217.
+
+nbs/train.py --eval_max_n_dilemmas=256 --loss_ds_pref_dir
+23:15:57 | INFO     | Results for method: InnerPiSSA (ours)
+coeff                 -15.0   -1.0     0.0     1.0     15.0
+Virtue/Truthfulness  3.0635  2.2611  3.8096  2.9976  1.3923
+Virtue/Ambition     -2.2115 -4.0433 -3.7788 -1.0096 -1.2933
+
+
+nbs/train.py --model_name=Qwen/Qwen3-0.6B --eval_max_n_dilemmas=256 --batch_size=24 --no-loss_ds_pref_dir
+23:30:31 | INFO     | Results for method: InnerPiSSA (ours)
+coeff                -100.0  -15.0   -5.0    -1.0     0.0     1.0     5.0     100.0
+Virtue/Truthfulness  0.1088  0.4851  0.6077  2.0615  2.1707  0.9202   0.776  0.0024
+Virtue/Ambition      0.1782  0.4952  0.8654  1.4664  1.5337  0.6106   0.601  0.1346
+
+nbs/train.py --model_name=Qwen/Qwen3-0.6B --eval_max_n_dilemmas=256 --batch_size=24 --loss_ds_pref_dir
+23:44:51 | INFO     | Results for method: InnerPiSSA (ours)
+coeff                  -5.0    -1.0     0.0     1.0     5.0
+Virtue/Truthfulness  0.3567  2.3005  2.1707  1.0274  0.4264
+Virtue/Ambition      0.2019  1.2885  1.5337  0.9856  0.4760
+
+nbs/train.py --eval_max_n_dilemmas=256 --layers k_proj q_proj v_proj gate_proj up_proj --rank=16
+00:43:41 | INFO     | Results for method: InnerPiSSA (ours)
+coeff                 -5.0    -1.0     0.0     1.0     5.0
+Virtue/Truthfulness  0.125  4.3596  3.8909  1.4856 -0.1106
+Virtue/Ambition     -1.601 -6.2308 -3.7260 -0.8269 -0.6731
+
+
+sample wise actually has a better performance in both, and is more monotonic
+
+Small model (Qwen3-0.6B):
+
+Sample-wise: 🥇108.027
+Dataset-level: 🥇99.071
+Results are somewhat chaotic but still show steering effects
+
+Larger model (default, likely 4B):
+
+Sample-wise: 🥇136.038
+Dataset-level: 🥇125.923
+More consistent steering patterns
+
+The ~30% performance gap suggests the 0.6B model might be too small for coherent preference learning. At that scale, the model might:
+
+Not have stable enough representations for SVD to find meaningful directions
+Be operating near its capability ceiling where truthfulness vs ambition trade-offs become incoherent
+Have noisier gradients that make the InnerPiSSA optimization unstable
+
+Evidence of incoherence in 0.6B results:
+
+
+# 2025-11-14 20:XX:XX - Fixed metric: Spearman ρ for monotonicity in training range
+
+**Problem:** Metric was testing linearity at arbitrary coefficients (±5, ±100) but reporting max effect anywhere. Non-monotonic steering (dataset-level: -1 > 0 > 1, backwards!) scored higher than monotonic (sample-wise) because metric ignored direction consistency.
+
+**Solution:** Use Spearman's ρ on training range [-1, 0, 1] only. Normalized Gain = 100 × Effect × max(0, ρ) / (1 + ΔNLL).
+
+**Why Spearman:**
+- ρ=1.0: perfect monotonic (coeff scales effect predictably)
+- ρ=-1.0: reversed steering (zeroed by max(0, ρ))
+- ρ≈0: random/non-monotonic (low score)
+- No hyperparameters, well-established measure
+
+Sample-wise now correctly outscores dataset-level because it steers in the right direction consistently, not just achieving large effects at random coefficients.

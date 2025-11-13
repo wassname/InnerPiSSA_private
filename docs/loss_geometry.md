@@ -10,7 +10,7 @@ A note on the pizza puns, we don't want to be on the nose, and we don't want to 
 - We might even color the inner space from cheesy yellow on the inside to darker brown towards the crust. We can use yellow and red and brown colors (but they have to be visually distinct enough to see the boundary, so if we shade brown we can use yellow and red for the vectors etc)
 
 ## Geometric Components
-
+****
 ### Space Definition
 **Pizza Space** refers to the full U-space from SVD(W) = U·S·V^T of layer weights at depth N-3. **InnerPiSSA space** is the valid region within the coherence boundary where `log p_π(y|x) ≥ log p_ref(y|x) - threshold`. This constraint, originally in probability space, backprojects to a circular boundary in U-space (the "pizza crust").
 

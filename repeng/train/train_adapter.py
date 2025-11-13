@@ -78,7 +78,7 @@ class TrainingConfig:
     lr: float = 6e-4
     weight_decay: float = 0.1
     log_n: int = 10 # log this many times per training
-    grad_accum_steps: int = 10
+    grad_accum_steps: int = 8
     quick: bool = False
     val_split: float = 0.15  # fraction of data for validation
     early_stop_patience: int = 5  # stop if val loss doesn't improve for N validation checks
@@ -88,11 +88,12 @@ class TrainingConfig:
     scale_s: Literal["add2", "add_tanh", "mult", "none"] = "add2"
     ipissa_rotate_u: bool = False # can be less stable as it modified output space and diverges from loss space
     ipissa_rotate_v: bool = True
-    full_loss_u: bool = True
+    loss_full_u: bool = True # use full loss on u projection instead of just the adapted part
+    loss_ds_pref_dir: bool = True # extract prefered direction the reference model hs on the entire dataset (true), not just the per sample ref hs
 
     # Dataset
     dataset_name: str = "honest"
-    dataset_max_samples: Optional[int] = 1000
+    dataset_max_samples: Optional[int] = 800
 
     # Loss
     loss_type: Literal["logsigmoid", "softplus2", "softplus_only", "tanh2v1"] = "logsigmoid"
@@ -195,11 +196,12 @@ def create_dataset(config: TrainingConfig, tokenizer, max_size: Optional[int] = 
     dataset = Dataset.from_list(data)
 
     if (max_size is not None) and (max_size < len(dataset)//2):
-        max_size2 = int(max_size * (1 + config.val_split))
+        # To get max_size training pairs after split, expand by 1/(1-val_split)
+        max_size2 = int(max_size / (1 - config.val_split))
         max_size2 = min(max_size2, len(dataset) // 2)
         dataset = dataset.select(range(max_size2 * 2))
-        honest_dataset = honest_dataset[:max_size2 * 2]
-        logger.debug(f"Cropping train dataset to {max_size2} pairs.")
+        honest_dataset = honest_dataset[:max_size2]
+        logger.debug(f"Cropping to {max_size2} pairs (will split to ~{max_size} train).")
 
     # Split into train/val
     val_size = int(config.val_split * len(honest_dataset))
@@ -355,12 +357,12 @@ def extract_U_matrices(model, loss_layers: List[str], config: TrainingConfig):
     """Extract SVD U matrices for loss projection."""
     Uw_full = {}
 
-    if config.full_loss_u:
+    if config.loss_full_u:
         for lk in loss_layers:
             m = model.get_submodule(lk)
             W = m.weight.data.float()
             U, S, Vh = torch.linalg.svd(W, full_matrices=False)
-            Uw_full[lk] = U[:, :-1].to(model.device).float()
+            Uw_full[lk] = U.to(model.device).float()
 
         shapes = {k: v.shape for k, v in Uw_full.items()}
         logger.info(f"Extracted U matrices: {shapes}")
@@ -431,6 +433,8 @@ def compute_batch_loss(
     mask_cho = attention_mask[::2]
     mask_rej = attention_mask[1::2]
     mask = mask_cho * mask_rej
+
+    Uw_full = {k: v.to(model.device).float() for k, v in Uw_full.items()}
     
     # Reference outputs
     with torch.no_grad(), ScaleAdapter(model, coeff=None):
@@ -456,7 +460,22 @@ def compute_batch_loss(
         
         for lk in loss_layers:
             hs_ref = (ret_ref[lk].output * attention_mask.unsqueeze(-1)).float()
-            pref_dir_ref_dH_Uw = dirs_Uw.directions[lk].clone().to(model.device).float()
+            
+            U_w = (
+                Uw_full[lk]
+                if config.loss_full_u
+                else model.get_submodule(lk)
+                .ipissa_u[config.dataset_name]
+                .to(model.device)
+                .float()
+            )
+
+            if config.loss_ds_pref_dir:
+                # else dataset level pref dir, less noise, more complex
+                pref_dir_ref_dH_Uw = dirs_Uw.directions[lk].clone().to(model.device).float()
+            else:
+                hs_ref_Uw = hs_ref @ U_w
+                pref_dir_ref_dH_Uw = hs_ref_Uw[::2] - hs_ref_Uw[1::2]
             
             hs_ref_cho = hs_ref[::2]
             hs_ref_rej = hs_ref[1::2]
@@ -469,15 +488,7 @@ def compute_batch_loss(
             pi_label_logprobs = pi_logprobs.gather(2, labels).squeeze(-1).float()
             pi_rej_label_logp = pi_label_logprobs[1::2]
             pi_cho_label_logp = pi_label_logprobs[::2]
-            
-            U_w = (
-                Uw_full[lk]
-                if config.full_loss_u
-                else model.get_submodule(lk)
-                .ipissa_u[config.dataset_name]
-                .to(model.device)
-                .float()
-            )
+        
             
             if coef > 0:
                 hs_pi_pos_u = hs_pi_cho @ U_w
@@ -742,35 +753,21 @@ def evaluate_model(model, tokenizer, config: TrainingConfig, dirs_pca: Optional[
     def sweep_coefficients(
         method_name,
         context_manager_fn,
-        coeff_pairs=[
-            (100, -100),
-            (15, -15),
-            (5.0, -5.0),
-            (2.0, -2.0),
-            (0.5, -0.5),
-            (0.1, -0.1),
-            (0.01, -0.01),
-        ],
     ):
-        """Test coefficient pairs from large to small magnitude until finding max coherent.
-        
-        Always evaluates: 0 (baseline), ±1 (training coeffs), then searches coeff_pairs.
+        """Evaluate coefficients -1, 0, and 1 for the method.
 
         Args:
             method_name: Name for logging (e.g., "InnerPiSSA", "PCA")
             context_manager_fn: Function that takes coeff and returns context manager for intervention
-            coeff_pairs: List of (pos, neg) coefficient pairs to test, ordered large to small
 
         Returns:
             List of result dicts
         """
         results = []
-        d_baseline = None
+        coeffs = [-1.0, 0.0, 1.0] if method_name == "InnerPiSSA (ours)" else [-1.0, 1.0]  # Skip 0 for non-baseline methods
         
-        def eval_coeff(coeff, raise_on_nan=False, is_baseline=False):
-            """Helper to evaluate a single coefficient."""
-            nonlocal d_baseline
-            label = "(baseline)" if is_baseline else "(training coeff)" if coeff in [-1, 1] else ""
+        for coeff in coeffs:
+            label = "(baseline)" if coeff == 0 else "(training coeff)" if coeff in [-1, 1] else ""
             logger.info(f"Evaluating {method_name} coeff={coeff} {label}".strip())
             clear_mem()
             with context_manager_fn(coeff):
@@ -781,37 +778,12 @@ def evaluate_model(model, tokenizer, config: TrainingConfig, dirs_pca: Optional[
                     choice_ids,
                     batch_size=eval_batch_size,
                     generation_config=generation_config,
-                    warn_low_pmass=is_baseline,
-                    raise_on_nan=raise_on_nan,
+                    warn_low_pmass=(coeff == 0),
+                    raise_on_nan=False,
                 )
                 d["coeff"] = coeff
                 d["method"] = method_name
                 results.append(d)
-                if is_baseline:
-                    d_baseline = d
-                return d
-
-        # Always evaluate 0, -1, +1
-        eval_coeff(0, is_baseline=True)
-        for coeff in [-1, 1]:
-            eval_coeff(coeff, raise_on_nan=False)
-
-        # Test pairs from large to small
-        for pos_coeff, neg_coeff in coeff_pairs:
-            pair_success = True
-            for coeff in [neg_coeff, pos_coeff]:
-                nll_inc = torch.nan
-                try:
-                    d = eval_coeff(coeff, raise_on_nan=True)
-                    nll_inc = d['input_nll'].mean() - d_baseline['input_nll'].mean()
-                except ValueError as e:
-                    logger.info(f"{method_name} broke at coeff={coeff}: {e}")
-                    pair_success = False
-                    break
-            
-            if pair_success and (nll_inc < 1.0):
-                logger.info(f"{method_name} coherent at ±{pos_coeff}, stopping search")
-                break
 
         return results
 

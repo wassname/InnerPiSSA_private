@@ -3,6 +3,7 @@ import os
 import typing
 import warnings
 from typing import Callable, Literal, OrderedDict
+from torch import Tensor
 import gguf
 import numpy as np
 from sklearn.decomposition import PCA
@@ -65,10 +66,11 @@ class ControlVector:
         needs_grads = any(m in method for m in ['gradient', 'fisher', 'hvp'])
         
         if needs_grads:
-            # Full gradient collection for gradient-based methods
-            act, logprobs, grads, feat_grad_norms = _collect_activations_grads(
-                model, tokenizer, train_strs, hidden_layers, batch_size
-            )
+            # # Full gradient collection for gradient-based methods
+            # act, logprobs, grads, feat_grad_norms = _collect_activations_grads(
+            #     model, tokenizer, train_strs, hidden_layers, batch_size
+            # )
+            1/0  # WIP: gradient collection disabled for now
         else:
             # Lightweight activation-only collection for PCA methods
             act, logprobs = _collect_activations_only(
@@ -400,7 +402,7 @@ def read_representations(
             for i in range(n_components):
                 components[i] = choose_sign_from_hiddens(components[i], h)
 
-            directions[layer] = components  # Now (K, d) or (d,)
+            directions[layer] = components  # Keep as (k, d) - baukit_dir_add_hook handles it
 
     return directions
 
@@ -454,8 +456,11 @@ def _collect_activations_only(
                 avg_logp_completion = (lprobs_for_inputs * label_mask).sum(-1) / label_mask.sum(-1)
                 
                 # Get last non-padded token index
-                seq_len = label_mask.shape[1]
-                last_valid_idx = seq_len - label_mask.flip(-1).to(torch.int64).cpu().argmax(dim=-1) - 1
+                # attention_mask is [batch, seq_len] with 1s for real tokens, 0s for padding
+                # For left padding: [0,0,0,1,1,1] -> last index is seq_len-1
+                # For right padding: [1,1,1,0,0,0] -> need to find last 1
+                # Flip and argmax finds first 1 from right, subtract from end
+                last_valid_idx = attention_mask.shape[1] - 1 - attention_mask.flip(dims=[-1]).argmax(dim=-1).cpu()
                 
                 # Collect activations from each layer
                 for layer in layers_to_edit:
@@ -475,103 +480,103 @@ def _collect_activations_only(
     return hidden_states, completion_lprob
 
 
-def _collect_activations_grads(
-    model,
-    tokenizer,
-    inputs: list[str],
-    layers_to_edit: list[str],
-    batch_size: int,
-) -> tuple[dict[str, np.ndarray], np.ndarray, dict[str, np.ndarray | None], torch.Tensor]:
-    """
-    Get hidden states and their gradients from ReprPO loss.
+# def _collect_activations_grads(
+#     model,
+#     tokenizer,
+#     inputs: list[str],
+#     layers_to_edit: list[str],
+#     batch_size: int,
+# ) -> tuple[dict[str, Tensor], Tensor, dict[str, Tensor | None], Tensor]:
+#     """
+#     Get hidden states and their gradients from ReprPO loss.
     
-    Key insight for iEF: We compute gradient norms w.r.t. the activations that
-    directly feed into the loss (hs_last), not intermediate steering layers.
-    This is equivalent to Wu et al.'s ||∇_z l_n||² (gradients w.r.t. logits).
-    """
-    assert batch_size % 2 == 0, "batch_size must be even for pos/neg pairs"
-    batched_inputs = [inputs[p : p + batch_size] for p in range(0, len(inputs), batch_size)]
-    if isinstance(model, ControlModel):
-        model = model.model
+#     Key insight for iEF: We compute gradient norms w.r.t. the activations that
+#     directly feed into the loss (hs_last), not intermediate steering layers.
+#     This is equivalent to Wu et al.'s ||∇_z l_n||² (gradients w.r.t. logits).
+#     """
+#     assert batch_size % 2 == 0, "batch_size must be even for pos/neg pairs"
+#     batched_inputs = [inputs[p : p + batch_size] for p in range(0, len(inputs), batch_size)]
+#     if isinstance(model, ControlModel):
+#         model = model.model
     
-    hidden_states: dict[str, list[np.ndarray]] = {layer: [] for layer in layers_to_edit}
-    completion_lprob: list[np.ndarray] = []
+#     hidden_states: dict[str, list[np.ndarray]] = {layer: [] for layer in layers_to_edit}
+#     completion_lprob: list[np.ndarray] = []
 
-    model.eval()
+#     model.eval()
 
         
-    for bi, batch in enumerate(tqdm.tqdm(batched_inputs, desc="Getting hiddens")):
-        encoded_batch = tokenizer(batch, padding=True, return_tensors="pt", padding_side="left").to(model.device)
-        attention_mask = encoded_batch["attention_mask"]
+#     for bi, batch in enumerate(tqdm.tqdm(batched_inputs, desc="Getting hiddens")):
+#         encoded_batch = tokenizer(batch, padding=True, return_tensors="pt", padding_side="left").to(model.device)
+#         attention_mask = encoded_batch["attention_mask"]
 
-        if bi % 10 == 0:
-            torch.cuda.empty_cache()
+#         if bi % 10 == 0:
+#             torch.cuda.empty_cache()
 
-        # We need to enable gradients for the DPO loss calculation.
-        with torch.enable_grad():
-            model.zero_grad()
-            with TraceDict(
-                model,
-                layers=layers_to_edit,
-                retain_output=True,
-                retain_grad=True,
-                detach=False,
-            ) as ret:
-                outputs = model(**encoded_batch, output_hidden_states=True)
-                # Retain logits grad for iEF weighting (||∇_z l_n||)
-                outputs.logits.retain_grad()
+#         # We need to enable gradients for the DPO loss calculation.
+#         with torch.enable_grad():
+#             model.zero_grad()
+#             with TraceDict(
+#                 model,
+#                 layers=layers_to_edit,
+#                 retain_output=True,
+#                 retain_grad=True,
+#                 detach=False,
+#             ) as ret:
+#                 outputs = model(**encoded_batch, output_hidden_states=True)
+#                 # Retain logits grad for iEF weighting (||∇_z l_n||)
+#                 # outputs.logits.retain_grad()
 
-                # We must explicitly tell PyTorch to retain gradients for the non-leaf hidden state tensors.
-                for layer in layers_to_edit:
-                    ret[layer].output.retain_grad()
+#                 # # We must explicitly tell PyTorch to retain gradients for the non-leaf hidden state tensors.
+#                 # for layer in layers_to_edit:
+#                 #     ret[layer].output.retain_grad()
 
-                # --- DPO Loss Calculation ---
-                lprobs = outputs.logits[:, :-1].log_softmax(-1)
-                labels = encoded_batch["input_ids"][:, 1:, None]
-                lprobs_for_inputs = torch.gather(input=lprobs, dim=-1, index=labels).squeeze(-1)
+#                 # --- DPO Loss Calculation ---
+#                 lprobs = outputs.logits[:, :-1].log_softmax(-1)
+#                 labels = encoded_batch["input_ids"][:, 1:, None]
+#                 lprobs_for_inputs = torch.gather(input=lprobs, dim=-1, index=labels).squeeze(-1)
                 
-                label_mask = attention_mask[:, 1:]
-                avg_logp_completion = (lprobs_for_inputs * label_mask).sum(-1) / label_mask.sum(-1)
+#                 label_mask = attention_mask[:, 1:]
+#                 avg_logp_completion = (lprobs_for_inputs * label_mask).sum(-1) / label_mask.sum(-1)
 
-                hs = outputs.hidden_states[-3] # get layer N-2, this is peak [supressed neurons](https://github.com/wassname/eliciting_suppressed_knowledge?tab=readme-ov-file#relation-to-prior-work)
+#                 hs = outputs.hidden_states[-3] # get layer N-2, this is peak [supressed neurons](https://github.com/wassname/eliciting_suppressed_knowledge?tab=readme-ov-file#relation-to-prior-work)
 
-                # get last non-padded token
-                seq_len = label_mask.shape[1]
-                last_valid_idx = seq_len - label_mask.flip(-1).to(torch.int64).cpu().argmax(dim=-1) - 1
+#                 # get last non-padded token
+#                 seq_len = label_mask.shape[1]
+#                 last_valid_idx = seq_len - label_mask.flip(-1).to(torch.int64).cpu().argmax(dim=-1) - 1
 
-            # collect activation, grad, avg_logp_completion for each example in batch
-            for layer in layers_to_edit:
-
-
-                hs = ret[layer].output.detach().float().cpu()
-                last_hs = hs[range(len(last_valid_idx)), last_valid_idx]
-                hidden_states[layer].append(last_hs)
-
-            completion_lprob.extend(avg_logp_completion.detach().cpu().float())
+#             # collect activation, grad, avg_logp_completion for each example in batch
+#             for layer in layers_to_edit:
 
 
-            # We must explicitly tell PyTorch to retain gradients for the non-leaf hidden state tensors.
-            for layer in layers_to_edit:
-                ret[layer].output.grad = None  # Free memory
+#                 hs = ret[layer].output.detach().float().cpu()
+#                 last_hs = hs[range(len(last_valid_idx)), last_valid_idx]
+#                 hidden_states[layer].append(last_hs)
 
-            # hs_last.grad = None  # Free memory
-            model.zero_grad()
-
+#             completion_lprob.extend(avg_logp_completion.detach().cpu().float())
 
 
-        del outputs, lprobs, lprobs_for_inputs, avg_logp_completion, ret, hs
-        model.zero_grad()
-        torch.cuda.empty_cache()
+#             # We must explicitly tell PyTorch to retain gradients for the non-leaf hidden state tensors.
+#             for layer in layers_to_edit:
+#                 ret[layer].output.grad = None  # Free memory
 
-    # stack layers
-    # final_grads = {k: torch.vstack(v) if v else None for k, v in gradients.items()}
-    hidden_states = {k: torch.vstack(v) for k, v in hidden_states.items()}
-    completion_lprob = torch.tensor(completion_lprob)
+#             # hs_last.grad = None  # Free memory
+#             model.zero_grad()
+
+
+
+#         del outputs, lprobs, lprobs_for_inputs, avg_logp_completion, ret, hs
+#         model.zero_grad()
+#         torch.cuda.empty_cache()
+
+#     # stack layers
+#     # final_grads = {k: torch.vstack(v) if v else None for k, v in gradients.items()}
+#     hidden_states = {k: torch.vstack(v) for k, v in hidden_states.items()}
+#     completion_lprob = torch.tensor(completion_lprob)
     
-    return (
-        hidden_states, # {layer: [batch, hidden_dim]}
-        completion_lprob, # [batch]
-    )
+#     return (
+#         hidden_states, # {layer: [batch, hidden_dim]}
+#         completion_lprob, # [batch]
+#     )
 
 
 def project_onto_direction(H, direction):
