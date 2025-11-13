@@ -39,3 +39,30 @@ See `docs/loss_geometry.md` for detailed geometric explanation with diagram (may
 # psudo code for extracting steering vectors
 
 see README.md for psudo code overview
+
+## Style Guidelines
+
+**PiSSA naming**: The method is called "PiSSA" (Principal Singular values and Singular vectors Adaptation). While it sounds like "pizza", avoid heavy-handed pizza metaphors in technical writing. Subtle visual references (warm colors, circular boundaries) are fine in diagrams, but don't call things "pizza crust" or use pizza emojis in formal contexts. Keep it professional.
+
+## Loss Geometry Diagram Requirements
+
+The diagram in `docs/img/loss_geometry.svg` should show:
+
+**Setup (upper-right quadrant of U-space)**:
+- `pref_dir`: frozen target direction (blue arrow)
+- `pref_dir_ref`: reference separation, initially equals `pref_dir_pi` at t=0
+- Coherence boundary: circular arc defining valid PiSSA space
+
+**After training with c=+1 (honest mode)**:
+- `pref_dir_pi` rotates toward `pref_dir` (better alignment)
+- `pref_dir_pi` amplifies (becomes longer than initial)
+- Projection onto `pref_dir` increases (shown by perpendicular drop)
+- Stays within coherence boundary
+
+**After training with c=-1 (dishonest mode)** - opposite transformation:
+- `pref_dir_pi` rotates away from `pref_dir` (worse alignment)
+- `pref_dir_pi` shrinks (becomes shorter than initial)
+- Projection onto `pref_dir` decreases or becomes negative
+- Still stays within coherence boundary
+
+The key insight: same learned parameters (V rotation, S scaling) produce reversible transformations via coefficient sign. This is like a "deep dish pizza slice" that can rotate both ways from the initial position.

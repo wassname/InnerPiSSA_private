@@ -220,7 +220,7 @@ def process_daily_dilemma_results(df_res, dd_dataset, df_labels):
 
     # Merge labels once (broadcast across all rows with same dilemma_idx)
     df_labels_reset = df_labels.reset_index()
-    df_res2 = df_res2.merge(df_labels_reset, on='dilemma_idx', how='left')
+    df_res2 = df_res2.merge(df_labels_reset, on='dilemma_idx', how='left').copy()
 
     # Vectorized score computation for all label columns
     label_cols = [c for c in df_labels.columns if c not in ['dilemma_idx']]

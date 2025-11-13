@@ -844,3 +844,120 @@ Can also report binary accuracy as supplementary metric for intuition (30.5pp in
 
 InnerPiSSA ±1.0: Δ logscore = 2.587, p=0.001, ΔNLL=0.314
 - This is the right metric. Do the hard work of explaining it properly rather than using a worse metric that's easier to explain.
+
+# 2025-11-13 14:44:22 are my operations interpolatable?
+
+In PCA steering it's a simple additive vector and we can somewhat modular the effect from 0 to ~2, with InnerPiSSA it's trained to be +/-1 using backprop. So it might be linearly interpolatable but not guaranteed. It might instead be a series of tweaks that adds up to a convex space wrt the steering coeffecient. It likely to be stable at [-1 and 1] as this is where it's trained at, but outside this range it might break down, certainly once it passes some region of coherence, then like PCA steering it will break down.
+
+But what about my operations? For additive PCA it's a simple addition to the output vectors. So the operation is linearly interpolatable with respect to the layer outputs (as it operates directly on them with addition!). 
+
+But mine (if using add2) are additive in the singular vector space, and also rotating U and V so changing the basis. So do we expect them to be smooth interpoatable changes in the outputs space of Wx?
+
+> sure they build up, for the rotation of U and V and the additive change of S, so you expect them to be smooth interpoatable changes in the outputs space of Wx?
+
+  Let me think through the geometry:
+
+  **For InnerPiSSA's forward pass** (from the code):
+  - Base: `y = W @ x`
+  - Adapted: `y' = (W + ΔW) @ x` where `ΔW = U_rot @ S_scaled @ V_rot^T`
+
+
+
+  Rotation is NOT linear in output space
+
+  Small rotations near identity: R(θ) ≈ I + θ·K where K is skew-symmetric
+  In this regime, coeff·θ gives approximately linear perturbations
+  But this only holds for small angles
+
+  # Cayley map: R = (I - θ·K)^-1 @ (I + θ·K)
+  # Scaling: R(coeff·θ) ≠ coeff·R(θ)
+
+
+Note from the ablations in results_journal_mjc.md, U hurts, V helps. And this has a good theoretical explanation too. U will effect the output basis, and upstream layers. Also we use U to project the outputs back into S space for the loss... but this U is not updated, so having a learned U risks taking us further from the basis used in the loss (althought it's often differen't layers so maybe this is not significant or solid logic).
+
+
+## Interpretation
+
+  **Why V-only works best:**
+  - V rotates **input space** (pre-activation)
+  - U rotates **output space** (post-activation, affects residual stream)
+  - Your loss measures separation in layer N-3's output, but later layers might undo U rotations
+  - V changes *what* gets transformed, U changes *how* it's presented downstream
+
+  **Why add2 > mult:**
+  - `add2`: `S' = S + coeff·tanh(λ)` → **linear in coeff**, bounded
+  - `mult`: `S' = exp(coeff·λ) ⊙ S` → **exponential**, can explode/vanish at large |coeff|
+  - Your eval sweeps `coeff ∈ [-5, 5]` → exponential scaling breaks interpolation
+
+  **Why both rotations together underperform V-only:**
+  - U+V: 🥇448 (add2), 🥇271 (mult)
+  - V-only: 🥇**386** (add2 default)
+  - Hypothesis: U rotation fights later layers, adds instability
+
+X V S U
+
+# 2025-11-13 15:XX:XX - Why V-rotation outperforms U-rotation: Basis preservation
+
+## Empirical Finding
+Ablations on Qwen3-4B show V-only rotation (🥇386) outperforms U+V (🥇448 but unstable) and massively beats U-only or no rotations (🥇48-359). This contradicts initial intuition that more learnable parameters = better.
+
+## Geometric Explanation
+
+**V rotates input space** (what patterns the layer looks for):
+- `h = x @ (V_rot @ S @ U^T)` 
+- Changes semantic features extracted from input
+- Downstream layers see perturbed activations but in their expected basis
+- Robust: pretrained layers handle input variation naturally
+
+**U rotates output space** (how results are expressed):
+- `h = x @ (V @ S @ U_rot^T)`
+- Reorients the residual stream basis itself
+- Downstream layers expect residual in pretrained basis (encoded in their weight matrices)
+- Fragile: breaks `W_{i+1}` assumptions about input coordinate system
+
+**Additional U problem for our loss:**
+We project activations to U-space for loss computation (`hs @ U_frozen`), but U_frozen is from the original SVD. If we learn U_rot, we're optimizing separation in a basis (U_frozen) that no longer matches the actual transform (U_rot). This creates a train/eval mismatch within the loss itself.
+
+## Interpolation Properties
+
+**V-rotation + additive S** (`rotate_v=True, scale_s=add2`):
+- S scaling: `S' = S + coeff·tanh(λ)` → **linear in coeff**
+- V rotation: Nonlinear (Cayley map), but quasi-linear if θ_v small
+- Combined: Smooth interpolation for `coeff ∈ [-2, 2]` if learned perturbations stay small
+
+**U+V rotation**:
+- Double nonlinearity compounds
+- Works when both θ_u, θ_v are small (bounded by coherence loss)
+- But U's basis-changing effect makes it unstable at high LR (observed: "loss shoots up even at 1e-3")
+
+## Recommendation
+For production: Use `rotate_u=False, rotate_v=True, scale_s=add2`. Trades ~15% peak performance (448→386) for stability and interpretability. V-only changes *what* the model thinks about (semantic steering) without breaking *how* it represents thoughts (basis preservation).
+
+# 2025-11-13 16:01:45
+
+You're right to question this - let me clarify the SVD terminology:
+
+Given `W = U @ S @ V^T`:
+- **U** (left singular vectors): basis for the **output space** (rows of W)
+- **S** (singular values): diagonal matrix of scaling factors (not a basis - just scalars)
+- **V** (right singular vectors): basis for the **input space** (columns of W)
+
+**S is NOT a vector space** - it's a diagonal matrix of singular values (scalars). You can't plot vectors "in S-space" because S doesn't define coordinates, it defines magnitudes.
+
+The confusion might be:
+- **Σ** (capital sigma/epsilon) is the standard notation for the diagonal singular value matrix (same as S)
+- The **singular value basis** refers to the decomposition into U, Σ, V - not a coordinate system called "Σ-space"
+
+In your code:
+```python
+V, S, U = SVD(layer.W)
+```
+
+The diagram shows vectors in **U-space** because:
+1. The hidden states `hs` are in the output space of the layer
+2. When you compute `hs @ U`, you're projecting into the U basis
+3. The separation vectors (`pref_dir`, etc.) are differences of hidden states, so they live in U-space
+
+**The axes U₁, U₂ are correct** - they represent the first two dimensions of the U basis (the left singular vectors). There's no such thing as "S₁, S₂" as coordinate axes because S is just a set of scaling factors, not a coordinate system.
+
+Does this clarify the confusion? The "singular vector basis" means the U and V matrices (which are orthonormal bases), while S/Σ is just the diagonal scaling between them.

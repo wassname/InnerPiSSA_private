@@ -85,8 +85,8 @@ class TrainingConfig:
 
     # Adapter params
     rank: int = 24
-    scale_s: Literal["add2", "add", "mult", "none"] = "add2"
-    ipissa_rotate_u: bool = True
+    scale_s: Literal["add2", "add_tanh", "mult", "none"] = "add2"
+    ipissa_rotate_u: bool = False # can be less stable as it modified output space and diverges from loss space
     ipissa_rotate_v: bool = True
     full_loss_u: bool = True
 
@@ -95,7 +95,7 @@ class TrainingConfig:
     dataset_max_samples: Optional[int] = 1000
 
     # Loss
-    loss_type: Literal["logsigmoid", "softplus", "softplus_only", "tanh2v1"] = "logsigmoid"
+    loss_type: Literal["logsigmoid", "softplus2", "softplus_only", "tanh2v1"] = "logsigmoid"
     coherence_threshold: float = 1.5
     boundary_order: int = 1
     last_n_tokens: int = 3
@@ -194,11 +194,12 @@ def create_dataset(config: TrainingConfig, tokenizer, max_size: Optional[int] = 
 
     dataset = Dataset.from_list(data)
 
-    if (max_size is not None) and (max_size < len(dataset)):
-        max_size2 = max_size * (1 + config.val_split)
-        dataset = dataset.select(range(max_size * 2))
-        honest_dataset = honest_dataset[:max_size * 2]
-        logger.debug(f"Cropping train dataset to {max_size} pairs.")
+    if (max_size is not None) and (max_size < len(dataset)//2):
+        max_size2 = int(max_size * (1 + config.val_split))
+        max_size2 = min(max_size2, len(dataset) // 2)
+        dataset = dataset.select(range(max_size2 * 2))
+        honest_dataset = honest_dataset[:max_size2 * 2]
+        logger.debug(f"Cropping train dataset to {max_size2} pairs.")
 
     # Split into train/val
     val_size = int(config.val_split * len(honest_dataset))

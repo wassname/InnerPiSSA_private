@@ -69,8 +69,8 @@ class InnerPiSSAConfig(PeftConfig):
         default=None,
         metadata={"help": "Block size for block_diagonal rotation (must divide r)"}
     )
-    scale_s: Literal["add", "mult", "none"] = field(
-        default="add",
+    scale_s: Literal["add_tanh", "add2", "mult", "none"] = field(
+        default="add2",
         metadata={"help": "S scaling mode: add (S + delta_s), mult (lambda_s * S), or none (frozen S)"}
     )
     alpha: float = field(
@@ -345,7 +345,7 @@ class InnerPiSSALayer(BaseTunerLayer):
         if scale_mode == "add2":
             delta_s = self.ipissa_delta_s[adapter]
             S_scaled = S + alpha * delta_s
-        elif scale_mode == "add":
+        elif scale_mode == "add_tanh":
             delta_s = self.ipissa_delta_s[adapter]  # [r]
             S_scaled = S + alpha * torch.tanh(delta_s) * S
         elif scale_mode == "mult":

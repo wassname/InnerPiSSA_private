@@ -44,14 +44,14 @@ run:
 
     # === Loss type ablations ===
     echo "### Loss type ablations ###"
-    run_exp --loss-type=softplus
+    run_exp --loss-type=softplus2
     run_exp --loss-type=tanh2v1
     run_exp --loss-type=softplus_only
     run_exp --loss-type=logsigmoid  # default
     
     # === Scale mechanism ablations ===
     echo "### Scale mechanism ablations ###"
-    run_exp --scale-s=add
+    run_exp --scale-s=add_tanh
     run_exp --scale-s=add2   # default
     run_exp --scale-s=none
     run_exp --scale-s=mult

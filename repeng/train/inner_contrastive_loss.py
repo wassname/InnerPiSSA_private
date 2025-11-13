@@ -212,7 +212,7 @@ def contrastive_steering_loss_with_ref(
         # Projection loss: ratio of signed projections (coef flips direction)
         proj_ratio = proj_pi_signed / (proj_ref_signed.abs() + eps)  # (b,) can be negative
         loss_proj = softclamp_tanh(proj_ratio, 1)
-    elif loss_type=="softplus":
+    elif loss_type=="softplus2":
         # use softplus for proj ratio with a margin, this bounds the downside (encouraing it to improve rather than lsos aversion)
         loss_coh = softclamp_tanh(loss_coh, n=2)
         # Projection loss: ratio of signed projections (coef flips direction)

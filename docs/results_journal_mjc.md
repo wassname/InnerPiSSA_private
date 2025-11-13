@@ -400,6 +400,24 @@ grep -E '🥇|nbs/train.py --' $FILE > results_summary.txt
     wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/l3r800ve
 
 
+## Interpretation
+
+**Why V-only works best:**
+- V rotates **input space** (pre-activation)
+- U rotates **output space** (post-activation, affects residual stream)
+- Your loss measures separation in layer N-3's output, but later layers might undo U rotations
+- V changes *what* gets transformed, U changes *how* it's presented downstream
+
+**Why add2 > mult:**
+- `add2`: `S' = S + coeff·tanh(λ)` → **linear in coeff**, bounded
+- `mult`: `S' = exp(coeff·λ) ⊙ S` → **exponential**, can explode/vanish at large |coeff|
+- Your eval sweeps `coeff ∈ [-5, 5]` → exponential scaling breaks interpolation
+
+**Why both rotations together underperform V-only:**
+- U+V: 🥇448 (add2), 🥇271 (mult)
+- V-only: 🥇**386** (add2 default)
+- Hypothesis: U rotation fights later layers, adds instability
+
 
 ## Evaluation complete 20251113_052825.
 
