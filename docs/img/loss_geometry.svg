@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="600" height="600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrowhead-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowhead-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#ea580c"/>
+    </marker>
+    <marker id="arrowhead-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#16a34a"/>
+    </marker>
+    <marker id="arrowhead-red" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#dc2626"/>
+    </marker>
+  </defs>
+  
+  <rect width="600" height="600" fill="#fefefe"/>
+  
+  <text x="300" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#333">
+    InnerPiSSA Loss Geometry in U-space
+  </text>
+  
+  <circle cx="300" cy="300" r="4" fill="#333"/>
+  <text x="285" y="320" font-size="12" fill="#666">origin</text>
+  
+  <circle cx="300" cy="300" r="200" fill="none" stroke="#f97316" stroke-width="3" stroke-dasharray="5,5" opacity="0.6"/>
+  <text x="510" y="305" font-size="12" fill="#f97316" font-weight="bold">coherence boundary</text>
+  <text x="510" y="320" font-size="10" fill="#f97316">(pizza crust)</text>
+  
+  <line x1="300" y1="300" x2="300" y2="100" stroke="#2563eb" stroke-width="3" marker-end="url(#arrowhead-blue)"/>
+  <text x="310" y="120" font-size="13" fill="#2563eb" font-weight="bold">pref_dir</text>
+  <text x="310" y="135" font-size="11" fill="#2563eb">(frozen target)</text>
+  
+  <line x1="300" y1="300" x2="420" y2="220" stroke="#16a34a" stroke-width="2.5" marker-end="url(#arrowhead-green)"/>
+  <text x="430" y="215" font-size="12" fill="#16a34a" font-weight="bold">pref_dir_ref</text>
+  <text x="430" y="228" font-size="10" fill="#16a34a">(initial, c=0)</text>
+  
+  <line x1="420" y1="220" x2="300" y2="220" stroke="#16a34a" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+  <circle cx="300" cy="220" r="3" fill="#16a34a"/>
+  <text x="250" y="215" font-size="10" fill="#16a34a">proj_ref</text>
+  
+  <line x1="300" y1="300" x2="380" y2="140" stroke="#ea580c" stroke-width="2.5" marker-end="url(#arrowhead-orange)"/>
+  <text x="390" y="135" font-size="12" fill="#ea580c" font-weight="bold">pref_dir_pi (c=+1)</text>
+  <text x="390" y="148" font-size="10" fill="#ea580c">(honest mode)</text>
+  
+  <line x1="380" y1="140" x2="300" y2="140" stroke="#ea580c" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+  <circle cx="300" cy="140" r="3" fill="#ea580c"/>
+  <text x="240" y="135" font-size="10" fill="#ea580c">longer proj</text>
+  
+  <line x1="300" y1="300" x2="450" y2="320" stroke="#dc2626" stroke-width="2.5" marker-end="url(#arrowhead-red)"/>
+  <text x="460" y="315" font-size="12" fill="#dc2626" font-weight="bold">pref_dir_pi (c=-1)</text>
+  <text x="460" y="328" font-size="10" fill="#dc2626">(dishonest mode)</text>
+  
+  <line x1="450" y1="320" x2="300" y2="320" stroke="#dc2626" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+  <circle cx="300" cy="320" r="3" fill="#dc2626"/>
+  <text x="240" y="335" font-size="10" fill="#dc2626">shorter proj</text>
+  
+  <path d="M 300 220 Q 320 200 340 180" fill="none" stroke="#ea580c" stroke-width="1" opacity="0.4"/>
+  <text x="330" y="195" font-size="10" fill="#ea580c" opacity="0.7">θ+</text>
+  
+  <path d="M 420 220 Q 430 250 440 290" fill="none" stroke="#dc2626" stroke-width="1" opacity="0.4"/>
+  <text x="435" y="260" font-size="10" fill="#dc2626" opacity="0.7">θ-</text>
+  
+  <g transform="translate(30, 450)">
+    <text x="0" y="0" font-size="14" font-weight="bold" fill="#333">Training Dynamics:</text>
+    <text x="0" y="20" font-size="11" fill="#666">• Initial: pref_dir_pi = pref_dir_ref (green)</text>
+    <text x="0" y="38" font-size="11" fill="#666">• c=+1: Rotate toward pref_dir → longer projection (orange)</text>
+    <text x="0" y="56" font-size="11" fill="#666">• c=-1: Rotate away from pref_dir → shorter projection (red)</text>
+    <text x="0" y="74" font-size="11" fill="#666">• All stay within coherence boundary</text>
+    
+    <text x="0" y="100" font-size="12" font-weight="bold" fill="#333">Loss:</text>
+    <text x="0" y="118" font-size="11" fill="#666">L = -proj_pi/proj_ref + λ·coherence_penalty</text>
+  </g>
+  
+  <text x="300" y="560" text-anchor="middle" font-size="12" fill="#999">U-space (2D projection of rank-r subspace)</text>
+</svg>
