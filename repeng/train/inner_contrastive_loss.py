@@ -196,14 +196,14 @@ def contrastive_steering_loss_with_ref(
 
         # Logsigmoid loss: bounded to [-∞, 0], coef switches optimization direction
         beta = 0.1
-        margin = 0.5
+        margin = 1
         proj_ratio_bounded = F.logsigmoid(beta * (proj_pi_signed - proj_ref_signed - margin))
         loss_proj = -proj_ratio_bounded  # Negate to maximize (logsigmoid outputs negative)
         loss_proj = loss_proj.mean()  # Average over batch
         loss_coh = torch.zeros_like(loss_coh)  # Disable coherence loss in logsigmoid mode
     elif loss_type=="softplus_only":
         loss_proj = -F.softplus(proj_pi_signed - proj_ref_signed)  # Maximize differenc
-        loss_proj = -proj_ratio_bounded  # Maximize absolute ratio
+        # loss_proj = -proj_ratio_bounded  # Maximize absolute ratio
         # loss_proj = output_direction * loss_proj  # Flip sign if output direction disagrees
     elif loss_type=="tanh2v1":
         # coh is [-2, 2] and proj is [-1, 1]

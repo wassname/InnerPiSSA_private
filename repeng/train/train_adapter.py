@@ -67,23 +67,25 @@ class TrainingConfig:
     quantization_type: Literal["4bit", "8bit", "none"] = "none"
 
     # layers to target
-    layers: List[str] = ["gate_proj", "up_proj"]
-    num_layers: int = 5 # intervene on this many layers, spaced evenly
+    layers: List[str] = [ "down_proj", "k_proj", "v_proj", "q_proj"]
+    num_layers: int = 3 # intervene on this many layers, spaced evenly
     perc_start: float = 0.3 # ignore the first X% of layers
     end_layers: int = -3 # ignore the last X layers
 
     # Training params
     batch_size: int = 6
-    n_epochs: int = 10
-    lr: float = 3e-3
+    n_epochs: int = 30
+    lr: float = 6e-4
     weight_decay: float = 0.1
     log_n: int = 10 # log this many times per training
     grad_accum_steps: int = 10
     quick: bool = False
+    val_split: float = 0.15  # fraction of data for validation
+    early_stop_patience: int = 5  # stop if val loss doesn't improve for N validation checks
 
     # Adapter params
     rank: int = 24
-    scale_s: Literal["add2", "add", "mult", "none"] = "mult"
+    scale_s: Literal["add2", "add", "mult", "none"] = "add2"
     ipissa_rotate_u: bool = True
     ipissa_rotate_v: bool = True
     full_loss_u: bool = True
@@ -172,7 +174,7 @@ def load_suffixes(
 
 
 def create_dataset(config: TrainingConfig, tokenizer, max_size: Optional[int] = None):
-    """Create contrastive dataset."""
+    """Create contrastive dataset with train/val split."""
     suffixes = load_suffixes(
         max_per_file=max_size // 4 if max_size is not None else None
     )
@@ -193,23 +195,51 @@ def create_dataset(config: TrainingConfig, tokenizer, max_size: Optional[int] = 
     dataset = Dataset.from_list(data)
 
     if (max_size is not None) and (max_size < len(dataset)):
+        max_size2 = max_size * (1 + config.val_split)
         dataset = dataset.select(range(max_size * 2))
         honest_dataset = honest_dataset[:max_size * 2]
         logger.debug(f"Cropping train dataset to {max_size} pairs.")
 
+    # Split into train/val
+    val_size = int(config.val_split * len(honest_dataset))
+    train_honest = honest_dataset[val_size:]
+    val_honest = honest_dataset[:val_size]
+    
+    # Create separate datasets for train and val
+    train_data = []
+    for ex in train_honest:
+        train_data.append({"s": ex.positive})
+        train_data.append({"s": ex.negative})
+    
+    val_data = []
+    for ex in val_honest:
+        val_data.append({"s": ex.positive})
+        val_data.append({"s": ex.negative})
+    
+    train_dataset = Dataset.from_list(train_data)
+    val_dataset = Dataset.from_list(val_data)
+
     logger.info(
-        f"Dataset: {len(dataset)} examples, {len(honest_dataset)} contrastive pairs"
+        f"Dataset: {len(train_dataset)} train examples ({len(train_honest)} pairs), "
+        f"{len(val_dataset)} val examples ({len(val_honest)} pairs)"
     )
 
-    # Tokenize
-    dataset_pt = dataset.map(
+    # Tokenize both
+    train_dataset_pt = train_dataset.map(
         lambda examples: tokenizer(examples["s"], truncation=True, max_length=512),
         batched=True,
         remove_columns=["s"],
     )
-    dataset_pt.set_format(type="torch", columns=["input_ids", "attention_mask"])
+    train_dataset_pt.set_format(type="torch", columns=["input_ids", "attention_mask"])
+    
+    val_dataset_pt = val_dataset.map(
+        lambda examples: tokenizer(examples["s"], truncation=True, max_length=512),
+        batched=True,
+        remove_columns=["s"],
+    )
+    val_dataset_pt.set_format(type="torch", columns=["input_ids", "attention_mask"])
 
-    return honest_dataset, dataset_pt
+    return train_honest, train_dataset_pt, val_honest, val_dataset_pt
 
 
 def load_model(model_id, quantization_type="none"):
@@ -368,6 +398,128 @@ def train_steer_vector(model, honest_dataset, loss_layers, Uw_full, tokenizer, c
 
 
 
+def compute_batch_loss(
+    model,
+    batch,
+    dirs_Uw,
+    loss_layers,
+    Uw_full,
+    config: TrainingConfig,
+    return_info: bool = False,
+    step: int = 0,
+    scheduler=None,
+):
+    """Compute contrastive loss for a batch (shared by train and val).
+    
+    Args:
+        model: Model with adapter
+        batch: Input batch dict with input_ids and attention_mask
+        dirs_Uw: Steering directions in U-space
+        loss_layers: Layers to compute loss on
+        Uw_full: Full U matrices for projection
+        config: Training config
+        return_info: If True, return detailed info dicts for logging
+        step: Current training step (for info logging)
+        scheduler: LR scheduler (for info logging)
+    
+    Returns:
+        If return_info=False: total_loss (scalar)
+        If return_info=True: (total_loss, infos_list)
+    """
+    attention_mask = batch["attention_mask"]
+    mask_cho = attention_mask[::2]
+    mask_rej = attention_mask[1::2]
+    mask = mask_cho * mask_rej
+    
+    # Reference outputs
+    with torch.no_grad(), ScaleAdapter(model, coeff=None):
+        with TraceDict(model, layers=loss_layers) as ret_ref:
+            with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+                outputs_ref = model(**batch, output_hidden_states=True)
+    
+    ref_logp = outputs_ref.logits[:, :-1].log_softmax(-1)
+    labels = batch["input_ids"][:, 1:].unsqueeze(-1)
+    ref_label_logp = ref_logp.gather(2, labels).squeeze(-1).float()
+    ref_cho_label_logp = ref_label_logp[::2].detach()
+    ref_rej_label_logp = ref_label_logp[1::2].detach()
+    
+    total_loss = torch.tensor(0.0, device=model.device)
+    infos = [] if return_info else None
+    
+    # Contrastive training with both coefficients
+    for coef in [-1.0, 1.0]:
+        with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+            with ScaleAdapter(model, coeff=coef):
+                with TraceDict(model, layers=loss_layers, retain_grad=not return_info) as ret:
+                    outputs_pi = model(**batch, output_hidden_states=True)
+        
+        for lk in loss_layers:
+            hs_ref = (ret_ref[lk].output * attention_mask.unsqueeze(-1)).float()
+            pref_dir_ref_dH_Uw = dirs_Uw.directions[lk].clone().to(model.device).float()
+            
+            hs_ref_cho = hs_ref[::2]
+            hs_ref_rej = hs_ref[1::2]
+            
+            hs_pi = (ret[lk].output * attention_mask.unsqueeze(-1)).float()
+            hs_pi_cho = hs_pi[::2]
+            hs_pi_rej = hs_pi[1::2]
+            
+            pi_logprobs = outputs_pi.logits[:, :-1].log_softmax(-1)
+            pi_label_logprobs = pi_logprobs.gather(2, labels).squeeze(-1).float()
+            pi_rej_label_logp = pi_label_logprobs[1::2]
+            pi_cho_label_logp = pi_label_logprobs[::2]
+            
+            U_w = (
+                Uw_full[lk]
+                if config.full_loss_u
+                else model.get_submodule(lk)
+                .ipissa_u[config.dataset_name]
+                .to(model.device)
+                .float()
+            )
+            
+            if coef > 0:
+                hs_pi_pos_u = hs_pi_cho @ U_w
+                hs_pi_neg_u = hs_pi_rej @ U_w
+                ref_coherence = ref_cho_label_logp
+                pi_coherence = pi_cho_label_logp
+            else:
+                hs_pi_pos_u = hs_pi_rej @ U_w
+                hs_pi_neg_u = hs_pi_cho @ U_w
+                ref_coherence = ref_rej_label_logp
+                pi_coherence = pi_rej_label_logp
+            
+            loss, info1 = contrastive_steering_loss_with_ref(
+                pref_dir=pref_dir_ref_dH_Uw.detach(),
+                hs_ref_cho=hs_ref_cho @ U_w,
+                hs_ref_rej=hs_ref_rej @ U_w,
+                hs_pi_pos=hs_pi_pos_u,
+                hs_pi_neg=hs_pi_neg_u,
+                ref_pos_label_logp=ref_coherence,
+                pi_pos_label_logp=pi_coherence,
+                cho_mask=mask.clone(),
+                coherence_threshold=config.coherence_threshold,
+                boundary_order=config.boundary_order,
+                last_n_tokens=config.last_n_tokens,
+                loss_type=config.loss_type,
+            )
+            
+            total_loss += loss.mean()
+            
+            if return_info:
+                if scheduler is not None:
+                    info1["lr"] = torch.tensor(scheduler.get_last_lr()[0])
+                info1 = {k: v.mean().detach().cpu().item() for k, v in info1.items()}
+                info1["coef"] = coef
+                info1["layer"] = lk
+                info1["step"] = step
+                infos.append(info1)
+    
+    if return_info:
+        return total_loss, infos
+    return total_loss
+
+
 def process_infos(infos, by_layer=True, by_coef=True, by_layer_num=True, verbose=False):
     """Process training info logs into summary dataframe."""
     df_infos = pd.DataFrame(infos)
@@ -395,6 +547,52 @@ def process_infos(infos, by_layer=True, by_coef=True, by_layer_num=True, verbose
     return df_hist
 
 
+@torch.no_grad()
+def compute_validation_loss(
+    model,
+    val_dataloader,
+    dirs_Uw,
+    loss_layers,
+    Uw_full,
+    config: TrainingConfig,
+):
+    """Compute validation loss without gradients, returning detailed metrics."""
+    model.eval()
+    total_loss = 0.0
+    n_batches = 0
+    
+    # Accumulate loss components
+    loss_components = {}
+    
+    for batch in val_dataloader:
+        batch = {k: v.to(model.device) for k, v in batch.items()}
+        
+        # Get loss with detailed info (but no gradients)
+        batch_loss, batch_infos = compute_batch_loss(
+            model, batch, dirs_Uw, loss_layers, Uw_full, config, return_info=True
+        )
+        
+        total_loss += batch_loss.item()
+        
+        # Accumulate component losses
+        for info in batch_infos:
+            for k, v in info.items():
+                if k not in ['step', 'coef', 'layer', 'lr']:
+                    if k not in loss_components:
+                        loss_components[k] = []
+                    loss_components[k].append(v)
+        
+        n_batches += 1
+    
+    model.train()
+    
+    # Average all components
+    avg_total = total_loss / n_batches if n_batches > 0 else float('inf')
+    avg_components = {k: np.mean(v) for k, v in loss_components.items()}
+    
+    return avg_total, avg_components
+
+
 def train_epoch(
     model,
     train_dataloader,
@@ -407,8 +605,12 @@ def train_epoch(
     epoch: int,
     infos: List[dict],
     wandb_run=None,
+    val_dataloader=None,
+    best_val_loss=None,
+    patience_counter=None,
+    save_folder=None,
 ):
-    """Train for one epoch."""
+    """Train for one epoch with optional validation."""
     model.train()
 
     for j, batch in enumerate(
@@ -417,94 +619,12 @@ def train_epoch(
         step = epoch * len(train_dataloader) + j
         batch = {k: v.to(model.device) for k, v in batch.items()}
 
-        attention_mask = batch["attention_mask"]
-        mask_cho = attention_mask[::2]
-        mask_rej = attention_mask[1::2]
-        mask = (mask_cho * mask_rej)  # intersection for paired positions
-
-        # Reference outputs
-        with torch.no_grad(), ScaleAdapter(model, coeff=None):
-            with TraceDict(model, layers=loss_layers) as ret_ref:
-                with torch.amp.autocast("cuda", dtype=torch.bfloat16):
-                    outputs_ref = model(**batch, output_hidden_states=True)
-
-        ref_logp = outputs_ref.logits[:, :-1].log_softmax(-1)
-        labels = batch["input_ids"][:, 1:].unsqueeze(-1)
-        ref_label_logp = ref_logp.gather(2, labels).squeeze(-1).float()
-        ref_cho_label_logp = ref_label_logp[::2].detach()
-        ref_rej_label_logp = ref_label_logp[1::2].detach()
-
-        total_loss = torch.tensor(0.0, device=model.device)
-
-        # Contrastive training with both coefficients
-        for coef in [-1.0, 1.0]:
-            with torch.amp.autocast("cuda", dtype=torch.bfloat16):
-                with ScaleAdapter(model, coeff=coef):
-                    with TraceDict(model, layers=loss_layers, retain_grad=True) as ret:
-                        outputs_pi = model(**batch, output_hidden_states=True)
-
-            for lk in loss_layers:
-                hs_ref = (ret_ref[lk].output * attention_mask.unsqueeze(-1)).float()
-                pref_dir_ref_dH_Uw = (
-                    dirs_Uw.directions[lk].clone().to(model.device).float()
-                )
-
-                hs_ref_cho = hs_ref[::2]
-                hs_ref_rej = hs_ref[1::2]
-
-                hs_pi = (ret[lk].output * attention_mask.unsqueeze(-1)).float()
-                hs_pi_cho = hs_pi[::2]
-                hs_pi_rej = hs_pi[1::2]
-
-                pi_logprobs = outputs_pi.logits[:, :-1].log_softmax(-1)
-                pi_label_logprobs = pi_logprobs.gather(2, labels).squeeze(-1).float()
-                pi_rej_label_logp = pi_label_logprobs[1::2]
-                pi_cho_label_logp = pi_label_logprobs[::2]
-
-                U_w = (
-                    Uw_full[lk]
-                    if config.full_loss_u
-                    else model.get_submodule(lk)
-                    .ipissa_u[config.dataset_name]
-                    .to(model.device)
-                    .float()
-                )
-
-                if coef > 0:
-                    hs_pi_pos_u = hs_pi_cho @ U_w
-                    hs_pi_neg_u = hs_pi_rej @ U_w
-                    ref_coherence = ref_cho_label_logp
-                    pi_coherence = pi_cho_label_logp
-                else:
-                    hs_pi_pos_u = hs_pi_rej @ U_w  # Swap: treat rej as "pos" for negative steering
-                    hs_pi_neg_u = hs_pi_cho @ U_w
-                    ref_coherence = ref_rej_label_logp
-                    pi_coherence = pi_rej_label_logp
-
-                loss, info1 = contrastive_steering_loss_with_ref(
-                    pref_dir=pref_dir_ref_dH_Uw.detach(),
-                    hs_ref_cho=hs_ref_cho @ U_w,
-                    hs_ref_rej=hs_ref_rej @ U_w,
-                    hs_pi_pos=hs_pi_pos_u,
-                    hs_pi_neg=hs_pi_neg_u,
-                    ref_pos_label_logp=ref_coherence,
-                    pi_pos_label_logp=pi_coherence,
-                    cho_mask=mask.clone(),
-                    # coef=1.0,  # Swapping inputs handles direction, so coef is always positive
-                    coherence_threshold=config.coherence_threshold,
-                    boundary_order=config.boundary_order,
-                    last_n_tokens=config.last_n_tokens,
-                    loss_type=config.loss_type,
-                )
-
-                total_loss += loss.mean()
-
-                info1["lr"] = torch.tensor(scheduler.get_last_lr()[0])
-                info1 = {k: v.mean().detach().cpu().item() for k, v in info1.items()}
-                info1["coef"] = coef
-                info1["layer"] = lk
-                info1["step"] = step
-                infos.append(info1)
+        # Compute loss and collect info for logging
+        total_loss, batch_infos = compute_batch_loss(
+            model, batch, dirs_Uw, loss_layers, Uw_full, config,
+            return_info=True, step=step, scheduler=scheduler
+        )
+        infos.extend(batch_infos)
 
         total_loss.backward()
 
@@ -539,9 +659,48 @@ def train_epoch(
 
                 if wandb_run is not None:
                     wandb_run.log(info, step=step)
+            
+            # Validation check (less frequent than logging)
+            if val_dataloader is not None and step % (log_n_steps * 2) == 0 and step > 0:
+                val_loss, val_components = compute_validation_loss(
+                    model, val_dataloader, dirs_Uw, loss_layers, Uw_full, config
+                )
+                
+                # Log validation metrics
+                val_log_str = " | ".join([f"{k}={v:.3g}" for k, v in val_components.items()])
+                logger.info(f"Validation loss: {val_loss:.4f} | {val_log_str}")
+                
+                if wandb_run is not None:
+                    val_metrics = {"val/loss_total": val_loss}
+                    val_metrics.update({f"val/{k}": v for k, v in val_components.items()})
+                    wandb_run.log(val_metrics, step=step)
+                
+                # Early stopping check
+                if best_val_loss is not None and patience_counter is not None:
+                    if val_loss < best_val_loss[0]:
+                        best_val_loss[0] = val_loss
+                        patience_counter[0] = 0
+                        logger.info(f"New best validation loss: {val_loss:.4f}")
+                        
+                        # Save best checkpoint
+                        if config.save_checkpoints and save_folder is not None:
+                            best_folder = save_folder / "best"
+                            save_adapter(model, best_folder, config.dataset_name)
+                            logger.info(f"Saved best checkpoint to {best_folder}")
+                    else:
+                        patience_counter[0] += 1
+                        logger.info(
+                            f"Val loss did not improve. Patience: {patience_counter[0]}/{config.early_stop_patience}"
+                        )
+                        
+                        if patience_counter[0] >= config.early_stop_patience:
+                            logger.info(f"Early stopping triggered at step {step}")
+                            return True  # Signal early stop
 
         if epoch % 5 == 0 and j == 0:
             clear_mem()
+    
+    return False  # No early stop
 
 @torch.no_grad()
 def evaluate_model(model, tokenizer, config: TrainingConfig, dirs_pca: Optional[ControlVector] = None):
@@ -907,8 +1066,8 @@ def main(config: TrainingConfig):
     # Get choice IDs for evaluation
     choice_ids = get_choice_ids(tokenizer)
 
-    # Create dataset
-    honest_dataset, dataset_pt = create_dataset(
+    # Create dataset with train/val split
+    train_honest, train_dataset_pt, val_honest, val_dataset_pt = create_dataset(
         config, tokenizer, max_size=config.dataset_max_samples
     )
 
@@ -916,10 +1075,10 @@ def main(config: TrainingConfig):
     loss_layers = get_loss_layers(model, config)
     Uw_full = extract_U_matrices(model, loss_layers, config)
 
-    # Extract steering vectors
+    # Extract steering vectors (use train set only)
     with ScaleAdapter(model, coeff=None):
         dirs_Uw, dirs_pca = train_steer_vector(
-            model, honest_dataset, loss_layers, Uw_full, tokenizer, config
+            model, train_honest, loss_layers, Uw_full, tokenizer, config
         )
 
     logger.info(f"Steering extraction layer: {loss_layers}")
@@ -929,7 +1088,13 @@ def main(config: TrainingConfig):
         tokenizer=tokenizer, padding="longest", max_length=64
     )
     train_dataloader = DataLoader(
-        dataset_pt,
+        train_dataset_pt,
+        shuffle=False,
+        batch_size=config.batch_size,
+        collate_fn=data_collator,
+    )
+    val_dataloader = DataLoader(
+        val_dataset_pt,
         shuffle=False,
         batch_size=config.batch_size,
         collate_fn=data_collator,
@@ -954,10 +1119,20 @@ def main(config: TrainingConfig):
         "BEFORE TRAINING - Example outputs at different steering coefficients:",
     )
 
-    # Training loop
+    # Training loop with early stopping
     infos = []
+    best_val_loss = [float('inf')]  # Use list for mutability
+    patience_counter = [0]
+    
+    # Create save folder for checkpoints
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    save_folder = (
+        Path(config.output_dir) / f"{config.dataset_name}_contrastive_ipissa_{ts}"
+    )
+    
+    early_stopped = False
     for epoch in tqdm(range(config.n_epochs), desc="Epochs"):
-        train_epoch(
+        should_stop = train_epoch(
             model,
             train_dataloader,
             dirs_Uw,
@@ -969,7 +1144,16 @@ def main(config: TrainingConfig):
             epoch,
             infos,
             wandb_run,
+            val_dataloader=val_dataloader,
+            best_val_loss=best_val_loss,
+            patience_counter=patience_counter,
+            save_folder=save_folder,
         )
+        
+        if should_stop:
+            early_stopped = True
+            logger.info(f"Training stopped early at epoch {epoch}")
+            break
 
         # Show examples mid-training
         if epoch == config.n_epochs // 4:
@@ -979,6 +1163,16 @@ def main(config: TrainingConfig):
                 choice_ids,
                 [-1, 0, 1],
                 f"MID-TRAINING (epoch {epoch}) - Example outputs:",
+            )
+    
+    if early_stopped and config.save_checkpoints:
+        # Load best checkpoint
+        logger.info("Loading best checkpoint for final evaluation...")
+        best_folder = save_folder / "best"
+        if best_folder.exists():
+            from peft import PeftModel as PeftModelLoader
+            model = PeftModelLoader.from_pretrained(
+                base_model, best_folder, adapter_name=config.dataset_name
             )
 
     # Process final results
@@ -1010,7 +1204,6 @@ def main(config: TrainingConfig):
     # Evaluation
     df_res_wlabels, df_res_pv = evaluate_model(model, tokenizer, config, dirs_pca)
 
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     logger.info(f"Config {config}\n")
     logger.info(f"## Evaluation complete {ts}.\n\n{' '.join(sys.argv)}")
 
@@ -1027,12 +1220,10 @@ def main(config: TrainingConfig):
         "\n"
         + md_table
     )
+    logger.info(f"{' '.join(sys.argv)}")
     logger.info(f'🥇{main_score:2.3f}')
 
-    # Save results
-    save_folder = (
-        Path(config.output_dir) / f"{config.dataset_name}_contrastive_ipissa_{ts}"
-    )
+    # Save results (folder already created during training)
     save_folder.mkdir(parents=True, exist_ok=True)
 
     save_adapter(model, save_folder, config.dataset_name)
@@ -1047,6 +1238,7 @@ def main(config: TrainingConfig):
     # Save evaluation results
     df_res_wlabels.to_parquet(save_folder / "eval_results.parquet", index=False)
     df_res_pv.to_parquet(save_folder / "eval_summary.parquet")
+    df_eff_sz.to_parquet(save_folder / "eval_effect_sizes.parquet")
 
     # Save markdown results table
     with open(save_folder / "eval_summary.md", "w") as f:
@@ -1060,6 +1252,7 @@ def main(config: TrainingConfig):
     if wandb_run is not None:
         logger.info(f"W&B run: {wandb_run.get_url()}")
         wandb_run.summary["eval/main_metric"] = main_score
+        wandb_run.log({"main_metric": main_score})
 
         # wandb_run.summary["eval/effect_size_truthfulness"] = effect_size_truth
 

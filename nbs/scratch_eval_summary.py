@@ -4,6 +4,7 @@ from pathlib import Path
 from repeng.train.daily_dilemas import format_results_table, compute_coherence_metrics
 import cattrs
 import json
+from adjustText import adjust_text
 from repeng.train.train_adapter import proj_root, TrainingConfig
 
 # TODO get last that has results
@@ -144,7 +145,7 @@ cbar = plt.colorbar(scatter, ax=ax)
 cbar.set_label('Coefficient Magnitude', fontsize=11)
 
 # Use adjustText for non-overlapping labels if available, otherwise use smart positioning
-from adjustText import adjust_text
+
 texts = []
 for idx, row in df_plot.iterrows():
     text = ax.annotate(
@@ -175,11 +176,6 @@ gt_table_html.write_raw_html(str(output_dir / "results_table.html"))
 print(f"Saved HTML to {output_dir / 'results_table.html'}")
 
 # Save as LaTeX
-try:
-    # FIXME: latex does not support styles
-    latex_str = gt_table.as_latex()
-    (output_dir / "results_table.tex").write_text(latex_str)
-    print(f"Saved LaTeX to {output_dir / 'results_table.tex'}")
-except Exception as e:
-    print(f"Could not save LaTeX (install tinytex if needed): {e}")
-# TODO make great table with proper everything and output latex and html
+latex_str = gt_table.as_latex()
+(output_dir / "results_table.tex").write_text(latex_str)
+print(f"Saved LaTeX to {output_dir / 'results_table.tex'}")
