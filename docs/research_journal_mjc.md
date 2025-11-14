@@ -749,16 +749,68 @@ maybe I should just take the next token on a forward. and it can literally just 
 
 # References
 
+- Representation Engineering: https://arxiv.org/abs/2310.01405
+  - Early steering paper repeng repo is based on 
+  - > In this paper, we identify and characterize the emerging area of representation engineering (RepE), an approach to enhancing the transparency of AI systems that draws on insights from cognitive neuroscience. RepE places population-level representations, rather than neurons or circuits, at the center of analysis, equipping us with novel methods for monitoring and manipulating high-level cognitive phenomena in deep neural networks (DNNs). We provide baselines and an initial analysis of RepE techniques, showing that they offer simple yet effective solutions for improving our understanding and control of large language models. We showcase how these methods can provide traction on a wide range of safety-relevant problems, including honesty, harmlessness, power-seeking, and more, demonstrating the promise of top-down transparency research. We hope that this work catalyzes further exploration of RepE and fosters advancements in the transparency and safety of AI systems. 
 - BiPDO https://arxiv.org/abs/2406.00045
-- https://turntrout.com/gemini-steering
+  - > Researchers have been studying approaches to steer the behavior of Large Language Models (LLMs) and build personalized LLMs tailored for various applications. While fine-tuning seems to be a direct solution, it requires substantial computational resources and may significantly affect the utility of the original LLM. Recent endeavors have introduced more lightweight strategies, focusing on extracting "steering vectors" to guide the model's output toward desired behaviors by adjusting activations within specific layers of the LLM's transformer architecture. However, such steering vectors are directly extracted from the activations of human preference data and thus often lead to suboptimal results and occasional failures, especially in alignment-related scenarios. This work proposes an innovative approach that could produce more effective steering vectors through bi-directional preference optimization. Our method is designed to allow steering vectors to directly influence the generation probability of contrastive human preference data pairs, thereby offering a more precise representation of the target behavior. By carefully adjusting the direction and magnitude of the steering vector, we enabled personalized control over the desired behavior across a spectrum of intensities. Extensive experimentation across various open-ended generation tasks, particularly focusing on steering AI personas, has validated the efficacy of our approach. Moreover, we comprehensively investigate critical alignment-concerning scenarios, such as managing truthfulness, mitigating hallucination, and addressing jailbreaking attacks. Remarkably, our method can still demonstrate outstanding steering effectiveness across these scenarios. Furthermore, we showcase the transferability of our steering vectors across different models/LoRAs and highlight the synergistic benefits of applying multiple vectors simultaneously. 
 - https://github.com/vgel/repeng
+  - This is library that quite robust and popular for steering with PCA vectors in hidden space, we use it's prompting setup, and use it as a baseline. It's been cited in several papers
+  - > A Python library for generating control vectors with representation engineering. Train a vector in less than sixty seconds!
 - [PiSSA](https://arxiv.org/html/2404.02948v4)
+  - This paper decomposes each weight matrix W into U S V + W_residual like us
+  - > To parameter-efficiently fine-tune (PEFT) large language models (LLMs), the low-rank adaptation (LoRA) method approximates the model changes Δ⁢W∈ℝm×n through the product of two matrices A∈ℝm×r and B∈ℝr×n, where r≪min⁡(m,n), A is initialized with Gaussian noise, and B with zeros. LoRA freezes the original model W and updates the “Noise & Zero” adapter, which may lead to slow convergence. To overcome this limitation, we introduce Principal Singular values and Singular vectors Adaptation (PiSSA). PiSSA shares the same architecture as LoRA, but initializes the adaptor matrices A and B with the principal components of the original matrix W, and put the remaining components into a residual matrix Wr⁢e⁢s∈ℝm×n which is frozen during fine-tuning. Compared to LoRA, PiSSA updates the principal components while freezing the “residual” parts, allowing faster convergence and enhanced performance. Comparative experiments of PiSSA and LoRA across 11 different models, ranging from 184M to 70B, encompassing 5 NLG and 8 NLU tasks, reveal that PiSSA consistently outperforms LoRA under identical experimental setups. On the GSM8K benchmark, Gemma-7B fine-tuned with PiSSA achieves an accuracy of 77.7%, surpassing LoRA’s 74.53% by 3.25%. Due to the same architecture, PiSSA is also compatible with quantization to further reduce the memory requirement of fine-tuning. Compared to QLoRA, QPiSSA (PiSSA with 4-bit quantization) exhibits smaller quantization errors in the initial stages. Fine-tuning LLaMA-3-70B on GSM8K, QPiSSA attains an accuracy of 86.05%, exceeding the performance of QLoRA at 81.73%. Leveraging a fast SVD technique, PiSSA can be initialized in only a few seconds, presenting a negligible cost for transitioning from LoRA to PiSSA.
 - [SSVD](https://arxiv.org/html/2509.02830v1)
+  - This paper rotates the V matrix, which is very nodel and we use, it has good results (generalisaton which is better than just parameter efficiency)
+  - > Parameter-efficient fine-tuning (PEFT) has emerged as a scalable solution for adapting large foundation models. While low-rank adaptation (LoRA) is widely used in speech applications, its state-of-the-art variants, e.g., VeRA, DoRA, PiSSA, and SVFT, are developed mainly for language and vision tasks, with limited validation in speech. This work presents the first comprehensive integration and benchmarking of these PEFT methods within ESPnet. We further introduce structured SVD-guided (SSVD) fine-tuning, which selectively rotates input-associated right singular vectors while keeping output-associated vectors fixed to preserve semantic mappings. This design enables robust domain adaptation with minimal trainable parameters and improved efficiency. We evaluate all methods on domain-shifted speech recognition tasks, including child speech and dialectal variation, across model scales from 0.1B to 2B. All implementations are released in ESPnet to support reproducibility and future work.
+- [DoRA](https://arxiv.org/html/2306.08990v2) 
+  - Seperates magnitude and direction and has become a popular and strong LoRA baseline
 - [SVFT](https://arxiv.org/html/2405.19597v1)
+  - This paper updates the S of the SVD of each weight matrix like us
+  - > Popular parameter-efficient fine-tuning (PEFT) methods, such as LoRA and its variants, freeze pre-trained model weights 𝐖 and inject learnable matrices 𝚫⁢𝐖. These 𝚫⁢𝐖 matrices are structured for efficient parameterization, often using techniques like low-rank approximations or scaling vectors. However, these methods typically show a performance gap compared to full fine-tuning. Although recent PEFT methods have narrowed this gap, they do so at the cost of additional learnable parameters. We propose SVFT, a simple approach that fundamentally differs from existing methods: the structure imposed on 𝚫⁢𝐖 depends on the specific weight matrix 𝐖. Specifically, SVFT updates 𝐖 as a sparse combination of outer products of its singular vectors, training only the coefficients (scales) of these sparse combinations. This approach allows fine-grained control over expressivity through the number of coefficients. Extensive experiments on language and vision benchmarks show that SVFT1 recovers up to 96% of full fine-tuning performance while training only 0.006 to 0.25% of parameters, outperforming existing methods that only recover up to 85% performance using 0.03 to 0.8% of the trainable parameter budget.
+
+- Improving Alignment and Robustness with Circuit Breakers https://arxiv.org/html/2406.04313v3
+  - This paper is novel in that it also has a loss that operates on the hidden states, but it only works for refusals not steering (the authors told me this in a private comms). It's a much easier and more limited problem than steering because you are shutting down complex behaviour in favour of a simple refusal mode.
+  - > AI systems can take harmful actions and are highly vulnerable to adversarial attacks. We present an approach, inspired by recent advances in representation engineering, that interrupts the models as they respond with harmful outputs with “circuit breakers.” Existing techniques aimed at improving alignment, such as refusal training, are often bypassed. Techniques such as adversarial training try to plug these holes by countering specific attacks. As an alternative to refusal training and adversarial training, circuit-breaking directly controls the representations that are responsible for harmful outputs in the first place. Our technique can be applied to both text-only and multimodal language models to prevent the generation of harmful outputs without sacrificing utility—even in the presence of powerful unseen attacks. Notably, while adversarial robustness in standalone image recognition remains an open challenge, circuit breakers allow the larger multimodal system to reliably withstand image “hijacks” that aim to produce harmful content. Finally, we extend our approach to AI agents, demonstrating considerable reductions in the rate of harmful actions when they are under attack. Our approach represents a significant step forward in the development of reliable safeguards to harmful behavior and adversarial attacks. Code is available at github.com/GraySwanAI/circuit-breakers.
+
+- [Negative Results for SAEs On Downstream Tasks and Deprioritising SAE Research (GDM Mech Interp Team Progress Update #2)](https://www.alignmentforum.org/posts/4uXCAJNuPKtKBsi28/negative-results-for-saes-on-downstream-tasks)
+  - see also "back arrowGo to ICML 2025 Conference homepage
+Are Sparse Autoencoders Useful? A Case Study in Sparse Probing" https://openreview.net/forum?id=rNfzT8YkgO&noteId=hA0Ptt2IOa
+  - Many of the main authors explain how SAE's, an alternative to steering, do not generalise well (an I would add do not scale well)
+
+    TL;DR
+
+        To validate whether SAEs were a worthwhile technique, we explored whether they were useful on the downstream task of OOD generalisation when detecting harmful intent in user prompts
+        Negative result: SAEs underperformed linear probes
+            Corollary: Linear probes are actually really good and cheap and perform great
+        As a result of this and parallel work, we are deprioritising fundamental SAE research for the moment and exploring other directions, though SAEs will remain a tool in our toolkit
+            We do not think that SAEs are useless or that no one should work on them, but we also do not think that SAEs will be a game-changer for interpretability, and speculate that the field is over-invested in them.
+        Training SAEs specialised for chat data closed about half the gap but was still worse than linear probes
+            We tried several ways to train chat SAEs, all did about as well. By default, we recommend taking an SAE on pretraining data and finetuning it on a bit of chat data
+        Other results:
+            We found SAEs fairly helpful for debugging low quality datasets (noticing spurious correlations)
+            We present a variant of JumpReLU with an alternative sparsity penalty to get rid of high-frequency latents
+            We argue that a standard auto-interp approach of computing the average interpretability of a uniformly sampled SAE latent can be misleading as it doesn’t penalise models which have high frequency, but not very interpretable, latents, a
+
+Why does current steering methods fail to generalise?
 - [AxBench](https://arxiv.org/pdf/2501.17148)
+- https://turntrout.com/research#steering-vectors
+
+    Prompt engineering and finetuning aim to maximize language model performance on a given metric (like toxicity reduction). However, these methods do not fully elicit a model’s capabilities. To reduce this gap, we introduce activation engineering: the inference-time modification of activations in order to control (or steer) model outputs. Specifically, we introduce the Activation Addition (ActAdd) technique, which contrasts the intermediate activations on prompt pairs (such as “Love” versus “Hate”) to compute a steering vector.
+
+    By tactically adding in e.g. the “Love” − “Hate” steering vector during the forward pass, we achieve sota on negative-to-positive sentiment shift and detoxification using models including LLaMA-3 and opt. ActAdd yields inference-time control over high-level output properties (like topic and sentiment) while preserving performance on off-target tasks. ActAdd is lightweight: it does not require any machine optimization and works with a single pair of data points, which enables rapid iteration over steering. ActAdd demonstrates the power of activation engineering.
+
+    During 2023 and 2024, activation engineering inspired dozens of follow-up papers.
+    At Google DeepMind, Mark Kurzeja and I found a negative result when attempting to steer Gemini towards higher benchmark scores.
+
+- https://turntrout.com/gemini-steering
+
+
+  Bidpo seems effective and sample-efficient but does not currently exceed more standard baselines. It’s hard to draw firm conclusions about bidpo because TruthfulQA might not be measuring truthfulness / factuality. However, we remain excited about dpo-driven Conditional Activation Steering, which has additional advantages—particularly for targeted loss mitigation.
+
 - [Anthropic steering personality traits paper](https://www.anthropic.com/research/persona-vectors)
 - supressed neurons
-  - https://github.com/wassname/eliciting_suppressed_knowledge
+  - my readme that summarises the lesser known litriture on https://github.com/wassname/eliciting_suppressed_knowledge this tells you why I needed to steer on layer -3, because lots of supression happens after this and I hypothesis that the generation planning information I need to steer is supressed later on
 
   1. **Suppression/Prediction Neural Dynamics**:
      - [Gurnee et al. (2024)](https://arxiv.org/abs/2401.12181) identified "universal neurons" across different model seeds, including prediction neurons (increasing probability of related tokens) and suppression neurons (decreasing probability of specific token classes)
@@ -1182,3 +1234,35 @@ vs informal:
 # 2025-11-14 13:29:12
 
 OK my pca might be broken... I should rename my lib, and just import and run normal repeng on the same eval!
+
+# 2025-11-14 14:53:39
+
+Which table captures this best?
+
+Slope table: Shows InnerPiSSA with slope=0.823 (p=0.045) vs prompting slope=0.259 (p=0.458)
+
+✓ Correctly shows InnerPiSSA works better
+✗ Doesn't capture that prompting is non-monotonic
+
+
+CI95 table: Complete nonsense - shows U-space PCA as best with CI95=0.906
+
+✗ Wrong metric - this is upper bound, not lower bound!
+
+
+Pearson/Spearman tables: Show very weak correlations (r≈0.1)
+
+✗ Misses the effect size completely
+
+
+T-stat table: Shows InnerPiSSA t=2.007 vs prompting t=0.743
+
+✓ Best captures both significance AND effect size
+✓ Correctly ranks methods
+
+
+
+The problem with prompting: It's not linear! The effect peaks at coeff=0 then drops. Linear metrics (slope, Pearson) assume monotonicity and miss this.
+My recommendation:
+
+Primary metric: Use slope but flag non-monotonic cases

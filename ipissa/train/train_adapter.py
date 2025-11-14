@@ -868,7 +868,6 @@ def evaluate_model(
                     tokenizer,
                     choice_ids,
                     batch_size=eval_batch_size,
-                    generation_config=generation_config,
                     warn_low_pmass=(coeff == 0),
                     raise_on_nan=False,
                 )
