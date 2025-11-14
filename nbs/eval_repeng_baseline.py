@@ -37,12 +37,11 @@ def main():
     # Config
     config = TrainingConfig(
         model_name="Qwen/Qwen3-0.6B",
-        quantization_type="none",
-        eval_max_n_dilemmas=64,
+        # quantization_type="none",
+        # eval_max_n_dilemmas=64,
         eval_batch_size=8,
         dataset_max_samples=800,
     )
-
 
     # We'll use the same as our method for fair comparison
     # model_total_layers = 28  # Qwen3-0.6B has 28  layers
@@ -64,7 +63,10 @@ def main():
 
     # repeng uses layers relative to end: [-5, -6, -7, ...]
     N = base_model.config.num_hidden_layers
-    repeng_layers = np.linspace(int(N*0.3), N-3, num=4, dtype=int).tolist()
+    # repeng_layers = np.linspace(int(N*0.3), N-1, num=8, dtype=int).tolist()
+    repeng_layers = list(range(-5, N//2, -1))  # last half layers
+
+    model = ControlModel(base_model, repeng_layers)
 
     logger.info(f"Loaded model: {config.model_name}, repeng layers: {repeng_layers}")
 
@@ -88,7 +90,7 @@ def main():
     # Train control vector (don't wrap model yet - repeng will do it internally)
     logger.info("Training control vector with repeng...")
     control_vector = ControlVector.train(
-        base_model,  # Use base model directly
+        model,  # Use base model directly
         tokenizer, 
         honest_dataset,
         hidden_layers=repeng_layers,  # Specify layers here (read_representations expects hidden_layers)
@@ -96,7 +98,7 @@ def main():
     logger.info("Control vector trained")
     
     # Now wrap model for inference
-    model = ControlModel(base_model, repeng_layers)
+    
     model.reset()
 
     # quick test
