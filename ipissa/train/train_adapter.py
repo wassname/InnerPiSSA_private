@@ -79,7 +79,7 @@ class TrainingConfig:
     lr: float = 6e-4
     weight_decay: float = 0.1
     log_n: int = 10 # log this many times per training
-    grad_accum_steps: int = 8 # FIXME replace with effective batch size
+    effective_batch_size: int = 48
     quick: bool = False
     val_split: float = 0.15  # fraction of data for validation
     early_stop_patience: int = 5  # stop if val loss doesn't improve for N validation checks
@@ -115,6 +115,9 @@ class TrainingConfig:
     save_checkpoints: bool = False
 
     verbose: bool = False
+
+    def __post_init__(self):
+        self.grad_accum_steps = (self.effective_batch_size // self.batch_size)
 
 
 # Preset configs for different hardware/model combinations
