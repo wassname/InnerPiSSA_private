@@ -20,6 +20,7 @@ import pandas as pd
 import safetensors
 import torch
 import tyro
+import tyro.extras
 from baukit.nethook import TraceDict
 from datasets import Dataset
 from loguru import logger
@@ -89,7 +90,7 @@ class TrainingConfig:
     ipissa_rotate_u: bool = False # can be less stable as it modified output space and diverges from loss space
     ipissa_rotate_v: bool = True
     loss_full_u: bool = True # use full loss on u projection instead of just the adapted part
-    loss_ds_pref_dir: bool = True # extract prefered direction the reference model hs on the entire dataset (true), not just the per sample ref hs
+    loss_ds_pref_dir: bool = False # extract prefered direction the reference model hs on the entire dataset (true), not just the per sample ref hs
 
     # Dataset
     dataset_name: str = "honest"
@@ -115,6 +116,66 @@ class TrainingConfig:
 
     verbose: bool = False
 
+
+# Preset configs for different hardware/model combinations
+default_configs = {
+    "qwen-0.6b-24gb": (
+        "Qwen 0.6B on 24GB GPU (safe batch size)",
+        TrainingConfig(
+            model_name="Qwen/Qwen3-0.6B",
+            batch_size=16,
+            grad_accum_steps=16,
+            lr=0.01,
+            n_epochs=30,
+        ),
+    ),
+    "qwen-4b-24gb": (
+        "Qwen 4B on 24GB GPU (4bit quantization)",
+        TrainingConfig(
+            model_name="Qwen/Qwen3-4B-Instruct-2507",
+            batch_size=6,
+            grad_accum_steps=8,
+            quantization_type="4bit",
+            lr=0.006,
+            n_epochs=30,
+        ),
+    ),
+
+    # TODO tiny random debug config
+
+    "qwen-0.6b-quick": (
+        "Quick debug run (Qwen 0.6B, small dataset)",
+        TrainingConfig(
+            model_name="Qwen/Qwen3-0.6B",
+            batch_size=8,
+            grad_accum_steps=4,
+            lr=0.01,
+            n_epochs=2,
+            dataset_max_samples=200,
+            eval_max_n_dilemmas=32,
+            use_wandb=False,
+        ),
+    ),
+    "qwen-4b-quick": (
+        "Quick debug run (Qwen 4B, 4bit quant)",
+        TrainingConfig(
+            model_name="Qwen/Qwen3-4B-Instruct-2507",
+            batch_size=4,
+            grad_accum_steps=4,
+            quantization_type="4bit",
+            lr=0.006,
+            n_epochs=2,
+            dataset_max_samples=200,
+            eval_max_n_dilemmas=32,
+            use_wandb=False,
+        ),
+    ),
+
+    # TODO 100gb gpu configs
+    # meta-llama/Llama-3.1-8B-Instruct
+    # google/gemma-3-12b-it
+    # openai/gpt-oss-20b
+}
 
 def setup_logging(verbose: bool = False):
     """Configure loguru for clean output."""
@@ -354,8 +415,9 @@ def get_loss_layers(model, config: TrainingConfig):
 
 
 def extract_U_matrices(model, loss_layers: List[str], config: TrainingConfig):
-    """Extract SVD U matrices for loss projection."""
+    """Extract SVD U and V matrices for weight reconstruction."""
     Uw_full = {}
+    Vw_full = {}
 
     if config.loss_full_u:
         for lk in loss_layers:
@@ -363,15 +425,29 @@ def extract_U_matrices(model, loss_layers: List[str], config: TrainingConfig):
             W = m.weight.data.float()
             U, S, Vh = torch.linalg.svd(W, full_matrices=False)
             Uw_full[lk] = U.to(model.device).float()
+            Vw_full[lk] = Vh.T.to(model.device).float()  # V = Vh.T
 
         shapes = {k: v.shape for k, v in Uw_full.items()}
         logger.info(f"Extracted U matrices: {shapes}")
 
-    return Uw_full
+    return Uw_full, Vw_full
 
 
-def train_steer_vector(model, honest_dataset, loss_layers, Uw_full, tokenizer, config):
-    """Extract steering directions in U-space."""
+def train_steer_vector(model, honest_dataset, loss_layers, Uw_full, Vw_full, tokenizer, config):
+    """Extract steering directions in U-space (singular vector basis) and construct weight perturbations.
+    
+    Returns two types of steering vectors:
+    1. dirs_Uw: Weight-space steering (dict with U, delta_s, V per layer)
+       - Extracts direction in S-space by projecting activations: hs_u = hs @ U
+       - Computes preference direction: delta_s = mean(hs_u_cho - hs_u_rej)
+       - Stores {U, delta_s, V} for reconstruction: delta_W = U @ delta_s @ V.T
+       - Applied as: hs_new = hs + delta_W @ x (input-dependent transformation)
+       - Handles varying dimensions automatically (q_proj: 2048, k/v_proj: 1024)
+       
+    2. dirs_pca: Activation-space steering (tensor per layer)
+       - PCA on raw activations (legacy baseline)
+       - Applied as: hs_new = hs + delta (input-independent bias)
+    """
     model.eval()
 
     with torch.no_grad(), torch.amp.autocast("cuda", dtype=torch.bfloat16):
@@ -382,14 +458,23 @@ def train_steer_vector(model, honest_dataset, loss_layers, Uw_full, tokenizer, c
 
     steer_dirs = {}
     for layer in loss_layers:
-        U_T = Uw_full[layer]
+        U = Uw_full[layer].cpu()
+        V = Vw_full[layer].cpu()
         hs_cpu = last_act[layer].float()
-        hs_proj = hs_cpu @ U_T.cpu()
+        hs_proj = hs_cpu @ U  # Project to U-space: [n, d_out] @ [d_out, r] = [n, r]
 
         h_cho = hs_proj[::2]
         h_rej = hs_proj[1::2]
-        steer_dir = (h_cho - h_rej).mean(dim=0)
-        steer_dirs[layer] = torch.nn.functional.normalize(steer_dir, dim=0)
+        delta_s = (h_cho - h_rej).mean(dim=0)  # [r] direction in singular vector basis
+        delta_s = torch.nn.functional.normalize(delta_s, dim=0)
+        
+        # Construct weight perturbation: delta_W = U @ diag(delta_s) @ V.T
+        # For efficiency, store (U, delta_s, V) as a dict to reconstruct in hook
+        steer_dirs[layer] = {
+            'U': U,
+            'delta_s': delta_s,
+            'V': V,
+        }
 
     dirs_Uw = ControlVector(model_type=model.config.model_type, directions=steer_dirs)
     dirs_pca = read_representations(last_act, logprobs, grads=None)
@@ -715,7 +800,13 @@ def train_epoch(
     return False  # No early stop
 
 @torch.no_grad()
-def evaluate_model(model, tokenizer, config: TrainingConfig, dirs_pca: Optional[ControlVector] = None):
+def evaluate_model(
+    model, 
+    tokenizer, 
+    config: TrainingConfig, 
+    dirs_pca: Optional[ControlVector] = None,
+    dirs_Uw: Optional[ControlVector] = None,
+):
     """Run evaluation on Daily Dilemmas dataset."""
     logger.info("Running evaluation...")
     model.eval()
@@ -764,7 +855,7 @@ def evaluate_model(model, tokenizer, config: TrainingConfig, dirs_pca: Optional[
             List of result dicts
         """
         results = []
-        coeffs = [-1.0, 0.0, 1.0] if method_name == "InnerPiSSA (ours)" else [-1.0, 1.0]  # Skip 0 for non-baseline methods
+        coeffs = [-1.0, 0.0, 1.0]  # Always eval at 0 for baseline
         
         for coeff in coeffs:
             label = "(baseline)" if coeff == 0 else "(training coeff)" if coeff in [-1, 1] else ""
@@ -795,7 +886,18 @@ def evaluate_model(model, tokenizer, config: TrainingConfig, dirs_pca: Optional[
         sweep_coefficients("InnerPiSSA (ours)", lambda c: ScaleAdapter(model, coeff=c))
     )
 
-    # PCA baseline
+    # U-space PCA baseline (dataset-level preference direction in U-space)
+    # This ablates the learnable rotations and scaling - just applies the extracted direction
+    if dirs_Uw is not None:
+        logger.info("Evaluating U-space PCA baseline (dataset-level pref dir in U-space)")
+        results.extend(
+            sweep_coefficients(
+                "U-space PCA",
+                lambda c: steer(model, dirs_Uw, coeff=c, retain_grad=False),
+            )
+        )
+
+    # PCA baseline (activation-space PCA)
     if dirs_pca is not None:
         results.extend(
             sweep_coefficients(
@@ -1046,12 +1148,12 @@ def main(config: TrainingConfig):
 
     # Setup loss layers
     loss_layers = get_loss_layers(model, config)
-    Uw_full = extract_U_matrices(model, loss_layers, config)
+    Uw_full, Vw_full = extract_U_matrices(model, loss_layers, config)
 
     # Extract steering vectors (use train set only)
     with ScaleAdapter(model, coeff=None):
         dirs_Uw, dirs_pca = train_steer_vector(
-            model, train_honest, loss_layers, Uw_full, tokenizer, config
+            model, train_honest, loss_layers, Uw_full, Vw_full, tokenizer, config
         )
 
     logger.info(f"Steering extraction layer: {loss_layers}")
@@ -1175,7 +1277,7 @@ def main(config: TrainingConfig):
         )
 
     # Evaluation
-    df_res_wlabels, df_res_pv = evaluate_model(model, tokenizer, config, dirs_pca)
+    df_res_wlabels, df_res_pv = evaluate_model(model, tokenizer, config, dirs_pca, dirs_Uw)
 
     logger.info(f"Config {config}\n")
     logger.info(f"## Evaluation complete {ts}.\n\n{' '.join(sys.argv)}")
@@ -1186,7 +1288,7 @@ def main(config: TrainingConfig):
         logger.info(f"Results for method: {method}\n{df_res_pv[method].head(2).round(4)}\n")
 
     # Generate comprehensive metrics (both text and markdown)
-    md_table, df_eff_sz, main_score = format_results_table(
+    md_table, tables_dict, main_score = format_results_table(
             df_res_wlabels, target_col="logscore_Virtue/Truthfulness", config=config
         )
     logger.info(
@@ -1211,7 +1313,10 @@ def main(config: TrainingConfig):
     # Save evaluation results
     df_res_wlabels.to_parquet(save_folder / "eval_results.parquet", index=False)
     df_res_pv.to_parquet(save_folder / "eval_summary.parquet")
-    df_eff_sz.to_parquet(save_folder / "eval_effect_sizes.parquet")
+    
+    # Save all metric variant tables
+    for metric_name, df_variant in tables_dict.items():
+        df_variant.to_parquet(save_folder / f"eval_effect_sizes_{metric_name}.parquet")
 
     # Save markdown results table
     with open(save_folder / "eval_summary.md", "w") as f:
@@ -1235,6 +1340,10 @@ def main(config: TrainingConfig):
 
         transfer = compute_transfer_summary(df_res_wlabels)
         wandb_run.log({"eval/transfer_summary": wandb.Table(dataframe=transfer)})
+        
+        # Log all metric variant tables for comparison
+        for metric_name, df_variant in tables_dict.items():
+            wandb_run.log({f"eval/effect_sizes_{metric_name}": wandb.Table(dataframe=df_variant.reset_index())})
 
         # TODO have to restrict it to numeric
         df_res_pv_flat = df_res_pv.reset_index().rename(columns={'index': 'value'})
@@ -1249,6 +1358,7 @@ def main(config: TrainingConfig):
         wandb_run.finish()
 
 
+
 if __name__ == "__main__":
-    config = tyro.cli(TrainingConfig)
+    config = tyro.extras.overridable_config_cli(default_configs)
     main(config)

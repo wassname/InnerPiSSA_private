@@ -13,8 +13,8 @@ run:
     #!/bin/bash -x
     
     # Base config for small model ablations
-    BASEsmall="uv run python nbs/train.py --model_name=Qwen/Qwen3-0.6B --eval_max_n_dilemmas=256 --batch_size=24"
-    BASE="uv run python nbs/train.py --eval_max_n_dilemmas=256"
+    BASEsmall="uv run python nbs/train.py --model_name=Qwen/Qwen3-0.6B --batch_size=24"
+    BASE="uv run python nbs/train.py"
 
     # Helper to run with base + extra args
     run_exp() {

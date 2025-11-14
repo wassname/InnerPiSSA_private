@@ -379,31 +379,59 @@ def compute_transfer_summary(df_results, target_col='logscore_Virtue/Truthfulnes
             max_transfer = effects[best_coeff]
             
             # Test monotonic dose-response in TRAINING RANGE [-1, 0, 1] only
-            # Use Spearman's rho to measure monotonicity + effect size together
-            training_coeffs = [-1.0, 0.0, 1.0]
-            mean_scores = []
-            for coeff in training_coeffs:
-                vals = df_m.query('coeff == @coeff')[target_col_log].dropna()
-                if len(vals) > 0:
-                    mean_scores.append(vals.mean())
-                else:
-                    mean_scores.append(np.nan)
-            
-            # Spearman correlation: 1.0 = perfect monotonic, -1.0 = reversed, 0 = random
-            if not any(np.isnan(mean_scores)):
+            # Compute multiple metrics for comparison
+            df_train = df_m.query('coeff in [-1.0, 0.0, 1.0]')[['coeff', target_col_log]].dropna()
+            if len(df_train) >= 3:
                 try:
-                    from scipy.stats import spearmanr
-                    rho, p_value = spearmanr(training_coeffs, mean_scores)
-                    # We want positive steering (coeff=1) to increase truthfulness
-                    # So rho should be positive. If negative, steering is backwards.
-                    monotonicity_score = rho
+                    from scipy.stats import linregress, spearmanr, pearsonr
+                    
+                    # Linear regression (Pearson-based)
+                    result = linregress(df_train['coeff'], df_train[target_col_log])
+                    slope = result.slope
+                    p_value = result.pvalue
+                    stderr = result.stderr
+                    r_value = result.rvalue  # Pearson correlation
+                    
+                    # Metric 1: 95% CI lower bound (conservative, principled)
+                    ci_lower = slope - 1.96 * stderr
+                    mono_ci95 = max(0.0, ci_lower) if slope > 0 else min(0.0, ci_lower)
+                    
+                    # Metric 2: Pearson r (signed by slope direction)
+                    mono_pearson = r_value if slope > 0 else -abs(r_value)
+                    
+                    # Metric 3: Spearman rho (rank-based, robust to outliers)
+                    rho, p_spearman = spearmanr(df_train['coeff'], df_train[target_col_log])
+                    mono_spearman = rho
+                    
+                    # Metric 4: t-statistic (slope / stderr)
+                    t_stat = slope / stderr if stderr > 0 else 0.0
+                    mono_tstat = t_stat
+                    
+                    # Metric 5: Slope weighted by significance (1 - p_value)
+                    mono_slope_weighted = slope * max(0, 1 - p_value)
+                    
+                    # Default: use CI95 (most principled)
+                    monotonicity_score = mono_ci95
+                    
                 except Exception:
-                    logger.exception("Error computing Spearman correlation")
+                    logger.exception("Error computing monotonicity metrics")
                     p_value = np.nan
                     monotonicity_score = 0.0
+                    slope = 0.0
+                    mono_ci95 = 0.0
+                    mono_pearson = 0.0
+                    mono_spearman = 0.0
+                    mono_tstat = 0.0
+                    mono_slope_weighted = 0.0
             else:
                 p_value = np.nan
                 monotonicity_score = 0.0
+                slope = 0.0
+                mono_ci95 = 0.0
+                mono_pearson = 0.0
+                mono_spearman = 0.0
+                mono_tstat = 0.0
+                mono_slope_weighted = 0.0
             
             # Get degradation at best coeff
             # FIXME should be mean of both signs at that magnitude?
@@ -433,7 +461,13 @@ def compute_transfer_summary(df_results, target_col='logscore_Virtue/Truthfulnes
                 'best_coeff': best_coeff,
                 'transfer_effect': max_transfer,
                 'p_value': p_value,
-                'monotonicity': monotonicity_score,
+                'monotonicity': monotonicity_score,  # Default: CI95
+                'mono_ci95': mono_ci95,
+                'mono_pearson': mono_pearson,
+                'mono_spearman': mono_spearman,
+                'mono_tstat': mono_tstat,
+                'mono_slope_weighted': mono_slope_weighted,
+                'slope': slope,
                 'degradation_nll': degradation,
                 'mean_collateral': mean_collateral,
                 'total_values': len(score_cols),
@@ -443,7 +477,7 @@ def compute_transfer_summary(df_results, target_col='logscore_Virtue/Truthfulnes
 
 
 def format_results_table(df_results, config, target_col='score_Virtue/Truthfulness', target_col_log='logscore_Virtue/Truthfulness', target_method='InnerPiSSA (ours)'):
-    """Generate paper-ready results table.
+    """Generate paper-ready results table with multiple monotonicity metrics for comparison.
     
     Args:
         df_results: Processed evaluation results
@@ -451,47 +485,63 @@ def format_results_table(df_results, config, target_col='score_Virtue/Truthfulne
         target_col_log: Log-based metric (for p-value computation)
     
     Returns:
-        Formatted string table
+        Formatted string table, df_table, score
     """
     summary = compute_transfer_summary(df_results, target_col=target_col, target_col_log=target_col_log)
     
     # Sort by coefficient magnitude, then method
     summary = summary.sort_values(['coeff_mag', 'method'], ascending=[False, True])
     
-    # Build paper-ready table with newline headers
-    rows = []
-    for _, row in summary.iterrows():
-        p = row.get('p_value', 1.0)
-        
-        # Flip sign for truthfulness (negative transfer_effect = more truthful)
-        target_effect = np.abs(row['transfer_effect'])
-        
-        rows.append({
-            "Method": row['method'],
-            "Coeff\n±": row['coeff_mag'],
-            "Target Effect\nΔ Truth ↑": target_effect,
-            "Side Effects\nΔ Other ↓": row['mean_collateral'],
-            "p-value": p,
-            "Output Quality\nΔ NLL ↓": row['degradation_nll'],
-        })
-
-    df_table = pd.DataFrame(rows).sort_values("Target Effect\nΔ Truth ↑", ascending=False).set_index("Method")
+    # Build comparison tables for different monotonicity metrics
+    metric_variants = {
+        'CI95': 'mono_ci95',
+        'Pearson': 'mono_pearson', 
+        'Spearman': 'mono_spearman',
+        'T-stat': 'mono_tstat',
+        'Slope*(1-p)': 'mono_slope_weighted',
+    }
     
-    # Normalized Gain: Effect weighted by monotonicity (Spearman rho), divided by cost
-    # rho ∈ [-1, 1]: 1.0 = perfect monotonic, -1.0 = reversed, 0 = random
-    # Only positive rho contributes (negative = steering backwards)
-    df_table['Monotonicity\nρ'] = summary.set_index('method')['monotonicity']
-    df_table['Normalized Gain (%)'] = 100 * df_table['Target Effect\nΔ Truth ↑'] * np.maximum(0, df_table['Monotonicity\nρ']) / (1 + df_table['Output Quality\nΔ NLL ↓'])
-    df_table = df_table.sort_values('Normalized Gain (%)', ascending=False)
+    tables = {}
+    for metric_name, metric_col in metric_variants.items():
+        rows = []
+        for _, row in summary.iterrows():
+            p = row.get('p_value', 1.0)
+            target_effect = np.abs(row['transfer_effect'])
+            
+            rows.append({
+                "Method": row['method'],
+                "Coeff\n±": row['coeff_mag'],
+                "Target Effect\nΔ Truth ↑": target_effect,
+                "Side Effects\nΔ Other ↓": row['mean_collateral'],
+                "p-value": p,
+                "Output Quality\nΔ NLL ↓": row['degradation_nll'],
+            })
 
-    # TODO consider tabulet or great_tables
-    # print(GT(df_table).as_latex())
+        df_table = pd.DataFrame(rows).sort_values("Target Effect\nΔ Truth ↑", ascending=False).set_index("Method")
+        
+        # Add monotonicity metric and compute normalized gain
+        df_table[f'Mono\n{metric_name}'] = summary.set_index('method')[metric_col]
+        df_table[f'Gain_{metric_name} (%)'] = (
+            100 * df_table['Target Effect\nΔ Truth ↑'] * 
+            np.maximum(0, df_table[f'Mono\n{metric_name}']) / 
+            (1 + df_table['Output Quality\nΔ NLL ↓'])
+        )
+        df_table = df_table.sort_values(f'Gain_{metric_name} (%)', ascending=False)
+        tables[metric_name] = df_table
+    
+    # Use CI95 as default
+    df_table = tables['CI95']
 
-    # TODO could for % format for some by making floatfmt as array? .2%
+    # Generate tables for all metric variants
+    all_tables_md = []
+    for metric_name, df_variant in tables.items():
+        table_md = tabulate(df_variant, tablefmt="pipe", headers="keys", floatfmt=".3f", maxcolwidths=[None, 20])
+        all_tables_md.append(f"\n### Metric: {metric_name}\n{table_md}")
+    
+    # Main table (CI95)
     table_md = tabulate(df_table, tablefmt="pipe", headers="keys", floatfmt=".3f", maxcolwidths=[None, 20])
     eval_size = config.eval_max_n_dilemmas or 907
-    target_name = target_col.replace('score_', '').replace('Virtue/', '')
-    n_other = row.get('total_values', 30) - 1
+    n_other = summary.iloc[0].get('total_values', 30) - 1
     
     # Detect metric type from column name for better caption
     is_binary = 'binary_' in target_col
@@ -523,13 +573,17 @@ def format_results_table(df_results, config, target_col='score_Virtue/Truthfulne
     )
     
     header_lines = [
+        "## Main Results (CI95 - Conservative 95% Confidence Interval)",
         table_md,
         "",
         caption,
         methods_note,
+        "\n## Metric Comparison (all variants)",
+        *all_tables_md,
     ]
 
-    # FIXME, we should have a simple table with simple names
-    # and a great table with detailed names for paper, to latex in console and html saved
-    score = df_table[df_table["Coeff\n±"]==1.0]['Normalized Gain (%)'][target_method].item()
-    return "\n".join(header_lines), df_table, score
+    # Extract score using the default metric (CI95)
+    score = df_table[df_table["Coeff\n±"]==1.0]['Gain_CI95 (%)'][target_method].item()
+    
+    # Return main table and all variants for comparison
+    return "\n".join(header_lines), tables, score

@@ -1065,3 +1065,116 @@ Evidence of incoherence in 0.6B results:
 - No hyperparameters, well-established measure
 
 Sample-wise now correctly outscores dataset-level because it steers in the right direction consistently, not just achieving large effects at random coefficients.
+
+# 2025-11-14 12:33:16 
+## Weight-Space vs Activation-Space Steering (Nov 14, 2025)
+
+### Context
+Testing simpler baselines to understand what's necessary:
+- What if we just use a steering vector (no learnable adapter)?
+- What if we just hook activations (no backprop through the model)?
+
+This is the "U-space PCA baseline" - extracting a preference direction from the dataset and applying it at inference time.
+
+### The Dimension Mismatch Problem
+When steering LLMs, layers have different output dimensions:
+- `q_proj`: output is `[..., 2048]` (query dimension)  
+- `k_proj`, `v_proj`, `down_proj`: output is `[..., 1024]` (hidden dimension)
+
+If we extract a steering vector in activation space, we get dimension mismatches when applying to different layers.
+
+### Solution: Weight-Space Steering
+
+Instead of steering in activation space (adding a constant bias), we steer in **weight space** (modifying the transformation).
+
+**SVD geometry:**
+- Weight matrix: `W = U @ S @ V.T` where `W` is `[d_out, d_in]`
+- `U`: left singular vectors `[d_out, r]` - basis for output space (column space of W)
+- `S`: singular values `[r]` - scaling in singular vector basis
+- `V`: right singular vectors `[d_in, r]` - basis for input space (row space of W)
+
+**Extraction (in `train_steer_vector`):**
+1. Project activations to U-basis: `hs_u = hs @ U` gives `[n, r]`
+2. Compute preference direction in U-basis: `delta_s = mean(hs_u_cho - hs_u_rej)` gives `[r]`
+3. Store `{U, delta_s, V}` for each layer
+
+**Application (in `baukit_dir_add_hook`):**
+1. Reconstruct weight perturbation: `delta_W = U @ diag(delta_s) @ V.T` gives `[d_out, d_in]`
+2. Apply to input: `hs_new = hs + coeff * delta_W @ x`
+   - Efficient: `delta_W @ x = U @ (diag(delta_s) @ (V.T @ x))`
+   - **Input-dependent**: different inputs get different steering
+
+**Why this works:**
+- Steering is a transformation in weight space, not a bias in activation space
+- Dimensions work automatically: `delta_W @ x` always gives `[d_out]` matching `hs`
+- Works for all layers regardless of output dimension (q_proj: 2048, k/v_proj: 1024)
+- Input-dependent steering is more principled than constant bias
+
+**Comparison to activation-space steering (legacy PCA):**
+- PCA: extracts direction from raw activations, applies as `hs + delta`
+- Input-independent: same steering for all inputs
+- Dimension-sensitive: requires delta to match layer output dimension
+- Simpler but less flexible
+
+**Terminology:**
+- "U-basis" or "left singular vector basis" = basis for output space (columns of U)
+- "S-space" = singular value space (diagonal scaling in SVD)
+- "Weight-space steering" = modifying the transformation via delta_W
+- "Activation-space steering" = adding constant bias to activations
+
+
+# 2025-11-14 12:51:03 on sloppy U space terminology
+
+You're right to call me out - I'm being sloppy with terminology. Let me be precise:
+
+**SVD of W:**
+- `W = U @ S @ V.T` where `W` is `[d_out, d_in]`
+- `U` is `[d_out, r]` - left singular vectors
+- `S` is `[r]` - singular values (diagonal)
+- `V` is `[d_in, r]` - right singular vectors
+
+**When we do `hs @ U`:**
+- `hs` has shape `[n, d_out]` (activations in output space)
+- `U` has shape `[d_out, r]`
+- `hs @ U` gives `[n, r]` - coordinates in the **r-dimensional subspace** spanned by U's columns
+
+**Terminology:**
+- "U-basis" = the basis formed by the columns of U (r orthonormal vectors in d_out-dimensional space)
+- "Singular vector basis" = same thing (the columns of U are the left singular vectors)
+- The result `hs @ U` lives in **R^r**, not R^d_out
+
+So when I say "U-basis" or "singular vector basis", I mean the same thing: the r-dimensional coordinate system defined by U's columns. The result has dimension `[r]`, not `[d_out]`.
+
+**Clearer terminology:**
+- "Projected to U-basis" = `hs @ U`, gives `[r]`-dimensional coordinates
+- "In activation space" = raw `hs`, has `[d_out]` dimensions
+- "In weight's singular vector basis" = same as "projected to U-basis"
+
+Does that clarify? The confusion is that "U-basis" sounds like it should be d_out-dimensional, but it's actually the r-dimensional subspace that U spans.
+
+For a paper, **"singular vector basis"** is clearer and more standard. Here's why:
+
+**"Singular vector basis" (better for papers):**
+- Standard ML/linear algebra terminology
+- Immediately signals you're working with SVD decomposition
+- Unambiguous: everyone knows this means the columns of U (or V)
+- Connects to existing literature (PiSSA, SVFT, SSVD papers all use this)
+
+**"U-basis" (worse for papers):**
+- Informal/shorthand notation
+- Could be confused with "U-space" (the full output space)
+- Requires explanation that U is from SVD
+- Sounds like jargon specific to your work
+
+**For the paper, use:**
+- "Left singular vector basis" when being precise (first mention)
+- "Singular vector basis" after establishing context
+- "U-basis" only in code comments or informal discussion
+
+**Example paper language:**
+> "We project activations onto the left singular vector basis of the weight matrix, obtaining coordinates in an r-dimensional subspace that captures the layer's principal transformation patterns."
+
+vs informal:
+> "We project to U-basis" (requires reader to know U is from SVD)
+
+**Bottom line:** Use "singular vector basis" in the paper. It's standard terminology that reviewers will recognize immediately. Save "U-basis" for code and informal notes.

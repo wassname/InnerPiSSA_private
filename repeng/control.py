@@ -9,6 +9,7 @@ from collections import OrderedDict
 from baukit import TraceDict
 import torch
 from torch import Tensor, nn
+from einops import einsum
 
 import contextlib
 from transformers import PretrainedConfig, PreTrainedModel
@@ -207,36 +208,77 @@ def get_available_layers(model, regex_filter: Optional[str] = None, layer_range:
 
 # @torch.no_grad()
 def baukit_dir_add_hook(
-    output: Float[Tensor, "... d_act"],
+    output: Float[Tensor, "... d_out"],
     layer: str,
     inputs,
-    directions: Dict[str, Float[Tensor, "k d_act"]],
+    directions: Dict[str, Any],  # dict with {U, delta_s, V} or Tensor
     coeff: float = 1.0,
 ):
     """
-    Edit layer output by adding a scaled steering direction.
+    Edit layer output by applying weight perturbation or activation bias.
     
-    For direction (k, d):
-    - Sums k components to single (d,) vector
-    - Applies: hs_new = hs + coeff * delta
-    - Linear scaling: coeff=0 (no steering), coeff=1 (baseline), coeff=2 (double)
+    Two modes:
+    1. Weight-space steering (U-space): direction is dict with {'U', 'delta_s', 'V'}
+       - Constructs weight perturbation: delta_W = U @ diag(delta_s) @ V.T
+       - Applies input-dependent steering: hs_new = hs + coeff * delta_W @ x
+       - This is a transformation in weight space, not a bias in activation space
+       - Different inputs get different steering (input-dependent)
+       - Handles varying output dimensions (e.g., q_proj: 2048, k/v_proj: 1024)
+       
+    2. Activation-space steering (legacy PCA): direction is tensor [d_out]
+       - Applies constant bias: hs_new = hs + coeff * delta
+       - Same steering for all inputs (input-independent)
+       - Requires delta dimension to match layer output dimension
+    
+    Why weight-space steering:
+    - We extract steering direction in singular vector basis (U-space)
+    - Direction is delta_s in S-space (singular values), shape [r]
+    - To apply: reconstruct delta_W = U @ delta_s @ V.T, then delta_W @ x
+    - This gives correct dimensions for all layers automatically
     """
     if isinstance(output, tuple):
         y = output[0]
     else:
         y = output
-    direction = directions[layer]  # (k, d)
     
-    # Sum k directions to single vector (simple linear combination)
-    if direction.dim() == 2:
-        delta = direction.sum(dim=0)  # (k, d) -> (d,)
+    direction = directions[layer]
+    
+    # Mode 1: Weight perturbation (U-space steering)
+    if isinstance(direction, dict):
+        U = direction['U'].to(y.device, y.dtype)
+        delta_s = direction['delta_s'].to(y.device, y.dtype)
+        V = direction['V'].to(y.device, y.dtype)
+        
+        # Get input: x = inputs[0] if tuple else inputs
+        x = inputs[0] if isinstance(inputs, tuple) else inputs
+        
+        # Compute delta_W @ x = U @ diag(delta_s) @ V.T @ x        # x: [b s d_in], V: [d_in r], U: [d_out r], delta_s: [r]
+        # Efficient: (U @ diag(delta_s)) @ (V.T @ x)
+        Vt_x = einsum(x, V, '... d_in, d_in r -> ... r')
+        scaled = delta_s * Vt_x  # [r] * [... r] = [... r]
+        delta_hs = einsum(scaled, U, '... r, d_out r -> ... d_out')
+        
+        y = y + coeff * delta_hs
+    
+    # Mode 2: Activation bias (legacy PCA steering)
     else:
-        delta = direction  # Already (d,) for k=1
-    
-    delta = delta.to(y.dtype).to(y.device)
-    
-    # Linear additive scaling
-    y = y + coeff * delta
+        # Sum k directions to single vector (simple linear combination)
+        if direction.dim() == 2:
+            delta = direction.sum(dim=0)  # (k, d) -> (d,)
+        else:
+            delta = direction  # Already (d,) for k=1
+        
+        delta = delta.to(y.dtype).to(y.device)
+        
+        # Verify dimension match
+        if delta.shape[-1] != y.shape[-1]:
+            raise RuntimeError(
+                f"Steering vector dimension mismatch at layer {layer}: "
+                f"delta.shape={delta.shape}, y.shape={y.shape}. "
+                f"Expected delta dim {y.shape[-1]}, got {delta.shape[-1]}"
+            )
+        
+        y = y + coeff * delta
     
     if isinstance(output, tuple):
         output = (y,) + output[1:]

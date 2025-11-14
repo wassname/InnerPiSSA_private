@@ -1,0 +1,247 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 800" width="900" height="800">
+<defs>
+  <!-- Radial gradient for subtle warmth (cheesy yellow center to brown edge) -->
+  <radialGradient id="pizzaGradient" cx="50%" cy="50%" r="50%">
+    <stop offset="0%" style="stop-color:#FFF9E6;stop-opacity:0.3" />
+    <stop offset="70%" style="stop-color:#FFE8B3;stop-opacity:0.2" />
+    <stop offset="100%" style="stop-color:#D4A574;stop-opacity:0.1" />
+  </radialGradient>
+  
+  <!-- Dashed pattern for edge texture -->
+  <pattern id="crustPattern" patternUnits="userSpaceOnUse" width="12" height="12">
+    <circle cx="6" cy="6" r="1.5" fill="#8B6F47" opacity="0.3"/>
+  </pattern>
+</defs>
+
+<!-- White background -->
+<rect x="0" y="0" width="900" height="800" fill="#ffffff"/>
+
+<!-- InnerPiSSA space with subtle gradient fill -->
+<circle cx="410" cy="350" r="200" fill="url(#pizzaGradient)"/>
+
+<!-- Coherence boundary (pizza crust) - brown dashed circle -->
+<circle cx="410" cy="350" r="200" 
+        stroke="#8B6F47" 
+        stroke-width="5" 
+        fill="none" 
+        stroke-dasharray="10 8"
+        opacity="0.85"/>
+
+<!-- Subtle texture on boundary -->
+<circle cx="410" cy="350" r="200" 
+        stroke="url(#crustPattern)" 
+        stroke-width="8" 
+        fill="none"/>
+
+<!-- pref_dir (frozen target) - blue arrow pointing up -->
+<g>
+  <line x1="410" y1="350" x2="410" y2="210" 
+        stroke="#2E5C8A" 
+        stroke-width="4.5" 
+        marker-end="url(#arrowBlue)"/>
+  <defs>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" 
+            refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2E5C8A"/>
+    </marker>
+  </defs>
+</g>
+
+<!-- c=+1 (honest) - warm orange/red arrow (like tomato sauce) -->
+<g>
+  <line x1="410" y1="350" x2="330" y2="170" 
+        stroke="#D97706" 
+        stroke-width="4.5" 
+        marker-end="url(#arrowOrange)"/>
+  <defs>
+    <marker id="arrowOrange" markerWidth="10" markerHeight="10" 
+            refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#D97706"/>
+    </marker>
+  </defs>
+</g>
+
+<!-- c=-1 (dishonest) - red arrow (like pepperoni) -->
+<g>
+  <line x1="410" y1="350" x2="510" y2="250" 
+        stroke="#DC2626" 
+        stroke-width="4.5" 
+        marker-end="url(#arrowRed)"/>
+  <defs>
+    <marker id="arrowRed" markerWidth="10" markerHeight="10" 
+            refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#DC2626"/>
+    </marker>
+  </defs>
+</g>
+
+<!-- Projection lines (dashed) -->
+<line x1="330" y1="170" x2="410" y2="170" 
+      stroke="#D97706" 
+      stroke-width="2" 
+      stroke-dasharray="4 4" 
+      opacity="0.6"/>
+<line x1="510" y1="250" x2="410" y2="250" 
+      stroke="#DC2626" 
+      stroke-width="2" 
+      stroke-dasharray="4 4" 
+      opacity="0.6"/>
+
+<!-- Title with Italian-inspired serif font -->
+<text x="450" y="35" 
+      font-family="Georgia, Garamond, serif" 
+      font-size="24" 
+      font-weight="600"
+      fill="#1a1a1a" 
+      text-anchor="middle">InnerPiSSA Training Geometry</text>
+<text x="450" y="58" 
+      font-family="Georgia, Garamond, serif" 
+      font-size="14" 
+      fill="#666" 
+      text-anchor="middle"
+      font-style="italic">in PiSSA space</text>
+
+<!-- Labels with Italian-inspired typography -->
+<g>
+  <!-- pref_dir label -->
+  <text x="430" y="195" 
+        font-family="Georgia, Garamond, serif" 
+        font-size="16" 
+        fill="#2E5C8A" 
+        font-weight="600">pref_dir</text>
+  <text x="430" y="212" 
+        font-family="Georgia, Garamond, serif" 
+        font-size="13" 
+        fill="#4A5568">(frozen target)</text>
+  
+  <!-- c=+1 label -->
+  <text x="240" y="155" 
+        font-family="Georgia, Garamond, serif" 
+        font-size="16" 
+        fill="#D97706" 
+        font-weight="600">c = +1</text>
+  <text x="240" y="172" 
+        font-family="Georgia, Garamond, serif" 
+        font-size="13" 
+        fill="#4A5568">(honest)</text>
+  
+  <!-- c=-1 label -->
+  <text x="530" y="235" 
+        font-family="Georgia, Garamond, serif" 
+        font-size="16" 
+        fill="#DC2626" 
+        font-weight="600">c = −1</text>
+  <text x="530" y="252" 
+        font-family="Georgia, Garamond, serif" 
+        font-size="13" 
+        fill="#4A5568">(dishonest)</text>
+  
+  <!-- Boundary label -->
+  <text x="450" y="130" 
+        font-family="Georgia, Garamond, serif" 
+        font-size="15" 
+        fill="#8B6F47" 
+        text-anchor="middle"
+        font-style="italic">Coherence boundary</text>
+  
+  <!-- Inner/Outer region labels - positioned near boundary on right side -->
+  <text x="590" y="345" 
+        font-family="Georgia, Garamond, serif" 
+        font-size="13" 
+        fill="#8B6F47" 
+        text-anchor="start"
+        opacity="0.7">Inner</text>
+  <text x="625" y="345" 
+        font-family="Georgia, Garamond, serif" 
+        font-size="13" 
+        fill="#999" 
+        text-anchor="start"
+        opacity="0.6">| Outer</text>
+</g>
+
+<!-- Legend/Caption section with Italian-inspired typography -->
+<g transform="translate(20, 580)">
+  <text x="0" y="0" 
+        font-family="Georgia, Garamond, serif" 
+        font-size="16" 
+        font-weight="600"
+        fill="#1a1a1a">PiSSA Space</text>
+  
+  <text x="0" y="25" 
+        font-family="Georgia, Garamond, serif" 
+        font-size="13" 
+        fill="#4A5568">2D projection of output singular vector basis from SVD(W) = U·Σ·V</text>
+  <text x="0" y="40" 
+        font-family="Georgia, Garamond, serif" 
+        font-size="13" 
+        fill="#4A5568"
+        font-style="italic">T</text>
+  
+  <!-- Bullet points with color coding -->
+  <g transform="translate(0, 60)">
+    <circle cx="5" cy="-3" r="3" fill="#2E5C8A"/>
+    <text x="15" y="0" 
+          font-family="Georgia, Garamond, serif" 
+          font-size="13" 
+          fill="#2a2a2a">
+      <tspan font-weight="600" fill="#2E5C8A">pref_dir = mean(h_cho − h_rej)</tspan>: Average activation difference across training pairs
+    </text>
+  </g>
+  
+  <g transform="translate(0, 80)">
+    <circle cx="5" cy="-3" r="3" fill="#D97706"/>
+    <text x="15" y="0" 
+          font-family="Georgia, Garamond, serif" 
+          font-size="13" 
+          fill="#2a2a2a">
+      <tspan font-weight="600" fill="#D97706">c = +1</tspan>: Adapter amplifies separation → longer projection (stronger steering)
+    </text>
+  </g>
+  
+  <g transform="translate(0, 100)">
+    <circle cx="5" cy="-3" r="3" fill="#DC2626"/>
+    <text x="15" y="0" 
+          font-family="Georgia, Garamond, serif" 
+          font-size="13" 
+          fill="#2a2a2a">
+      <tspan font-weight="600" fill="#DC2626">c = −1</tspan>: Adapter suppresses separation → shorter projection (reverse steering)
+    </text>
+  </g>
+  
+  <g transform="translate(0, 120)">
+    <circle cx="5" cy="-3" r="3" fill="#8B6F47"/>
+    <text x="15" y="0" 
+          font-family="Georgia, Garamond, serif" 
+          font-size="13" 
+          fill="#2a2a2a">
+      <tspan font-weight="600" fill="#8B6F47">Boundary</tspan>: Maintains coherence (log p<tspan baseline-shift="sub" font-size="10">π</tspan> ≥ log p<tspan baseline-shift="sub" font-size="10">ref</tspan> − τ)
+    </text>
+  </g>
+  
+  <!-- Loss function with proper math notation -->
+  <text x="0" y="150" 
+        font-family="Georgia, Garamond, serif" 
+        font-size="13" 
+        fill="#1a1a1a"
+        font-weight="600">Loss:</text>
+  <text x="45" y="150" 
+        font-family="Georgia, Garamond, serif" 
+        font-size="13" 
+        fill="#4A5568"
+        font-style="italic">maximize proj<tspan baseline-shift="sub" font-size="10">π</tspan> / proj<tspan baseline-shift="sub" font-size="10">ref</tspan> subject to coherence</text>
+</g>
+
+<!-- Origin point -->
+<circle cx="410" cy="350" r="4" fill="#1a1a1a"/>
+<text x="420" y="368" 
+      font-family="Arial, sans-serif" 
+      font-size="12" 
+      fill="#4A5568">origin</text>
+
+<!-- Projection markers on pref_dir axis -->
+<circle cx="410" cy="170" r="3" fill="#D97706" opacity="0.7"/>
+<circle cx="410" cy="250" r="3" fill="#DC2626" opacity="0.7"/>
+
+</svg>

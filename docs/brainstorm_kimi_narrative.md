@@ -548,3 +548,33 @@ GitHub Copilot: Yes! This is **excellent** technical writing. Notice what makes 
 See the difference? You're not just describing *what* you did, but *why* each choice solves a specific problem.
 
 Want me to help rewrite your methods section in this style?
+
+
+# note on terminology
+
+   For a paper, **"singular vector basis"** is clearer and more standard. Here's why:
+
+   **"Singular vector basis" (better for papers):**
+   - Standard ML/linear algebra terminology
+   - Immediately signals you're working with SVD decomposition
+   - Unambiguous: everyone knows this means the columns of U (or V)
+   - Connects to existing literature (PiSSA, SVFT, SSVD papers all use this)
+
+   **"U-basis" (worse for papers):**
+   - Informal/shorthand notation
+   - Could be confused with "U-space" (the full output space)
+   - Requires explanation that U is from SVD
+   - Sounds like jargon specific to your work
+
+   **For the paper, use:**
+   - "Left singular vector basis" when being precise (first mention)
+   - "Singular vector basis" after establishing context
+   - "U-basis" only in code comments or informal discussion
+
+   **Example paper language:**
+   > "We project activations onto the left singular vector basis of the weight matrix, obtaining coordinates in an r-dimensional subspace that captures the layer's principal transformation patterns."
+
+   vs informal:
+   > "We project to U-basis" (requires reader to know U is from SVD)
+
+   **Bottom line:** Use "singular vector basis" in the paper. It's standard terminology that reviewers will recognize immediately. Save "U-basis" for code and informal notes.

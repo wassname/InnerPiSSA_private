@@ -1,0 +1,59 @@
+<svg viewBox="0 0 800 400">
+  <!-- Panel A: Reference -->
+  <g transform="translate(50, 50)">
+    <text class="title">Reference (coef=0)</text>
+    
+    <!-- Axes -->
+    <line class="axis" ... />
+    
+    <!-- Hidden states -->
+    <circle class="hs_ref_cho" cx="200" cy="100" r="5" fill="blue"/>
+    <circle class="hs_ref_rej" cx="150" cy="180" r="5" fill="red"/>
+    
+    <!-- Preference direction (frozen) -->
+    <line class="pref_dir_ref" 
+          x1="150" y1="180" x2="200" y2="100" 
+          stroke="purple" stroke-width="2" 
+          marker-end="url(#arrowhead)"/>
+    <text class="label">pref_dir_ref (frozen)</text>
+  </g>
+  
+  <!-- Panel B: After Training -->
+  <g transform="translate(450, 50)">
+    <text class="title">After Training (coef=+1)</text>
+    
+    <!-- Coherence boundary -->
+    <circle class="coherence_boundary" 
+            cx="175" cy="140" r="80" 
+            fill="none" stroke="gray" stroke-dasharray="5,5"/>
+    
+    <!-- Learned separation -->
+    <circle class="hs_pi_cho" cx="220" cy="80" r="5" fill="darkblue"/>
+    <circle class="hs_pi_rej" cx="130" cy="200" r="5" fill="darkred"/>
+    
+    <!-- Learned direction (amplified) -->
+    <line class="pref_dir_pi" 
+          x1="130" y1="200" x2="220" y2="80" 
+          stroke="darkpurple" stroke-width="3" 
+          marker-end="url(#arrowhead)"/>
+    
+    <!-- Reference direction (for comparison) -->
+    <line class="pref_dir_ref_ghost" 
+          x1="150" y1="180" x2="200" y2="100" 
+          stroke="purple" stroke-width="1" opacity="0.3" 
+          stroke-dasharray="3,3"/>
+    
+    <!-- Projection onto frozen direction -->
+    <line class="projection" 
+          x1="220" y1="80" x2="210" y2="95" 
+          stroke="green" stroke-dasharray="2,2"/>
+    
+    <text class="label">pref_dir_pi (learned)</text>
+    <text class="label">↑ larger projection</text>
+  </g>
+  
+  <!-- Legend -->
+  <g transform="translate(50, 350)">
+    <text>Loss = -proj(pref_dir_pi onto pref_dir_ref) + coherence_penalty</text>
+  </g>
+</svg>
