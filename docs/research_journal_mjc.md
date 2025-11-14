@@ -1178,3 +1178,7 @@ vs informal:
 > "We project to U-basis" (requires reader to know U is from SVD)
 
 **Bottom line:** Use "singular vector basis" in the paper. It's standard terminology that reviewers will recognize immediately. Save "U-basis" for code and informal notes.
+
+# 2025-11-14 13:29:12
+
+OK my pca might be broken... I should rename my lib, and just import and run normal repeng on the same eval!

@@ -1,5 +1,5 @@
 [project]
-name = "repeng"
+name = "ipissa"
 version = "0.5.0"
 description = "representation engineering / control vectors"
 authors = [{ name = "Theia Vogel", email = "theia@vgel.me" }]

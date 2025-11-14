@@ -2,18 +2,18 @@
 import cattrs
 import pandas as pd
 from pathlib import Path
-from repeng.train.daily_dilemas import (
+from ipissa.train.daily_dilemas import (
     format_results_table, evaluate_daily_dilemma, 
     load_and_process_daily_dilemmas_eval_dataset, 
     load_labels, select_dilemma_by_values, process_daily_dilemma_results
 )
-from repeng.eval import get_choice_ids
-from repeng.train.train_adapter import (
+from ipissa.eval import get_choice_ids
+from ipissa.train.train_adapter import (
     proj_root, TrainingConfig, load_model, register_ipissa_peft, 
     PeftModel as PeftModelLoader, clear_mem, setup_logging,
     create_dataset, get_loss_layers
 )
-from repeng.adapter import ScaleAdapter
+from ipissa.adapter import ScaleAdapter
 from transformers import AutoTokenizer, GenerationConfig
 import torch
 from tqdm.auto import tqdm
@@ -24,9 +24,9 @@ import json
 from loguru import logger
 import matplotlib.pyplot as plt  # Missing import
 from matplotlib.lines import Line2D
-from repeng.control import steer
-from repeng.extract import _collect_activations_only, read_representations
-from repeng import ControlVector
+from ipissa.control import steer
+from ipissa.extract import _collect_activations_only, read_representations
+from ipissa import ControlVector
 from matplotlib.colors import LogNorm  # For log colorbar
 
 

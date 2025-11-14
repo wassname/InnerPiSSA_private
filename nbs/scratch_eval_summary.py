@@ -1,11 +1,11 @@
 # %%
 import pandas as pd
 from pathlib import Path
-from repeng.train.daily_dilemas import format_results_table, compute_coherence_metrics
+from ipissa.train.daily_dilemas import format_results_table, compute_coherence_metrics
 import cattrs
 import json
 from adjustText import adjust_text
-from repeng.train.train_adapter import proj_root, TrainingConfig
+from ipissa.train.train_adapter import proj_root, TrainingConfig
 
 # TODO get last that has results
 print(f"proj_root: {proj_root}")

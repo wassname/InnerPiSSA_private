@@ -1,11 +1,11 @@
 # %%
 import pandas as pd
 from pathlib import Path
-from repeng.train.daily_dilemas import format_results_table, compute_coherence_metrics
+from ipissa.train.daily_dilemas import format_results_table, compute_coherence_metrics
 import cattrs
 import json
 from loguru import logger
-from repeng.train.train_adapter import proj_root, TrainingConfig
+from ipissa.train.train_adapter import proj_root, TrainingConfig
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from tqdm.auto import tqdm

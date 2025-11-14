@@ -1,7 +1,7 @@
 import pytest
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from repeng.eval import (
+from ipissa.eval import (
     get_choice_ids,
     gen_with_choices,
     is_choice,
@@ -116,13 +116,13 @@ def test_evaluate_model_with_adapter():
     2. Adapter coefficients have measurable effects (non-zero)
     3. Different coefficients produce different outputs
     """
-    from repeng.train.train_adapter import (
+    from ipissa.train.train_adapter import (
         TrainingConfig,
         setup_adapter,
         register_ipissa_peft,
     )
-    from repeng.adapter import ScaleAdapter
-    from repeng.train.daily_dilemas import evaluate_daily_dilemma
+    from ipissa.adapter import ScaleAdapter
+    from ipissa.train.daily_dilemas import evaluate_daily_dilemma
     from datasets import Dataset
     
     # Use tiny model for fast testing
@@ -166,7 +166,7 @@ def test_evaluate_model_with_adapter():
     }
     
     # Format with tokenizer
-    from repeng.train.daily_dilemas import format_messages
+    from ipissa.train.daily_dilemas import format_messages
     
     formatted_data = []
     for i in range(len(synthetic_data["idx"])):

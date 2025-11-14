@@ -25,11 +25,11 @@ from loguru import logger
 from tqdm.auto import tqdm
 from transformers import GenerationConfig
 
-from repeng.control import steer
-from repeng.adapter import ScaleAdapter
-from repeng.eval import get_choice_ids
-from repeng.train.daily_dilemas import evaluate_daily_dilemma
-from repeng.train.train_adapter import (
+from ipissa.control import steer
+from ipissa.adapter import ScaleAdapter
+from ipissa.eval import get_choice_ids
+from ipissa.train.daily_dilemas import evaluate_daily_dilemma
+from ipissa.train.train_adapter import (
     TrainingConfig,
     load_model,
     register_ipissa_peft,

@@ -9,7 +9,7 @@ from tqdm.auto import tqdm
 from collections import defaultdict
 from loguru import logger
 from typing import Optional
-from repeng.eval import gen_with_choices
+from ipissa.eval import gen_with_choices
 from tabulate import tabulate
 
 

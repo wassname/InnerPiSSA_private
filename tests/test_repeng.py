@@ -7,9 +7,9 @@ import numpy as np
 import pytest
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizerBase
 
-from repeng import ControlModel, ControlVector, DatasetEntry
-from repeng.control import model_layer_list
-from repeng.extract import batched_get_hiddens
+from ipissa import ControlModel, ControlVector, DatasetEntry
+from ipissa.control import model_layer_list
+from ipissa.extract import batched_get_hiddens
 
 
 @pytest.mark.slow

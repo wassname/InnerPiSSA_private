@@ -20,7 +20,7 @@ from peft.tuners.ia3.layer import IA3Layer
 from peft.tuners.vera.layer import VeraLayer
 from peft.tuners.road.layer import RoadLayer
 from peft.tuners.lora.layer import LoraLayer
-from repeng.peft_utils.innerpissa import InnerPiSSALayer
+from ipissa.peft_utils.innerpissa import InnerPiSSALayer
 
 try:
     from peft.tuners.delora.layer import DeloraLayer

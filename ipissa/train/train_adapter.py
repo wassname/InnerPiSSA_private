@@ -35,13 +35,13 @@ from transformers import (
     GenerationConfig,
 )
 
-from repeng import ControlVector, make_dataset
-from repeng.adapter import ScaleAdapter
-from repeng.control import steer
-from repeng.eval import get_choice_ids, gen_with_choices
-from repeng.extract import _collect_activations_only, read_representations
-from repeng.peft_utils.innerpissa import InnerPiSSAConfig, InnerPiSSAModel
-from repeng.train.daily_dilemas import (
+from ipissa import ControlVector, make_dataset
+from ipissa.adapter import ScaleAdapter
+from ipissa.control import steer
+from ipissa.eval import get_choice_ids, gen_with_choices
+from ipissa.extract import _collect_activations_only, read_representations
+from ipissa.peft_utils.innerpissa import InnerPiSSAConfig, InnerPiSSAModel
+from ipissa.train.daily_dilemas import (
     compute_coherence_metrics,
     compute_transfer_summary,
     evaluate_daily_dilemma,
@@ -51,7 +51,7 @@ from repeng.train.daily_dilemas import (
     process_daily_dilemma_results,
     select_dilemma_by_values,
 )
-from repeng.train.inner_contrastive_loss import contrastive_steering_loss_with_ref
+from ipissa.train.inner_contrastive_loss import contrastive_steering_loss_with_ref
 
 from attr import define
 import cattrs
@@ -79,7 +79,7 @@ class TrainingConfig:
     lr: float = 6e-4
     weight_decay: float = 0.1
     log_n: int = 10 # log this many times per training
-    grad_accum_steps: int = 8
+    grad_accum_steps: int = 8 # FIXME replace with effective batch size
     quick: bool = False
     val_split: float = 0.15  # fraction of data for validation
     early_stop_patience: int = 5  # stop if val loss doesn't improve for N validation checks
