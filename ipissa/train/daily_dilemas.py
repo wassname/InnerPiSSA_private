@@ -536,15 +536,15 @@ def format_results_table(df_results, config, target_col='score_Virtue/Truthfulne
 
         df_table = pd.DataFrame(rows).sort_values(col_names['effect'], ascending=False).set_index(col_names['method'])
         
-        # Add monotonicity metric (abs for clarity - direction is arbitrary)
-        mono_values = summary.set_index('method')[metric_col]
-        df_table[f'Mono\n{metric_name}'] = np.abs(mono_values)
+        # # Add monotonicity metric (abs for clarity - direction is arbitrary)
+        # mono_values = summary.set_index('method')[metric_col]
+        # df_table[f'Mono\n{metric_name}'] = np.abs(mono_values)
         
         # Compute normalized gain (use absolute values for magnitude regardless of direction)
         df_table[f'Gain_{metric_name} (%)'] = (
-            100 * df_table[col_names['effect']] *
-            np.abs(mono_values) /  # Use absolute values for magnitude
-            (1 + df_table[col_names['quality']])
+            100 * df_table[col_names['effect']] 
+            # * np.abs(mono_values) #  # Use absolute values for magnitude
+            / (1 + df_table[col_names['quality']])
         )
         df_table = df_table.sort_values(f'Gain_{metric_name} (%)', ascending=False)
         tables[metric_name] = df_table
@@ -604,7 +604,7 @@ def format_results_table(df_results, config, target_col='score_Virtue/Truthfulne
 
     # Extract score using the default metric (T-stat)
     if 'Coeff\n±' in df_table.columns:
-        df_table[df_table['Coeff\n±']==1]
+        df_table = df_table[df_table['Coeff\n±']==1]
     score = df_table['Gain_T-stat (%)'][target_method].item()
     
     # Return main table and all variants for comparison

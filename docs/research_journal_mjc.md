@@ -1266,3 +1266,18 @@ The problem with prompting: It's not linear! The effect peaks at coeff=0 then dr
 My recommendation:
 
 Primary metric: Use slope but flag non-monotonic cases
+
+# 2025-11-14 19:22:14 using normal repeng PCA code
+
+I clone the original repeng repo and ran it just in case my modifitations (tensors, hooks, contextlib) were breaking something. But the results are the same... it doesn't generalise! How strange. My theory:
+
+- it only makes a difference after a long generation sequence
+- somehow my training is out of format - e.g. only steering in a scope like assitant or thought
+- bug?
+
+
+
+other bugs
+- uv run python nbs/train.py --loss_ds_pref_dir fails ,try with quick
+- tables need to be sorted by their own norm slope
+- are we multiplying or dividing by nll down?

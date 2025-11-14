@@ -33,25 +33,11 @@ run:
     run_exp_small --loss_ds_pref_dir
 
     run_exp_small --no_loss_full_u
+
+    # try long
+    run_exp --n_epochs=100
+    run_exp_small --n_epochs=20
     
-    # === Layer selection ablations ===
-    echo "### Layer selection ablations ###"
-    run_exp --layers k_proj q_proj v_proj gate_proj up_proj --rank=16
-    run_exp --layers o_proj down_proj
-    run_exp --layers gate_proj up_proj  # default
-    run_exp --layers gate_proj down_proj
-    run_exp --layers o_proj up_proj
-    run_exp --layers gate_proj up_proj down_proj o_proj --rank=16
-    run_exp --layers k_proj q_proj v_proj --rank=16
-    # all pre compute
-
-    # === Weight decay ablations ===
-    echo "### Weight decay ablations ###"
-    run_exp --weight_decay=0.0
-    run_exp --weight_decay=0.1  # default
-    run_exp --weight_decay=1.0
-    run_exp --weight_decay=10.0
-
 
     # === Loss type ablations ===
     echo "### Loss type ablations ###"
@@ -73,6 +59,26 @@ run:
     run_exp --ipissa_rotate_u 
     run_exp --no_ipissa_rotate_v
     # run_exp --no_ipissa_rotate_u --no_ipissa_rotate_v --scale_s=none  # minimal adapter
+
+
+    # === Layer selection ablations ===
+    echo "### Layer selection ablations ###"
+    run_exp --layers k_proj q_proj v_proj gate_proj up_proj --rank=16
+    run_exp --layers o_proj down_proj
+    run_exp --layers gate_proj up_proj  # default
+    run_exp --layers gate_proj down_proj
+    run_exp --layers o_proj up_proj
+    run_exp --layers gate_proj up_proj down_proj o_proj --rank=16
+    run_exp --layers k_proj q_proj v_proj --rank=16
+    # all pre compute
+
+    # === Weight decay ablations ===
+    echo "### Weight decay ablations ###"
+    run_exp --weight_decay=0.0
+    run_exp --weight_decay=0.1  # default
+    run_exp --weight_decay=1.0
+    run_exp --weight_decay=10.0
+
 
     # === Learning rate ablations ===
     echo "### Learning rate ablations ###"

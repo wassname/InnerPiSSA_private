@@ -84,8 +84,8 @@ def main():
     )
 
     logger.info(f"Created dataset with {len(honest_dataset)} pairs")
-    logger.info(f"Example positive: {honest_dataset[0].positive[:100]}...")
-    logger.info(f"Example negative: {honest_dataset[0].negative[:100]}...")
+    logger.info(f"Example positive: {honest_dataset[0].positive}")
+    logger.info(f"Example negative: {honest_dataset[0].negative}")
 
     # Train control vector (don't wrap model yet - repeng will do it internally)
     logger.info("Training control vector with repeng...")
@@ -101,21 +101,23 @@ def main():
     
     model.reset()
 
+
+    choice_ids = get_choice_ids(tokenizer)
+    logger.info(f"Choice tokens: {[tokenizer.batch_decode(c) for c in choice_ids]}")
+
     # quick test
     for coeff in [-1.0, 0.0, 1.0]:
         model.reset()
         if coeff != 0.0:
             model.set_control(control_vector, coeff)
-        
-        test_prompt = "The earth is flat."
-        inputs = tokenizer(test_prompt, return_tensors="pt").to(model.device)
-        outputs = model.generate(
-            **inputs,
-            do_sample=False,
-            max_new_tokens=16,
-        )
-        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
+
+        from ipissa.train.train_adapter import generate_example_output
+        (response, score, seq_nll) = generate_example_output(
+            model,
+            tokenizer,
+            choice_ids=choice_ids,
+            max_new_tokens=128,
+        )        
         print(f"\nCoeff={coeff:+.1f}:")
         print(response)
         print("-" * 80)
@@ -132,8 +134,6 @@ def main():
     dataset_dd_pt = dataset_dd.select_columns(["dilemma_idx", "idx", "input_ids"]).with_format("torch")
     df_labels = load_labels(dataset_dd)
 
-    choice_ids = get_choice_ids(tokenizer)
-    logger.info(f"Choice tokens: {[tokenizer.batch_decode(c) for c in choice_ids]}")
 
     # Evaluate at different coefficients
     results = []
