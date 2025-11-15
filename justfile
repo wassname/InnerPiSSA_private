@@ -45,6 +45,11 @@ run:
     
     uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh2v1  --batch-size=32
     uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=google/gemma-3-12b-it --loss_type=tanh2v1  --batch-size=32
+    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=google/gemma-3-27b-it --loss_type=tanh2v1  --batch-size=32
+    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=Qwen/Qwen3-32B
+    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=deepseek-ai/DeepSeek-R1-Distill-Llama-70B
+    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=meta-llama/Llama-3.3-70B-Instruct
+    
     #uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=Qwen/Qwen3-14B --loss_type=tanh2v1 --batch-size=12
     # uv run python nbs/train.py . --lr=8e-3 --n_epochs=30 --model_name=openai/gpt-oss-20b --loss_type=tanh2v1 --batch-size=12
     

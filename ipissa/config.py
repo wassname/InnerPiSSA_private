@@ -46,7 +46,7 @@ class TrainingConfig:
 
     # Loss
     loss_type: Literal["logsigmoid", "softplus2", "softplus_only", "tanh2v1"] = (
-        "logsigmoid"
+        "tanh2v1"
     )
     coherence_threshold: float = 1.5
     boundary_order: int = 1
