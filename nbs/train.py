@@ -1,4 +1,5 @@
-from ipissa.train.train_adapter import main, TrainingConfig, default_configs
+from ipissa.train.train_adapter import main
+from ipissa.config import proj_root, TrainingConfig, default_configs
 import tyro 
 
 if __name__ == "__main__":

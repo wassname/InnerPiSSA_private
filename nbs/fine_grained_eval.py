@@ -34,7 +34,7 @@ from ipissa.train.train_adapter import (
     add_adapter_name_to_sd,
     compute_coherence_metrics,
     compute_transfer_summary,
-    create_dataset,  # Import instead of duplicating
+    create_train_dataset,  # Import instead of duplicating
     format_results_table,
     get_loss_layers,  # Import instead of duplicating
     load_and_process_daily_dilemmas_eval_dataset,
@@ -98,7 +98,7 @@ def load_checkpoint(result_dir: Path):
     )
 
     # Compute steering directions (using activations from honest dataset)
-    honest_dataset, _ = create_dataset(
+    honest_dataset, _ = create_train_dataset(
         config, tokenizer, max_size=config.dataset_max_samples
     )
     loss_layers = get_loss_layers(model, config)  # Reuse from train_adapter

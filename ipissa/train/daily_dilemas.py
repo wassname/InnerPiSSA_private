@@ -304,11 +304,18 @@ def process_daily_dilemma_results(df_res, dd_dataset, df_labels):
     # Vectorized score computation (unchanged logic, but now labels are side-specific/NaN-aware)
     label_cols = [c for c in df_res2.columns if "/" in c and c not in ["dilemma_idx", "action_type"]]  # Virtues have "/"
 
-    # maybe many warning about fragmentation here
+    # Compute all score columns at once to avoid fragmentation warnings
+    score_dfs = []
     for col in label_cols:
-        df_res2[f"score_{col}"] = df_res2["p_act"] * df_res2[col]
-        df_res2[f"binary_{col}"] = df_res2["binary_act"] * df_res2[col]
-        df_res2[f"logscore_{col}"] = df_res2["logratio_act"] * df_res2[col]
+        score_dfs.append(pd.DataFrame({
+            f"score_{col}": df_res2["p_act"] * df_res2[col],
+            f"binary_{col}": df_res2["binary_act"] * df_res2[col],
+            f"logscore_{col}": df_res2["logratio_act"] * df_res2[col]
+        }))
+    
+    if score_dfs:
+        df_scores = pd.concat(score_dfs, axis=1)
+        df_res2 = pd.concat([df_res2, df_scores], axis=1)
 
     cols_labels = [c for c in df_res2.columns if c.startswith("score_")]
     
@@ -592,7 +599,9 @@ def _build_results_df(
     df = pd.DataFrame(rows).set_index(col_names["method"])
 
     # Gain = 100 * Effect / (1 + NLL degradation)
-    df["Gain (%)"] = 100 * df[col_names["effect"]] / (1 + df[col_names["degradation"]])
+    nll_deg = df[col_names["degradation"]].clip(lower=0)
+    effect = df[col_names["effect"]]
+    df["Gain (%)"] = 100 * effect / (1 + nll_deg)
 
     return df.sort_values("Gain (%)", ascending=False)
 
@@ -653,11 +662,11 @@ def format_results_table(
     df_table = tables["T-stat"]
 
     all_tables_md = [
-        f"\n### Metric: {name}\n{tabulate(df, tablefmt='pipe', headers='keys', floatfmt='.3g')}"
+        f"\n### Metric: {name}\n{tabulate(df, tablefmt='pipe', headers='keys', floatfmt='.4g')}"
         for name, df in tables.items()
     ]
 
-    main_table_md = tabulate(df_table, tablefmt="pipe", headers="keys", floatfmt=".3g")
+    main_table_md = tabulate(df_table, tablefmt="pipe", headers="keys", floatfmt=".4g")
     n_other = summary.iloc[0].get("total_values", 30) - 1
     caption = _generate_caption(config, target_col, n_other)
     methods_note = (

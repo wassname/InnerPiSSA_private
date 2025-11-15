@@ -28,7 +28,7 @@ from ipissa.train.train_adapter import (
     TrainingConfig,
     generate_example_output,
     get_choice_ids,
-    load_suffixes,
+    load_train_suffixes,
     proj_root,
 )
 
@@ -75,7 +75,7 @@ def main():
     logger.info(f"Loaded model: {config.model_name}, repeng layers: {repeng_layers}")
 
     # Create training dataset
-    suffixes = load_suffixes(
+    suffixes = load_train_suffixes(
         max_per_file=config.dataset_max_samples // 4
         if config.dataset_max_samples
         else None

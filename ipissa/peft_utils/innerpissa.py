@@ -31,7 +31,8 @@ from peft.utils import PeftType
 from peft.utils.other import get_pattern_key
 import bitsandbytes as bnb
 from bitsandbytes.nn import Params4bit, Int8Params
-
+from typing import Any, Optional, Union, List
+import enum
 from peft.utils import (
     TRANSFORMERS_MODELS_TO_LORA_TARGET_MODULES_MAPPING,
 )
@@ -500,3 +501,25 @@ class InnerPiSSAModel(BaseTuner):
                 f"Currently, only `torch.nn.Linear` is supported."
             )
         return new_module
+
+
+
+
+def register_ipissa_peft():
+    """Register custom InnerPiSSA adapter with PEFT."""
+
+    import peft.utils.peft_types
+    from peft.mapping import PEFT_TYPE_TO_PREFIX_MAPPING
+    from peft.utils import register_peft_method
+
+    class PeftType2(str, enum.Enum):
+        INNERPISSA = "INNERPISSA"
+
+    peft.utils.peft_types.PeftType = PeftType2
+    PEFT_TYPE_TO_PREFIX_MAPPING[InnerPiSSAConfig.peft_type] = "INNERPISSA"
+    register_peft_method(
+        name="innerpissa",
+        model_cls=InnerPiSSAModel,
+        config_cls=InnerPiSSAConfig,
+        prefix="ipissa_",
+    )

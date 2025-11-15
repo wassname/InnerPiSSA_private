@@ -27,18 +27,13 @@ run:
         $BASEsmall "$@"
     }
 
-    run_exp_small --no-loss_ds_pref_dir
-    run_exp_small --loss_ds_pref_dir
+    # run_exp_small --no-loss_ds_pref_dir
+    # run_exp_small --loss_ds_pref_dir
 
-    run_exp --no-loss_ds_pref_dir
-    run_exp --loss_ds_pref_dir
+    # run_exp --no-loss_ds_pref_dir
+    # run_exp --loss_ds_pref_dir
 
-    run_exp_small --no_loss_full_u
-
-    # try long
-    run_exp --n_epochs=200
-    run_exp_small --n_epochs=200
-    
+    # run_exp_small --no_loss_full_u
 
     # === Loss type ablations ===
     echo "### Loss type ablations ###"
@@ -47,13 +42,15 @@ run:
     run_exp --loss_type=softplus_only
     run_exp --loss_type=logsigmoid  # default
     
-    # === Scale mechanism ablations ===
-    echo "### Scale mechanism ablations ###"
-    run_exp --scale_s=add_tanh
-    run_exp --scale_s=add2   # default
-    run_exp --scale_s=none
-    run_exp --scale_s=mult
     
+    uv run python nbs/train.py . --lr=8e-3 --n_epochs=30 --model_name=meta-llama/Llama-3.2-3B-Instruct --loss_type=tanh2v1
+    uv run python nbs/train.py . --lr=8e-3 --n_epochs=30 --model_name=google/gemma-3-4b-it --loss_type=tanh2v1
+    
+
+    # try long
+    run_exp --n_epochs=200
+    run_exp_small --n_epochs=200
+
     # === Rotation ablations ===
     echo "### Rotation ablations ###"
     run_exp --ipissa_rotate_u --no_ipissa_rotate_v
@@ -61,6 +58,12 @@ run:
     run_exp --no_ipissa_rotate_v
     # run_exp --no_ipissa_rotate_u --no_ipissa_rotate_v --scale_s=none  # minimal adapter
 
+    # === Scale mechanism ablations ===
+    echo "### Scale mechanism ablations ###"
+    run_exp --scale_s=add_tanh
+    run_exp --scale_s=add2   # default
+    run_exp --scale_s=none
+    run_exp --scale_s=mult
 
     # === Layer selection ablations ===
     echo "### Layer selection ablations ###"

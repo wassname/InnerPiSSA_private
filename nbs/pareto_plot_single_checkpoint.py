@@ -32,7 +32,7 @@ from ipissa.train.train_adapter import PeftModel as PeftModelLoader
 from ipissa.train.train_adapter import (
     TrainingConfig,
     clear_mem,
-    create_dataset,
+    create_train_dataset,
     get_loss_layers,
     load_model,
     proj_root,
@@ -99,7 +99,7 @@ def get_acts(checkpoint_name, dataset_len):
 
 
 # Extract directions for baselines
-train_honest, _, _, _ = create_dataset(
+train_honest, _, _, _ = create_train_dataset(
     config, tokenizer, max_size=config.dataset_max_samples
 )
 loss_layers = get_loss_layers(model, config)

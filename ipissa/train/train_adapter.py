@@ -19,11 +19,8 @@ from typing import List, Literal, Optional
 import cattrs
 import numpy as np
 import pandas as pd
-import safetensors
 import torch
 import torch.nn.functional as F
-import tyro
-import tyro.extras
 from attr import define
 from baukit.nethook import TraceDict
 from datasets import Dataset
@@ -36,7 +33,6 @@ from transformers import (
     AutoTokenizer,
     BitsAndBytesConfig,
     DataCollatorWithPadding,
-    GenerationConfig,
 )
 
 from ipissa import ControlVector, make_dataset
@@ -44,7 +40,7 @@ from ipissa.adapter import ScaleAdapter
 from ipissa.control import steer
 from ipissa.eval import gen_with_choices, get_choice_ids
 from ipissa.extract import _collect_activations_only, read_representations
-from ipissa.peft_utils.innerpissa import InnerPiSSAConfig, InnerPiSSAModel
+from ipissa.peft_utils.innerpissa import InnerPiSSAConfig, InnerPiSSAModel, register_ipissa_peft
 from ipissa.train.daily_dilemas import (
     compute_coherence_metrics,
     compute_transfer_summary,
@@ -56,111 +52,8 @@ from ipissa.train.daily_dilemas import (
     select_dilemma_by_values,
 )
 from ipissa.train.inner_contrastive_loss import contrastive_steering_loss_with_ref
-
-proj_root = Path(__file__).parent.parent.parent
-
-
-@define(slots=False)
-class TrainingConfig:
-    """Configuration for training contrastive InnerPiSSA adapter."""
-
-    # Model config
-    model_name: str = "Qwen/Qwen3-4B-Instruct-2507"
-    quantization_type: Literal["4bit", "8bit", "none"] = "none"
-
-    # layers to target
-    layers: List[str] = ["down_proj", "k_proj", "v_proj", "q_proj"]
-    num_layers: int = 3  # intervene on this many layers, spaced evenly
-    perc_start: float = 0.3  # ignore the first X% of layers
-    end_layers: int = -3  # ignore the last X layers
-
-    # Training params
-    batch_size: int = 8
-    n_epochs: int = 30
-    lr: float = 6e-4
-    weight_decay: float = 0.1
-    log_n: int = 10  # log this many times per training
-    effective_batch_size: int = 48
-    quick: bool = False
-    val_split: float = 0.15  # fraction of data for validation
-    early_stop_patience: int = (
-        5  # stop if val loss doesn't improve for N validation checks
-    )
-
-    # Adapter params
-    rank: int = 24
-    scale_s: Literal["add2", "add_tanh", "mult", "none"] = "add2"
-    ipissa_rotate_u: bool = False  # can be less stable as it modified output space and diverges from loss space
-    ipissa_rotate_v: bool = True
-    loss_full_u: bool = (
-        True  # use full loss on u projection instead of just the adapted part
-    )
-    loss_ds_pref_dir: bool = False  # extract prefered direction the reference model hs on the entire dataset (true), not just the per sample ref hs
-
-    # Dataset
-    dataset_name: str = "honest"
-    dataset_max_samples: Optional[int] = 800
-
-    # Loss
-    loss_type: Literal["logsigmoid", "softplus2", "softplus_only", "tanh2v1"] = (
-        "logsigmoid"
-    )
-    coherence_threshold: float = 1.5
-    boundary_order: int = 1
-    last_n_tokens: int = 3
-
-    # Eval
-    eval_batch_size: Optional[int] = None
-    # Instead of a full eval just use the top N value with truth labels
-    eval_max_n_dilemmas: Optional[int] = None
-    eval_dataset_max_token_length: int = 196
-
-    # Output
-    output_dir: Path = proj_root / "outputs/adapters"
-    use_wandb: bool = True
-    wandb_project: str = "InnerPiSSA"
-    save_checkpoints: bool = False
-
-    verbose: bool = False
-
-    @property
-    def grad_accum_steps(self):
-        return self.effective_batch_size // self.batch_size
-
-    # def __post_init__(self):
-    #     self.grad_accum_steps = (self.effective_batch_size // self.batch_size)
-
-
-# Preset configs for different hardware/model combinations https://brentyi.github.io/tyro/examples/hierarchical_structures/
-default_configs = {
-    ".": ("default", TrainingConfig()),
-    "q1-24gb": (
-        "Qwen 0.6B on 24GB GPU",
-        TrainingConfig(
-            model_name="Qwen/Qwen3-0.6B",
-            batch_size=32,
-        ),
-    ),
-    "q4b-24gb": (
-        "Qwen 4B on 24GB GPU",
-        TrainingConfig(
-            model_name="Qwen/Qwen3-4B-Instruct-2507",
-            batch_size=6,
-        ),
-    ),
-    "tiny": (
-        "Debug tiny random model",
-        TrainingConfig(
-            model_name="snake7gun/tiny-random-qwen3",
-            quick=True,
-        ),
-    ),
-    # TODO 100gb gpu configs
-    # meta-llama/Llama-3.2-3B-Instruct
-    # meta-llama/Llama-3.1-8B-Instruct
-    # google/gemma-3-12b-it
-    # openai/gpt-oss-20b
-}
+from ipissa.config import TrainingConfig, proj_root
+from ipissa.peft_utils.load import add_adapter_name_to_sd, remove_adapter_name, save_adapter
 
 
 def setup_logging(verbose: bool = False):
@@ -180,27 +73,8 @@ def clear_mem():
     torch.cuda.empty_cache()
 
 
-def register_ipissa_peft():
-    """Register custom InnerPiSSA adapter with PEFT."""
 
-    import peft.utils.peft_types
-    from peft.mapping import PEFT_TYPE_TO_PREFIX_MAPPING
-    from peft.utils import register_peft_method
-
-    class PeftType2(str, enum.Enum):
-        INNERPISSA = "INNERPISSA"
-
-    peft.utils.peft_types.PeftType = PeftType2
-    PEFT_TYPE_TO_PREFIX_MAPPING[InnerPiSSAConfig.peft_type] = "INNERPISSA"
-    register_peft_method(
-        name="innerpissa",
-        model_cls=InnerPiSSAModel,
-        config_cls=InnerPiSSAConfig,
-        prefix="ipissa_",
-    )
-
-
-def load_suffixes(
+def load_train_suffixes(
     data_dir: Path = proj_root / "nbs/data", max_per_file: Optional[int] = None
 ) -> List[str]:
     """Load dataset suffixes from JSON files."""
@@ -221,9 +95,9 @@ def load_suffixes(
     return suffixes
 
 
-def create_dataset(config: TrainingConfig, tokenizer, max_size: Optional[int] = None):
+def create_train_dataset(config: TrainingConfig, tokenizer, max_size: Optional[int] = None):
     """Create contrastive dataset with train/val split."""
-    suffixes = load_suffixes(
+    suffixes = load_train_suffixes(
         max_per_file=max_size // 4 if max_size is not None else None
     )
 
@@ -870,17 +744,8 @@ def evaluate_model(
     df_labels = load_labels(dataset_dd)
 
     choice_ids = get_choice_ids(tokenizer)
-    generation_config = GenerationConfig(
-        eos_token_id=tokenizer.eos_token_id,
-        pad_token_id=tokenizer.pad_token_id,
-        bos_token_id=tokenizer.bos_token_id,
-        use_cache=True,
-        output_logits=True,
-        return_dict_in_generate=True,
-        do_sample=False,
-    )
 
-    eval_batch_size = config.eval_batch_size or config.batch_size * 2
+    eval_batch_size = config.eval_batch_size or config.batch_size
 
     # Helper function to sweep coefficients with early stopping
     def sweep_coefficients(
@@ -1012,43 +877,6 @@ def evaluate_model(
 
     return df_res_wlabels, df_res_pv
 
-
-def add_adapter_name_to_sd(sd, adapter_name="default", prefix="ipissa_"):
-    new_sd = {}
-    for k, v in sd.items():
-        if prefix in k:
-            new_k = f"{k}.{adapter_name}"
-        new_sd[new_k] = v
-    return new_sd
-
-
-def remove_adapter_name(key, adapter_name="default"):
-    if "." not in key:
-        return key
-    if key.endswith(f".{adapter_name}"):
-        return key.removesuffix(f".{adapter_name}")
-    return key  # .replace(f".{adapter_name}.", ".")
-
-
-def save_adapter(model: PeftModel, save_folder: Path, adapter_name: str):
-    """Save adapter weights and config."""
-
-    from peft.mapping import PEFT_TYPE_TO_PREFIX_MAPPING
-
-    save_folder.mkdir(parents=True, exist_ok=True)
-
-    config = model.peft_config[adapter_name]
-    state_dict = model.state_dict()
-
-    prefix = PEFT_TYPE_TO_PREFIX_MAPPING[config.peft_type]
-    to_return = {k: state_dict[k] for k in state_dict if prefix in k}
-
-    to_return = {remove_adapter_name(k, adapter_name): v for k, v in to_return.items()}
-
-    safetensors.torch.save_file(to_return, save_folder / "adapter_model.safetensors")
-    config.save_pretrained(save_folder)
-
-    logger.info(f"Saved adapter to {save_folder}")
 
 
 @torch.no_grad()
@@ -1237,7 +1065,7 @@ def main(config: TrainingConfig):
     choice_ids = get_choice_ids(tokenizer)
 
     # Create dataset with train/val split
-    train_honest, train_dataset_pt, val_honest, val_dataset_pt = create_dataset(
+    train_honest, train_dataset_pt, val_honest, val_dataset_pt = create_train_dataset(
         config, tokenizer, max_size=config.dataset_max_samples
     )
 
@@ -1467,6 +1295,3 @@ def main(config: TrainingConfig):
         wandb_run.finish()
 
 
-if __name__ == "__main__":
-    config = tyro.extras.overridable_config_cli(default_configs)
-    main(config)

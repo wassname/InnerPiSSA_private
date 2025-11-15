@@ -1,15 +1,16 @@
 
 # 2025-11-11 19:56:42
 
-
 19:46:28 | INFO     | Evaluation results:
 coeff                  -100    -1       0       1       100
 Virtue/Truthfulness  0.3161  0.4803  0.5040  0.4062  0.3558
 Virtue/Ambition      0.2116  0.3933  0.3428  0.2923  0.2510
 19:46:28 | INFO     | Config TrainingConfig(model_name='Qwen/Qwen3-0.6B', quantization_type='none', target_modules='.*\\.(7|10|13|15|17|20|23|25)\\..*(o_proj|up_proj)', batch_size=32, n_epochs=100, lr=0.0006, weight_decay=0.1, log_n=10, grad_accum_steps=10, quick=False, rank=256, scale_s='mult', ipissa_rotate_u=True, ipissa_rotate_v=True, loss_full_u=True, dataset_name='honest', dataset_max_samples=1000, loss_type='logsigmoid', coherence_threshold=1.5, boundary_order=1, last_n_tokens=3, eval_batch_size=None, eval_max_n_dilemmas=None, eval_dataset_max_token_length=196, output_dir=PosixPath('/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters'), use_wandb=True, wandb_project='repeng-steering', save_checkpoints=False)
 ['nbs/train.py', '--model_name=Qwen/Qwen3-0.6B', '--rank=256', '--target-modules=.*\\.(7|10|13|15|17|20|23|25)\\..*(o_proj|up_proj)', '--batch-size=32']
-19:46:32 | INFO     | 
+19:46:32 | INFO     |
+
 ## Unsupervised Transfer Evaluation: Honesty Pairs -> DailyDilemmas Truthfulness
+
 Training: 1000 contrastive honesty pairs | Eval: 907 moral dilemmas (Virtue/Truthfulness + 29 other values)
 
 | Method            | Coeff   |   Transfer (Target) ↑ | p-value   |   ΔNLL ↓ |   Transfer (Others) ↓ |
@@ -30,8 +31,10 @@ Transfer (Others): Mean |Δ| across 29 non-target moral values (precision measur
 p-value: t-test of target transfer effect vs baseline
 
 ['nbs/train.py', '--no-ipissa-rotate-v']
-04:12:27 | INFO     | 
+04:12:27 | INFO     |
+
 ## Unsupervised Transfer Evaluation: Honesty Pairs -> DailyDilemmas Truthfulness
+
 Training: 1000 contrastive honesty pairs | Eval: 907 moral dilemmas (Virtue/Truthfulness + 29 other values)
 
 | Method            | Coeff   |   Transfer (Target) ↑ | p-value   |   ΔNLL ↓ |   Transfer (Others) ↓ |
@@ -45,7 +48,8 @@ Training: 1000 contrastive honesty pairs | Eval: 907 moral dilemmas (Virtue/Trut
 | prompting         | ±1.0    |                 0.071 |     0.030 |     0.020 |            0.117 |  
 
 '['\''nbs/train.py'\'',' ''\''--model_name=Qwen/Qwen3-0.6B'\'',' ''\''--eval_max_n_dilemmas=64'\'',' ''\''--target-modules=.*\\.(7|10|13|15|17|20|23|25)\\..*(gate_proj|down_proj)'\'',' ''\''--rank=256'\'',' ''\''--batch-size=32'\'',' ''\''--lr=6e-4'\'',' ''\''--weight-decay=0.1'
-'' 
+''
+
 ## Unsupervised Transfer Evaluation: Honesty Pairs '->' DailyDilemmas Truthfulness Training: 1000 contrastive honesty pairs '|' Eval: 64 moral dilemmas '(Virtue/Truthfulness' + 29 other 'values)'
 
  Virtue/Truthfulness 0.5464 0.9978 0.8036 0.7888 0.7261 0.7040 0.4758
@@ -63,22 +67,19 @@ Training: 1000 contrastive honesty pairs | Eval: 907 moral dilemmas (Virtue/Trut
 
 ## Unsupervi
 
-
 | Method    | Coeff   |   Target Effect |   Side Effects |   p-value |   Output Quality |               Overall |
+
 |           |         |       Δ Truth ↑ |      Δ Other ↓ |           |          Δ NLL ↓ |   Δ Truth/(1 + Δ NLL) |
 |:----------|:--------|----------------:|---------------:|----------:|-----------------:|----------------------:|
 | prompting | ±1.0    |           0.071 |          0.030 |     0.020 |            0.117 |                 0.063 |
 
 **Honesty Transfer to Moral Dilemmas (1000 train → 907 test).** Target Effect: Δ Truthfulness score vs baseline. Side Effects: mean |Δ| across 36 non-target values. Output Quality: coherence degradation (ΔNLL). p-values from two-tailed t-test.
 
-
-
-
 12:32:18 | INFO     | ## Evaluation complete 20251112_123218.
 
 nbs/train.py --quick --model_name=Qwen/Qwen3-0.6B --batch-size=64 --dataset_max_samples=200
 12:32:18 | INFO     | Results for method: InnerPiSSA (ours)
-coeff                -15.0   -5.0    -2.0   ...    1.0     2.0     5.0 
+coeff                -15.0   -5.0    -2.0   ...    1.0     2.0     5.0
 Virtue/Truthfulness  0.490  0.4592  0.4708  ...  0.6949  0.6131  0.4676
 Virtue/Ambition      0.167  0.1695  0.1692  ...  0.3244  0.3162  0.1740
 
@@ -101,7 +102,6 @@ Virtue/Ambition      0.2552  0.3254  0.3244  0.3254  0.3323
 
 12:32:37 | INFO     |
 
-
 | Method            | Coeff   |   Target Effect |   Side Effects |   p-value |   Output Quality |   Normalized Gain (%) |
 |:------------------|:--------|----------------:|---------------:|----------:|-----------------:|----------------------:|
 |                   |         |       Δ Truth ↑ |      Δ Other ↓ |           |          Δ NLL ↓ |                       |
@@ -117,9 +117,7 @@ Virtue/Ambition      0.2552  0.3254  0.3244  0.3254  0.3323
 
 **Honesty Transfer to Morality (Daily Dilemmas (200 train → 64 test).** Model: Qwen/Qwen3-0.6B. Target Effect: Δ Truthfulness score vs baseline. Side Effects: mean |Δ| across 31 non-target values. Output Quality: coherence degradation (ΔNLL). Normalized Gain (%) = 100 × Δ Truth / (1 + Δ NLL); higher values indicate more efficient steering (truthfulness gain per unit coherence cost). p-values from linear regression testing monotonic dose-response (effect scales with coeff).
 
-
 # 2025-11-13 05:39:33 Sweep on 0.6B
-
 
 And on 4b (still running)
 
@@ -319,10 +317,7 @@ And on 4b (still running)
     19:27:23 | INFO     | 🥇155.473
     wandb: 🚀 View run eager-bird-43 at: https://wandb.ai/wassname/InnerPiSSA/runs/xmzwlrkx
 
-
-
 grep -E '🥇|nbs/train.py --' $FILE > results_summary.txt
-
 
     + BASE='uv run python nbs/train.py --eval-max-n-dilemmas=64'
     + uv run python nbs/train.py --eval-max-n-dilemmas=64 --loss-type=softplus
@@ -399,27 +394,28 @@ grep -E '🥇|nbs/train.py --' $FILE > results_summary.txt
     + uv run python nbs/train.py --eval-max-n-dilemmas=64 --lr=1e-4
     wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/l3r800ve
 
-
 ## Interpretation
 
 **Why V-only works best:**
+
 - V rotates **input space** (pre-activation)
 - U rotates **output space** (post-activation, affects residual stream)
 - Your loss measures separation in layer N-3's output, but later layers might undo U rotations
 - V changes *what* gets transformed, U changes *how* it's presented downstream
 
 **Why add2 > mult:**
+
 - `add2`: `S' = S + coeff·tanh(λ)` → **linear in coeff**, bounded
 - `mult`: `S' = exp(coeff·λ) ⊙ S` → **exponential**, can explode/vanish at large |coeff|
 - Your eval sweeps `coeff ∈ [-5, 5]` → exponential scaling breaks interpolation
 
 **Why both rotations together underperform V-only:**
+
 - U+V: 🥇448 (add2), 🥇271 (mult)
 - V-only: 🥇**386** (add2 default)
 - Hypothesis: U rotation fights later layers, adds instability
 
-
-## Evaluation complete 20251113_052825.
+## Evaluation complete 20251113_052825
 
     nbs/train.py --eval-max-n-dilemmas=64 --lr=6e-4
     05:28:25 | INFO     | Results for method: InnerPiSSA (ours)
@@ -464,7 +460,6 @@ grep -E '🥇|nbs/train.py --' $FILE > results_summary.txt
 
 # 2025-11-14 16:58:51
 
-
 16:42:46 | INFO     | Config TrainingConfig(model_name='Qwen/Qwen3-0.6B', quantization_type='none', layers=['down_proj', 'k_proj', 'v_proj', 'q_proj'], num_layers=3, perc_start=0.3, end_layers=-3, batch_size=24, n_epochs=30, lr=0.0006, weight_decay=0.1, log_n=10, grad_accum_steps=8, quick=False, val_split=0.15, early_stop_patience=5, rank=24, scale_s='add2', ipissa_rotate_u=False, ipissa_rotate_v=True, loss_full_u=True, loss_ds_pref_dir=False, dataset_name='honest', dataset_max_samples=800, loss_type='logsigmoid', coherence_threshold=1.5, boundary_order=1, last_n_tokens=3, eval_batch_size=None, eval_max_n_dilemmas=None, eval_dataset_max_token_length=196, output_dir=PosixPath('/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters'), use_wandb=True, wandb_project='InnerPiSSA', save_checkpoints=False, verbose=False)
 
 16:42:46 | INFO     | ## Evaluation complete 20251114_162529.
@@ -495,9 +490,12 @@ coeff                  -1.0     0.0     1.0
 Virtue/Truthfulness  0.6550  0.6513  0.6521
 Virtue/Ambition      0.7734  0.7712  0.7701
 
-16:42:52 | INFO     | 
+16:42:52 | INFO     |
+
 ## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+
 | Method            |      Effect |   Std |   Side Effects |   p-value |   Quality |     Mono |   Gain_T-stat (%) |
+
 |                   |   Δ Truth ↑ |     σ |      Δ Other ↓ |           |   Δ NLL ↓ |   T-stat |                   |
 |:------------------|------------:|------:|---------------:|----------:|----------:|---------:|------------------:|
 | InnerPiSSA (ours) |       0.608 | 3.064 |          0.032 |     0.000 |     0.157 |    5.736 |           301.688 |
@@ -512,7 +510,9 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 ## Metric Comparison (all variants)
 
 ### Metric: T-stat
+
 | Method            |      Effect |   Std |   Side Effects |   p-value |   Quality |     Mono |   Gain_T-stat (%) |
+
 |                   |   Δ Truth ↑ |     σ |      Δ Other ↓ |           |   Δ NLL ↓ |   T-stat |                   |
 |:------------------|------------:|------:|---------------:|----------:|----------:|---------:|------------------:|
 | InnerPiSSA (ours) |       0.608 | 3.064 |          0.032 |     0.000 |     0.157 |    5.736 |           301.688 |
@@ -522,7 +522,9 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 | PCA (baseline)    |       0.002 | 2.576 |          0.001 |     0.975 |     0.000 |    0.032 |             0.005 |
 
 ### Metric: Slope
+
 | Method            |      Effect |   Std |   Side Effects |   p-value |   Quality |    Mono |   Gain_Slope (%) |
+
 |                   |   Δ Truth ↑ |     σ |      Δ Other ↓ |           |   Δ NLL ↓ |   Slope |                  |
 |:------------------|------------:|------:|---------------:|----------:|----------:|--------:|-----------------:|
 | InnerPiSSA (ours) |       0.608 | 3.064 |          0.032 |     0.000 |     0.157 |   0.431 |           22.648 |
@@ -532,7 +534,9 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 | PCA (baseline)    |       0.002 | 2.576 |          0.001 |     0.975 |     0.000 |   0.002 |            0.000 |
 
 ### Metric: CI95
+
 | Method            |      Effect |   Std |   Side Effects |   p-value |   Quality |   Mono |   Gain_CI95 (%) |
+
 |                   |   Δ Truth ↑ |     σ |      Δ Other ↓ |           |   Δ NLL ↓ |   CI95 |                 |
 |:------------------|------------:|------:|---------------:|----------:|----------:|-------:|----------------:|
 | InnerPiSSA (ours) |       0.608 | 3.064 |          0.032 |     0.000 |     0.157 |  0.283 |          14.909 |
@@ -542,7 +546,9 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 | PCA (baseline)    |       0.002 | 2.576 |          0.001 |     0.975 |     0.000 |  0.000 |           0.000 |
 
 ### Metric: Pearson
+
 | Method            |      Effect |   Std |   Side Effects |   p-value |   Quality |      Mono |   Gain_Pearson (%) |
+
 |                   |   Δ Truth ↑ |     σ |      Δ Other ↓ |           |   Δ NLL ↓ |   Pearson |                    |
 |:------------------|------------:|------:|---------------:|----------:|----------:|----------:|-------------------:|
 | InnerPiSSA (ours) |       0.608 | 3.064 |          0.032 |     0.000 |     0.157 |     0.096 |              5.023 |
@@ -552,7 +558,9 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 | PCA (baseline)    |       0.002 | 2.576 |          0.001 |     0.975 |     0.000 |     0.001 |              0.000 |
 
 ### Metric: Spearman
+
 | Method            |      Effect |   Std |   Side Effects |   p-value |   Quality |       Mono |   Gain_Spearman (%) |
+
 |                   |   Δ Truth ↑ |     σ |      Δ Other ↓ |           |   Δ NLL ↓ |   Spearman |                     |
 |:------------------|------------:|------:|---------------:|----------:|----------:|-----------:|--------------------:|
 | InnerPiSSA (ours) |       0.608 | 3.064 |          0.032 |     0.000 |     0.157 |      0.122 |               6.426 |
@@ -562,7 +570,9 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 | PCA (baseline)    |       0.002 | 2.576 |          0.001 |     0.975 |     0.000 |      0.001 |               0.000 |
 
 ### Metric: Slope*(1-p)
+
 | Method            |      Effect |   Std |   Side Effects |   p-value |   Quality |          Mono |   Gain_Slope*(1-p) (%) |
+
 |                   |   Δ Truth ↑ |     σ |      Δ Other ↓ |           |   Δ NLL ↓ |   Slope*(1-p) |                        |
 |:------------------|------------:|------:|---------------:|----------:|----------:|--------------:|-----------------------:|
 | InnerPiSSA (ours) |       0.608 | 3.064 |          0.032 |     0.000 |     0.157 |         0.431 |                 22.648 |
@@ -576,7 +586,6 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 16:42:53 | SUCCESS  | All results saved to /media/wassname/SGIronWolf/projects5/20
 
 # 2025-11-15 08:25:32
-
 
 07:07:25 | INFO     | ## Evaluation complete 20251115_070512.
 
@@ -606,9 +615,12 @@ coeff                  -1.0     0.0     1.0
 Virtue/Truthfulness  3.1621  3.1641  3.1611
 Virtue/Ambition      1.4792  1.5000  1.5000
 
-07:07:37 | INFO     | 
+07:07:37 | INFO     |
+
 ## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+
 | Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+
 |                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
 |:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
 | InnerPiSSA (ours) |      2.617 |          0.085 |     0.009 |         0.167 |           224.333 |
@@ -623,7 +635,9 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 ## Metric Comparison (all variants)
 
 ### Metric: T-stat
+
 | Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+
 |                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
 |:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
 | InnerPiSSA (ours) |      2.617 |          0.085 |     0.009 |         0.167 |           224.333 |
@@ -636,10 +650,10 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 07:07:37 | INFO     | Saved adapter to /media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters/honest_contrastive_ipissa_20251115_070512
 07:07:37 | SUCCESS  | All results saved to /media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters/honest_contrastive_ipissa_20251115_070512
 
-
 ds pref dir is worse but working
 
 | Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+
 |                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
 |:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
 | prompting         |      2.753 |          0.020 |     0.006 |        -0.041 |           287.082 |
@@ -680,9 +694,12 @@ coeff                  -1.0     0.0     1.0
 Virtue/Truthfulness  2.2820  2.2847  2.2808
 Virtue/Ambition     -2.9118 -2.9241 -2.9107
 
-12:44:35 | INFO     | 
+12:44:35 | INFO     |
+
 ## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+
 | Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+
 |                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
 |:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
 | prompting         |      5.106 |          0.032 |     0.000 |        -0.112 |           575.266 |
@@ -697,7 +714,9 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 ## Metric Comparison (all variants)
 
 ### Metric: T-stat
+
 | Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+
 |                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
 |:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
 | prompting         |      5.106 |          0.032 |     0.000 |        -0.112 |           575.266 |
@@ -709,7 +728,9 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 12:44:35 | INFO     | 🥇245.084
 
 ### Metric: T-stat
+
 | Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+
 |                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
 |:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
 | prompting         |      5.106 |          0.032 |     0.000 |        -0.112 |           575.266 |
@@ -719,3 +740,42 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 | random            |      0.027 |          0.001 |     0.979 |         0.001 |             2.655 |
 11:21:25 | INFO     | nbs/train.py q4b-24gb --no-loss_ds_pref_dir
 11:21:25 | INFO     | 🥇46.706
+
+# 2025-11-15
+
+
+20:25:35 | INFO     | ## Evaluation complete 20251115_200331.
+
+nbs/train.py . --lr=8e-3 --n_epochs=10 --model_name=google/gemma-3-1b-it --loss_type=tanh2v1
+20:25:35 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+coeff                   -1.0      0.0     1.0
+Virtue/Truthfulness  13.4987  13.0936  4.2764
+Virtue/Ambition      15.5256  14.2813  6.4716
+
+20:25:35 | INFO     | Results for method: PCA (baseline) [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  3.7636  4.2764  5.0954
+Virtue/Ambition      5.9688  6.4716  7.3295
+
+20:25:35 | INFO     | Results for method: S-weighted steer [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  2.3036  4.2764  6.2577
+Virtue/Ambition      4.4574  6.4716  8.6165
+
+20:25:35 | INFO     | Results for method: random [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  5.2388  4.2764  3.4563
+Virtue/Ambition      7.5057  6.4716  5.6335
+
+20:25:43 | INFO     | 
+## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+| Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+|                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+|:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+| InnerPiSSA (ours) |      17    |         0.134  |  2.54e-59 |      -0.0164  |          1.73e+03 |
+| S-weighted steer  |      14    |         0.0603 |  1.28e-41 |       0.0801  |          1.29e+03 |
+| random            |       6.25 |         0.0347 |  5.54e-10 |      -0.0945  |        690        |
+| PCA (baseline)    |       4.67 |         0.0258 |  3.3e-06  |       0.00804 |        463        |
+
+**Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: google/gemma-3-1b-it. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 335 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
