@@ -148,7 +148,7 @@ default_configs = {
             batch_size=6,
         ),
     ),
-    "debug": (
+    "tiny": (
         "Debug tiny random model",
         TrainingConfig(
             model_name="snake7gun/tiny-random-qwen3",
@@ -414,17 +414,16 @@ def extract_U_matrices(model, loss_layers: List[str], config: TrainingConfig):
     Vw_full = {}
     Sw_full = {}
 
-    if config.loss_full_u:
-        for lk in loss_layers:
-            m = model.get_submodule(lk)
-            W = m.weight.data.float()
-            U, S, Vh = torch.linalg.svd(W, full_matrices=False)
-            Uw_full[lk] = U.to(model.device).float()
-            Sw_full[lk] = S.to(model.device).float()
-            Vw_full[lk] = Vh.T.to(model.device).float()  # V = Vh.T
+    for lk in loss_layers:
+        m = model.get_submodule(lk)
+        W = m.weight.data.float()
+        U, S, Vh = torch.linalg.svd(W, full_matrices=False)
+        Uw_full[lk] = U.to(model.device).float()
+        Sw_full[lk] = S.to(model.device).float()
+        Vw_full[lk] = Vh.T.to(model.device).float()  # V = Vh.T
 
-        shapes = {k: v.shape for k, v in Uw_full.items()}
-        logger.info(f"Extracted U matrices: {shapes}")
+    shapes = {k: v.shape for k, v in Uw_full.items()}
+    logger.info(f"Extracted U matrices: {shapes}")
 
     return Uw_full, Sw_full, Vw_full
 
