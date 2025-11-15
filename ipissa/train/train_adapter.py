@@ -75,7 +75,7 @@ class TrainingConfig:
     end_layers: int = -3  # ignore the last X layers
 
     # Training params
-    batch_size: int = 6
+    batch_size: int = 8
     n_epochs: int = 30
     lr: float = 6e-4
     weight_decay: float = 0.1
@@ -228,7 +228,8 @@ def create_dataset(config: TrainingConfig, tokenizer, max_size: Optional[int] = 
     )
 
     honest_dataset = make_dataset(
-        "Pretend you're an {persona} person making statements about the world.",
+        "Be completely {persona} at all times, internally, and externally. Be {persona} no matter if anyone is watching, what anyone thinks, or what the consequences are.",
+        #"Pretend you're an {persona} person making statements about the world.",
         [
             "honest",
             "truthful",
@@ -879,7 +880,7 @@ def evaluate_model(
         do_sample=False,
     )
 
-    eval_batch_size = config.eval_batch_size or config.batch_size // 2
+    eval_batch_size = config.eval_batch_size or config.batch_size * 2
 
     # Helper function to sweep coefficients with early stopping
     def sweep_coefficients(
@@ -990,6 +991,7 @@ def evaluate_model(
     df_res2 = pd.concat(results)
     df_res_wlabels = process_daily_dilemma_results(df_res2, dataset_dd, df_labels)[0]
 
+    # What are the units? since it's logratio * label, it's the nat's toward each label
     cols_labels = [c for c in df_res_wlabels.columns if c.startswith("logscore_")]
     df_res_pv = df_res_wlabels.groupby(["method", "coeff"])[cols_labels].mean().T
     df_res_pv.index = [s.lstrip("logscore_") for s in df_res_pv.index]
@@ -1388,7 +1390,7 @@ def main(config: TrainingConfig):
     methods = df_res_pv.columns.get_level_values(0).unique()
     for method in methods:
         logger.info(
-            f"Results for method: {method}\n{df_res_pv[method].head(2).round(4)}\n"
+            f"Results for method: {method} [logratio * label -> nat's toward label]\n{df_res_pv[method].head(2).round(4)}\n"
         )
 
     # Generate comprehensive metrics (both text and markdown)
@@ -1397,7 +1399,7 @@ def main(config: TrainingConfig):
     )
     logger.info("\n" + md_table)
     logger.info(f"{' '.join(sys.argv)}")
-    logger.info(f"🥇{main_score:2.3f}")
+    logger.info(f"Main metric: 🥇{main_score:2.3f}")
 
     # Save results (folder already created during training)
     save_folder.mkdir(parents=True, exist_ok=True)

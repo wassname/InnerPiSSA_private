@@ -191,8 +191,6 @@ def evaluate_daily_dilemma(
             print("=" * 20)
 
     df_res = pd.DataFrame(data)
-
-    # TODO should really merge with values and action, flip from prob_act to prob_yes, then multiple by values_aggregated to get expected value
     return df_res
 
 
@@ -306,6 +304,7 @@ def process_daily_dilemma_results(df_res, dd_dataset, df_labels):
     # Vectorized score computation (unchanged logic, but now labels are side-specific/NaN-aware)
     label_cols = [c for c in df_res2.columns if "/" in c and c not in ["dilemma_idx", "action_type"]]  # Virtues have "/"
 
+    # maybe many warning about fragmentation here
     for col in label_cols:
         df_res2[f"score_{col}"] = df_res2["p_act"] * df_res2[col]
         df_res2[f"binary_{col}"] = df_res2["binary_act"] * df_res2[col]
@@ -470,22 +469,26 @@ def _compute_monotonicity(df_train: pd.DataFrame, target_col_log: str) -> dict:
 
 
 def _compute_collateral_effects(
-    df_method: pd.DataFrame, df_mag: pd.DataFrame, eval_coeff: float, target_col: str
+    df_method: pd.DataFrame, eval_coeff: float, target_col: str
 ) -> float:
     """Computes the mean absolute effect on non-target values at the given coefficient."""
     score_cols = [c for c in df_method.columns if c.startswith("score_")]
     non_target_cols = [c for c in score_cols if c != target_col]
 
-    collateral_effects = []
-    for col in non_target_cols:
-        baseline_vals_col = df_method.query("coeff == 0")[col].dropna()
-        method_vals = df_mag.query("coeff == @eval_coeff")[col].dropna()
+    if not non_target_cols:
+        return 0.0
 
-        if len(method_vals) > 0 and len(baseline_vals_col) > 0:
-            delta = method_vals.mean() - baseline_vals_col.mean()
-            collateral_effects.append(abs(delta))
+    # Vectorized computation: compute means for all columns at once
+    dfm0 = df_method.query("coeff == 0")[non_target_cols]
+    dfmc = df_method.query("coeff == @eval_coeff")[non_target_cols]
 
-    return np.mean(collateral_effects) if collateral_effects else 0.0
+    baseline_means = dfm0.mean()
+    method_means = dfmc.mean()
+
+    # Compute absolute deltas for all columns
+    deltas = (method_means - baseline_means).abs()
+
+    return deltas.mean() if not deltas.empty else 0.0
 
 
 def compute_transfer_summary(
@@ -542,7 +545,7 @@ def compute_transfer_summary(
 
             degradation = coherence.loc[(method, eval_coeff), "input_nll_shift"]
             mean_collateral = _compute_collateral_effects(
-                df_m, df_mag, eval_coeff, target_col
+                df_m, eval_coeff, target_col
             )
 
             results.append(
@@ -650,11 +653,11 @@ def format_results_table(
     df_table = tables["T-stat"]
 
     all_tables_md = [
-        f"\n### Metric: {name}\n{tabulate(df, tablefmt='pipe', headers='keys', floatfmt='.3f')}"
+        f"\n### Metric: {name}\n{tabulate(df, tablefmt='pipe', headers='keys', floatfmt='.3g')}"
         for name, df in tables.items()
     ]
 
-    main_table_md = tabulate(df_table, tablefmt="pipe", headers="keys", floatfmt=".3f")
+    main_table_md = tabulate(df_table, tablefmt="pipe", headers="keys", floatfmt=".3g")
     n_other = summary.iloc[0].get("total_values", 30) - 1
     caption = _generate_caption(config, target_col, n_other)
     methods_note = (

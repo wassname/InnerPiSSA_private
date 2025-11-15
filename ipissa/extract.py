@@ -17,8 +17,8 @@ from baukit import TraceDict
 
 from .control import ControlModel
 from .dataset import DatasetEntry
-from .analyze_vectors.svd_steering import svd_steering
-from .analyze_vectors.fisher_steering import natural_gradient_steering
+# from .analyze_vectors.svd_steering import svd_steering
+# from .analyze_vectors.fisher_steering import natural_gradient_steering
 # from .train.inner_contrastive_loss import contrastive_steering_loss_noref
 
 
@@ -371,12 +371,13 @@ def read_representations(
         dim = None
         
         if method == "svd_gradient":
-            # For concept extraction, flip negative gradients
-            # grad_matrix[1::2] *= -1  # Now all gradients point "toward honesty" 
-            directions[layer] = svd_steering(grad_matrix)
+            raise NotImplementedError("Gradient-based methods are currently disabled.")
+            # # For concept extraction, flip negative gradients
+            # # grad_matrix[1::2] *= -1  # Now all gradients point "toward honesty" 
+            # directions[layer] = svd_steering(grad_matrix)
 
-            # TODO importance sampling from logprobs
-            directions[layer] = _choose_sign_from_grads(directions[layer], grad_matrix).unsqueeze(0)  # [1, d]
+            # # TODO importance sampling from logprobs
+            # directions[layer] = _choose_sign_from_grads(directions[layer], grad_matrix).unsqueeze(0)  # [1, d]
         
         else: # PCA-based methods
             # run PCA on difference vectors between positive and negative examples
