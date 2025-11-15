@@ -32,9 +32,10 @@ d = json.loads((result_dir / "training_config.json").read_text())
 config = cattrs.structure(d, TrainingConfig)
 print(f"Evaluation results:\n{df_res_pv.round(4)}")
 
-# Optionally load prompting baseline if exists
-# NOTE: Disabled for performance - prompting baseline has 32k+ rows which slows down compute_transfer_summary
-# prompting_path = proj_root / "outputs" / "prompting_baseline.parquet"
+# Optionally load per-model prompting baseline if exists
+# NOTE: Disabled for performance - prompting baseline has many rows which slows down compute_transfer_summary
+# model_safe = config.model_name.replace('/', '_')
+# prompting_path = proj_root / "outputs" / f"prompting_baseline_{model_safe}.parquet"
 # if prompting_path.exists():
 #     res_prompting = pd.read_parquet(prompting_path)
 #     df_res_wlabels = pd.concat([df_res_wlabels, res_prompting], ignore_index=True)

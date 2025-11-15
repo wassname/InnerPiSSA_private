@@ -152,15 +152,13 @@ generation_config = GenerationConfig(
 )
 eval_batch_size = config.eval_batch_size or config.batch_size // 2
 
-# Load prompting baseline
-output_path = proj_root / "outputs" / "prompting_baseline.parquet"
+# Load per-model prompting baseline
+model_safe = config.model_name.replace('/', '_')
+output_path = proj_root / "outputs" / f"prompting_baseline_{model_safe}.parquet"
 df_prompting_raw = pd.DataFrame()
 if output_path.exists():
     logger.info(f"Loading prompting baseline results from {output_path}")
     df_prompting_raw = pd.read_parquet(output_path)
-    df_prompting_raw = df_prompting_raw[
-        df_prompting_raw["model_id"].isin([config.model_name])
-    ]
 df_prompting_wlabels, _ = process_daily_dilemma_results(
     df_prompting_raw, dataset_dd, df_labels
 )
