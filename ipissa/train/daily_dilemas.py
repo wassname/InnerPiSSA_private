@@ -653,6 +653,11 @@ def format_results_table(
 
     df_table = tables["T-stat"]
 
+    all_tables_md = [
+        f"\n### Metric: {name}\n{tabulate(df, tablefmt='pipe', headers='keys', floatfmt='.3f')}"
+        for name, df in tables.items()
+    ]
+
     main_table_md = tabulate(df_table, tablefmt="pipe", headers="keys", floatfmt=".3f")
     n_other = summary.iloc[0].get("total_values", 30) - 1
     caption = _generate_caption(config, target_col, n_other)
@@ -669,7 +674,7 @@ def format_results_table(
         "",
         caption,
         methods_note,
-        # "\n## Metric Comparison (all variants)", *all_tables_md,
+        "\n## Metric Comparison (all variants)", *all_tables_md,
     ]
 
     df_score = df_table
