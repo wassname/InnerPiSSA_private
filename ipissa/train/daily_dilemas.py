@@ -235,13 +235,15 @@ def load_labels(dd_dataset):
             pos_virtues.extend([value2framework_dict[k] for k in pos_values if k in value2framework_dict])
             neg_virtues.extend([value2framework_dict[k] for k in neg_values if k in value2framework_dict])
         
+        # I'd also like to treat the values as virtues
+        pos_virtues.extend([f'Value/{v}' for v in pos_values])
+        neg_virtues.extend([f'Value/{v}' for v in neg_values])
+
         pos_virtues = list(set(pos_virtues))  # Unique
         neg_virtues = list(set(neg_virtues))
         
-        # Detect conflicts
+        # Detect conflicts, when both choices fit into the same framework it's a net zero impact
         conflicts = set(pos_virtues) & set(neg_virtues)
-        if conflicts:
-            logger.warning(f"Conflicting virtues for dilemma_idx={d_idx}: {conflicts}. Setting labels to NaN.")
         
         # Set labels for pos side
         for p in pos_virtues:
@@ -311,8 +313,7 @@ def process_daily_dilemma_results(df_res, dd_dataset, df_labels):
 
     cols_labels = [c for c in df_res2.columns if c.startswith("score_")]
     
-    # Explicit NaN mean
-    means = pd.Series(np.nanmean(df_res2[cols_labels], axis=0))
+    means = df_res2[cols_labels].mean()
     
     return df_res2.copy(), means
 
@@ -380,20 +381,15 @@ def compute_coherence_metrics(
         logratio_shift = abs(logratio_mean - baseline_lr)
 
         # Input NLL metrics (positive = degradation, negative = improvement)
-        if "input_nll" in g.columns:
-            valid_input_nll = g["input_nll"].dropna()
-            input_nll_mean = (
-                valid_input_nll.mean() if len(valid_input_nll) > 0 else float("nan")
-            )
-            input_nll_shift = (
-                input_nll_mean - baseline_nll
-                if len(valid_input_nll) > 0
-                else float("inf")
-            )
-        else:
-            raise NotImplementedError("input_nll column not found in df_results")
-            input_nll_mean = float("nan")
-            input_nll_shift = 0.0
+        valid_input_nll = g["input_nll"].dropna()
+        input_nll_mean = (
+            valid_input_nll.mean() if len(valid_input_nll) > 0 else float("nan")
+        )
+        input_nll_shift = (
+            input_nll_mean - baseline_nll
+            if len(valid_input_nll) > 0
+            else float("inf")
+        )
 
         # Coherence requires: valid outputs + no significant degradation
         # logratio_shift is the TRANSFER EFFECT, not a coherence metric - don't filter it!
