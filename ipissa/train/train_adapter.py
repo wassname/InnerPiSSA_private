@@ -177,7 +177,7 @@ def create_train_dataset(config: TrainingConfig, tokenizer, max_size: Optional[i
 
 def load_model(model_id, quantization_type="none"):
     """Load base model with optional quantization."""
-    quantization_config = None
+    model_kwargs = {}
     if quantization_type == "4bit":
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -185,18 +185,22 @@ def load_model(model_id, quantization_type="none"):
             bnb_4bit_use_double_quant=False,
             bnb_4bit_quant_type="nf4",
         )
+        model_kwargs['quantization_config'] = quantization_config
     elif quantization_type == "8bit":
         quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+        model_kwargs['quantization_config'] = quantization_config
+
+    
 
     logger.info(f"Loading model: {model_id}")
     base_model = AutoModelForCausalLM.from_pretrained(
         model_id,
         dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float16,
-        quantization_config=quantization_config,
         device_map="cuda:0",
+        **model_kwargs
     )
 
-    if quantization_config is not None:
+    if 'quantization_config' in model_kwargs:
         base_model.enable_input_require_grads()
 
     # Load tokenizer
@@ -210,6 +214,8 @@ def load_model(model_id, quantization_type="none"):
 
 def setup_adapter(base_model, config: TrainingConfig):
     """Setup InnerPiSSA adapter on base model."""
+    # FIXME 
+    # AttributeError: 'Gemma3Config' object has no attribute 'num_hidden_layers'
     total_layers = base_model.config.num_hidden_layers
     start_layer = int(config.perc_start * total_layers)
     end_layer = total_layers + config.end_layers
