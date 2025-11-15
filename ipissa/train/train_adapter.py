@@ -845,12 +845,12 @@ def evaluate_model(
             )
         )
 
-    # if we have output_path = Path("../outputs/prompting_baseline.parquet")
-    output_path = proj_root / "outputs/prompting_baseline.parquet"
+    # Load per-model prompting baseline
+    model_safe = config.model_name.replace('/', '_')
+    output_path = proj_root / "outputs" / f"prompting_baseline_{model_safe}.parquet"
     if output_path.exists():
         logger.info(f"Loading prompting baseline results from {output_path}")
         df_prompting = pd.read_parquet(output_path)
-        df_prompting = df_prompting[df_prompting["model_id"].isin([config.model_name])]
         for (method, coeff), d in df_prompting.groupby(["method", "coeff"]):
             results.append(d)
     else:
