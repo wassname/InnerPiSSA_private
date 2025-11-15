@@ -13,8 +13,8 @@ run:
     #!/bin/bash -x
     
     # Base config for small model ablations
-    BASEsmall="uv run python nbs/train.py q1-24gb"
-    BASE="uv run python nbs/train.py q4b-24gb"
+    BASEsmall="uv run python nbs/train.py q4b-80gb"
+    BASE="uv run python nbs/train.py q14b-80gb"
 
     # Helper to run with base + extra args
     run_exp() {
@@ -43,8 +43,10 @@ run:
     run_exp --loss_type=logsigmoid  # default
     
     
-    uv run python nbs/train.py . --lr=8e-3 --n_epochs=30 --model_name=meta-llama/Llama-3.2-3B-Instruct --loss_type=tanh2v1
-    uv run python nbs/train.py . --lr=8e-3 --n_epochs=30 --model_name=google/gemma-3-4b-it --loss_type=tanh2v1
+    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh2v1  --batch-size=32
+    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=google/gemma-3-12b-it --loss_type=tanh2v1  --batch-size=32
+    #uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=Qwen/Qwen3-14B --loss_type=tanh2v1 --batch-size=12
+    # uv run python nbs/train.py . --lr=8e-3 --n_epochs=30 --model_name=openai/gpt-oss-20b --loss_type=tanh2v1 --batch-size=12
     
 
     # try long

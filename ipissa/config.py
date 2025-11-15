@@ -23,7 +23,7 @@ class TrainingConfig:
     lr: float = 6e-4
     weight_decay: float = 0.1
     log_n: int = 10  # log this many times per training
-    effective_batch_size: int = 48
+    effective_batch_size: int = 32
     quick: bool = False
     val_split: float = 0.15  # fraction of data for validation
     early_stop_patience: int = (
@@ -68,7 +68,7 @@ class TrainingConfig:
 
     @property
     def grad_accum_steps(self):
-        return self.effective_batch_size // self.batch_size
+        return max(1, self.effective_batch_size // self.batch_size)
 
     # def __post_init__(self):
     #     self.grad_accum_steps = (self.effective_batch_size // self.batch_size)
@@ -91,6 +91,27 @@ default_configs = {
             batch_size=6,
         ),
     ),
+    "q4b-80gb": (
+        "Qwen 4B on 80GB GPU",
+        TrainingConfig(
+            model_name="Qwen/Qwen3-4B-Instruct-2507",
+            batch_size=64,
+        ),
+    ),
+    "q14b-80gb": (
+        "Qwen 14B on 80GB GPU",
+        TrainingConfig(
+            model_name="Qwen/Qwen3-14B",
+            batch_size=32,
+        ),
+    ),
+    # "oss20-80gb": (
+    #     "GPT-OSS 20B on 80GB GPU",
+    #     TrainingConfig(
+    #         model_name="openai/gpt-oss-20b",
+    #         batch_size=24,
+    #     ),
+    # ),
     "tiny": (
         "Debug tiny random model",
         TrainingConfig(

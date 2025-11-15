@@ -330,7 +330,7 @@ def train_steer_vector(
     with torch.no_grad(), torch.amp.autocast("cuda", dtype=torch.bfloat16):
         train_strs = [s for ex in honest_dataset for s in (ex.positive, ex.negative)]
         last_act, logprobs = _collect_activations_only(
-            model, tokenizer, train_strs, loss_layers, batch_size=2
+            model, tokenizer, train_strs, loss_layers, batch_size=config.batch_size//2
         )
 
     loss_dirs = {}  # Unweighted S-space for loss
@@ -649,8 +649,7 @@ def train_epoch(
             clear_mem()
 
         # Logging
-        # FIXME evals to 1 then it's every step
-        log_n_steps = len(train_dataloader) * config.n_epochs // config.log_n + 1
+        log_n_steps = max(1, len(train_dataloader) * config.n_epochs // config.log_n)
 
         df_hist = process_infos(
             infos, by_layer=False, by_coef=True, by_layer_num=True, verbose=False
@@ -1105,7 +1104,7 @@ def main(config: TrainingConfig):
         collate_fn=data_collator,
     )
 
-    total_steps = config.n_epochs * len(train_dataloader) // config.grad_accum_steps + 1
+    total_steps = config.n_epochs * len(train_dataloader) // config.grad_accum_steps
     opt = torch.optim.AdamW(
         model.parameters(), lr=config.lr, weight_decay=config.weight_decay
     )
