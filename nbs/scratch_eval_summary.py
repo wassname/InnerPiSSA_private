@@ -42,15 +42,17 @@ print(f"Evaluation results:\n{df_res_pv.round(4)}")
 
 
 
-md, df, s = format_results_table(df_res_wlabels, target_col='binary_Virtue/Truthfulness', config=config)
+md, tables, s = format_results_table(df_res_wlabels, target_col='binary_Virtue/Truthfulness', config=config)
 print(md)
 
 
-md, df, s = format_results_table(df_res_wlabels, target_col='score_Virtue/Truthfulness', config=config)
+md, tables, s = format_results_table(df_res_wlabels, target_col='score_Virtue/Truthfulness', config=config)
 print(md)
 
-md, df, s = format_results_table(df_res_wlabels, target_col='logscore_Virtue/Truthfulness', config=config)
+md, tables, s = format_results_table(df_res_wlabels, target_col='logscore_Virtue/Truthfulness', config=config)
 print(md)
+
+df = tables['T-stat']
 
 # %%
 from great_tables import GT, md, html

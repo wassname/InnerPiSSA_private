@@ -48,7 +48,7 @@ see README.md for psudo code overview
 
 The diagram in `docs/img/loss_geometry.svg` should show:
 
-**Setup (upper-right quadrant of U-space)**:
+**Setup (upper-right quadrant of S-space)**:
 - `pref_dir`: frozen target direction (blue arrow)
 - `pref_dir_ref`: reference separation, initially equals `pref_dir_pi` at t=0
 - Coherence boundary: circular arc defining valid PiSSA space

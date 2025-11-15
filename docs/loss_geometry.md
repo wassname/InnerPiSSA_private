@@ -1,6 +1,6 @@
 # Loss Geometry Visualization
 
-**Figure: Geometric interpretation of contrastive steering loss in InnerPiSSA space.** The diagram visualizes training dynamics in the output singular vector basis (U-space) from SVD of layer weights. The coherence constraint from logp space is backprojected as a circular boundary (pizza crust), defining the valid operating region (InnerPiSSA space). Training rotates the per-sample adapter separation vector (orange/red slice) toward the frozen mean direction (blue) extracted from training data, while maintaining generation quality within the crust. The projection ratio loss encourages amplification along the frozen direction, while the coherence penalty prevents degradation beyond the threshold.
+**Figure: Geometric interpretation of contrastive steering loss in InnerPiSSA space.** The diagram visualizes training dynamics in the output singular vector basis (S-space) from SVD of layer weights. The coherence constraint from logp space is backprojected as a circular boundary (pizza crust), defining the valid operating region (InnerPiSSA space). Training rotates the per-sample adapter separation vector (orange/red slice) toward the frozen mean direction (blue) extracted from training data, while maintaining generation quality within the crust. The projection ratio loss encourages amplification along the frozen direction, while the coherence penalty prevents degradation beyond the threshold.
 
 A note on the pizza puns, we don't want to be on the nose, and we don't want to compromise with geometrical or mathmatical intuition. We want it to acceptable in a paper. But we also want people to be like "oh the pizza diagram". So
 - 45 degree chicago deep dish slice, but don't mention that
@@ -12,20 +12,20 @@ A note on the pizza puns, we don't want to be on the nose, and we don't want to 
 ## Geometric Components
 ****
 ### Space Definition
-**Pizza Space** refers to the full U-space from SVD(W) = U·S·V^T of layer weights at depth N-3. **InnerPiSSA space** is the valid region within the coherence boundary where `log p_π(y|x) ≥ log p_ref(y|x) - threshold`. This constraint, originally in probability space, backprojects to a circular boundary in U-space (the "pizza crust").
+**Pizza Space** refers to the full S-space from SVD(W) = U·S·V^T of layer weights at depth N-3. **InnerPiSSA space** is the valid region within the coherence boundary where `log p_π(y|x) ≥ log p_ref(y|x) - threshold`. This constraint, originally in probability space, backprojects to a circular boundary in S-space (the "pizza crust").
 
 ### Separation Vectors (Pizza Slices)
-- **`pref_dir`** (blue, frozen): Target direction extracted once from training data as `normalize(mean(hs_ref_cho - hs_ref_rej))` in U-space. This is the mean separation direction across all training samples with adapter at c=0. Fixed throughout training to provide a stable optimization target.
+- **`pref_dir`** (blue, frozen): Target direction extracted once from training data as `normalize(mean(hs_ref_cho - hs_ref_rej))` in S-space. This is the mean separation direction across all training samples with adapter at c=0. Fixed throughout training to provide a stable optimization target.
   
-- **`pref_dir_ref`** (green slice): Reference model's per-sample separation `hs_ref_cho - hs_ref_rej` in U-space, computed each batch with adapter at c=0. Projects onto `pref_dir` with magnitude `proj_ref`. At initialization (t=0), `pref_dir_pi` equals `pref_dir_ref` since the adapter has zero effect.
+- **`pref_dir_ref`** (green slice): Reference model's per-sample separation `hs_ref_cho - hs_ref_rej` in S-space, computed each batch with adapter at c=0. Projects onto `pref_dir` with magnitude `proj_ref`. At initialization (t=0), `pref_dir_pi` equals `pref_dir_ref` since the adapter has zero effect.
   
-- **`pref_dir_pi`** (orange/red slice): Adapter model's per-sample separation `hs_pi_pos - hs_pi_neg` in U-space, computed with adapter at c=±1. Trainable via InnerPiSSA parameters: rotating V changes direction in input space, scaling S controls magnitude. Projects onto `pref_dir` with magnitude `proj_pi`.
+- **`pref_dir_pi`** (orange/red slice): Adapter model's per-sample separation `hs_pi_pos - hs_pi_neg` in S-space, computed with adapter at c=±1. Trainable via InnerPiSSA parameters: rotating V changes direction in input space, scaling S controls magnitude. Projects onto `pref_dir` with magnitude `proj_pi`.
 
 ### Loss Components
 
 **Projection loss** maximizes the ratio `proj_pi / proj_ref`, encouraging the adapter to amplify separation along the frozen reference direction. This ratio formulation provides scale invariance and focuses optimization on directional alignment.
 
-**Coherence constraint** enforces `log p_π(y|x) ≥ log p_ref(y|x) - threshold` per-token to prevent gaming via selective token manipulation. The quadratic penalty `(max(0, degradation - threshold))^2` creates a steep boundary, allowing free optimization within the margin while strongly penalizing violations. This backprojects to the circular boundary shown in U-space.
+**Coherence constraint** enforces `log p_π(y|x) ≥ log p_ref(y|x) - threshold` per-token to prevent gaming via selective token manipulation. The quadratic penalty `(max(0, degradation - threshold))^2` creates a steep boundary, allowing free optimization within the margin while strongly penalizing violations. This backprojects to the circular boundary shown in S-space.
 
 ### Training Dynamics
 At initialization (t=0), the adapter has zero effect, so `pref_dir_pi` equals `pref_dir_ref` (both start at the same position). Training then transforms `pref_dir_pi` by adjusting V (rotation in input space) and S (magnitude scaling). The coherence boundary constrains this transformation - the adapter cannot extend too far without crossing the boundary and degrading generation quality. The equilibrium balances maximal projection (steering effect) with minimal coherence violation.
@@ -39,12 +39,12 @@ This reversibility comes from the Cayley transform `R = cayley(θ_v, c)` (rotati
 
 **Key insight**: The projection length onto `pref_dir` changes - it's not just rotation. In +1 mode, we get a longer projection (stronger steering toward honesty). In -1 mode, we get a shorter/negative projection (steering away from honesty).
 
-Note: The diagram shows a 2D projection of the actual high-dimensional U-space (typically rank ~4000). In reality, `pref_dir_pi` can move in many directions simultaneously, but the loss encourages movement primarily along `pref_dir` while the coherence constraint limits the total distance from the origin.
+Note: The diagram shows a 2D projection of the actual high-dimensional S-space (typically rank ~4000). In reality, `pref_dir_pi` can move in many directions simultaneously, but the loss encourages movement primarily along `pref_dir` while the coherence constraint limits the total distance from the origin.
 
 ## Diagram
 
 ```
-                U-space (InnerPiSSA space)
+                S-space (InnerPiSSA space)
                 
                      ↑ pref_dir (frozen target)
                      |
@@ -103,4 +103,4 @@ $$h' = h + \Delta h = h + V \cdot S \cdot U^T \cdot h$$
 - Scaling **S** changes the magnitude of separation
 - **U** is frozen (defines the loss space = output space of layer)
 
-Training in U-space ensures the loss directly optimizes what matters for the next layer.
+Training in S-space ensures the loss directly optimizes what matters for the next layer.

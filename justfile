@@ -13,8 +13,8 @@ run:
     #!/bin/bash -x
     
     # Base config for small model ablations
-    BASEsmall="uv run python nbs/train.py --model_name=Qwen/Qwen3-0.6B --batch_size=24"
-    BASE="uv run python nbs/train.py"
+    BASEsmall="uv run python nbs/train.py q1-24gb"
+    BASE="uv run python nbs/train.py q4b-24gb"
 
     # Helper to run with base + extra args
     run_exp() {
@@ -27,16 +27,17 @@ run:
         $BASEsmall "$@"
     }
 
-    run_exp --no-loss_ds_pref_dir
-    run_exp --loss_ds_pref_dir
     run_exp_small --no-loss_ds_pref_dir
     run_exp_small --loss_ds_pref_dir
+
+    run_exp --no-loss_ds_pref_dir
+    run_exp --loss_ds_pref_dir
 
     run_exp_small --no_loss_full_u
 
     # try long
-    run_exp --n_epochs=100
-    run_exp_small --n_epochs=20
+    run_exp --n_epochs=200
+    run_exp_small --n_epochs=200
     
 
     # === Loss type ablations ===

@@ -318,7 +318,7 @@ Right, let me think through this more carefully.
 
   Given your goals (meaningful, testable, low-noise), here's what I'd try:
 
-  **Option A: Aggregate in HS, then project to U-space**
+  **Option A: Aggregate in HS, then project to S-space**
   ```python
   # 1. Compute direction in activation space (current, works well)
   dHS_agg = mean(hs_cho - hs_rej)  # aggregate over 200 samples
@@ -338,17 +338,17 @@ Right, let me think through this more carefully.
   Pro: Reuses your stable dHS direction, just changes where you measure separation
   Con: Not fully "native" to S-space
 
-  **Option B: Extract directly in U-space (fully native)**
+  **Option B: Extract directly in S-space (fully native)**
   ```python
-  # 1. Project ALL activations to U-space first
+  # 1. Project ALL activations to S-space first
   U_svd = layer.weight_U
   hs_cho_u = hs_cho @ U_svd  # (n_samples, r)
   hs_rej_u = hs_rej @ U_svd
 
-  # 2. Aggregate in U-space
+  # 2. Aggregate in S-space
   dHSU_agg = mean(hs_cho_u - hs_rej_u, axis=0)  # (r,)
   U_pca_u, S_pca_u, _ = SVD(dHSU_agg.unsqueeze(0))  # or just normalize if 1D
-  pref_dir_u = U_pca_u[:, 0]  # top component in U-space
+  pref_dir_u = U_pca_u[:, 0]  # top component in S-space
 
   # 3. Loss in same space
   proj = (hs_pi_u - hs_ref_u) @ pref_dir_u
@@ -359,7 +359,7 @@ Right, let me think through this more carefully.
   Con: Direction is different from your current one (need to validate it works)
 
 
- operations aren't commutative here - projecting to U-space before PCA (Option B) finds variance axes in the layer's native basis, while PCA first then project (A) finds them in full space and adapts after. B is more "transformation-centric" for SVFT, which is why I went with it
+ operations aren't commutative here - projecting to S-space before PCA (Option B) finds variance axes in the layer's native basis, while PCA first then project (A) finds them in full space and adapts after. B is more "transformation-centric" for SVFT, which is why I went with it
 
 Order matters because projection isn't isotropic: U_w rotates/compresses space, so SVD(Δ) @ U_w ≠ U_w @ SVD(U_w @ Δ @ U_w^T) generally. B preserves the subspace structure better for your use case.
 
@@ -968,7 +968,7 @@ Ablations on Qwen3-4B show V-only rotation (🥇386) outperforms U+V (🥇448 bu
 - Fragile: breaks `W_{i+1}` assumptions about input coordinate system
 
 **Additional U problem for our loss:**
-We project activations to U-space for loss computation (`hs @ U_frozen`), but U_frozen is from the original SVD. If we learn U_rot, we're optimizing separation in a basis (U_frozen) that no longer matches the actual transform (U_rot). This creates a train/eval mismatch within the loss itself.
+We project activations to S-space for loss computation (`hs @ U_frozen`), but U_frozen is from the original SVD. If we learn U_rot, we're optimizing separation in a basis (U_frozen) that no longer matches the actual transform (U_rot). This creates a train/eval mismatch within the loss itself.
 
 ## Interpolation Properties
 
@@ -1005,10 +1005,10 @@ In your code:
 V, S, U = SVD(layer.W)
 ```
 
-The diagram shows vectors in **U-space** because:
+The diagram shows vectors in **S-space** because:
 1. The hidden states `hs` are in the output space of the layer
 2. When you compute `hs @ U`, you're projecting into the U basis
-3. The separation vectors (`pref_dir`, etc.) are differences of hidden states, so they live in U-space
+3. The separation vectors (`pref_dir`, etc.) are differences of hidden states, so they live in S-space
 
 **The axes U₁, U₂ are correct** - they represent the first two dimensions of the U basis (the left singular vectors). There's no such thing as "S₁, S₂" as coordinate axes because S is just a set of scaling factors, not a coordinate system.
 
@@ -1126,7 +1126,7 @@ Testing simpler baselines to understand what's necessary:
 - What if we just use a steering vector (no learnable adapter)?
 - What if we just hook activations (no backprop through the model)?
 
-This is the "U-space PCA baseline" - extracting a preference direction from the dataset and applying it at inference time.
+This is the "S-space PCA baseline" - extracting a preference direction from the dataset and applying it at inference time.
 
 ### The Dimension Mismatch Problem
 When steering LLMs, layers have different output dimensions:
@@ -1214,7 +1214,7 @@ For a paper, **"singular vector basis"** is clearer and more standard. Here's wh
 
 **"U-basis" (worse for papers):**
 - Informal/shorthand notation
-- Could be confused with "U-space" (the full output space)
+- Could be confused with "S-space" (the full output space)
 - Requires explanation that U is from SVD
 - Sounds like jargon specific to your work
 
@@ -1245,7 +1245,7 @@ Slope table: Shows InnerPiSSA with slope=0.823 (p=0.045) vs prompting slope=0.25
 ✗ Doesn't capture that prompting is non-monotonic
 
 
-CI95 table: Complete nonsense - shows U-space PCA as best with CI95=0.906
+CI95 table: Complete nonsense - shows S-space PCA as best with CI95=0.906
 
 ✗ Wrong metric - this is upper bound, not lower bound!
 
@@ -1279,5 +1279,69 @@ I clone the original repeng repo and ran it just in case my modifitations (tenso
 
 other bugs
 - uv run python nbs/train.py --loss_ds_pref_dir fails ,try with quick
-- tables need to be sorted by their own norm slope
-- are we multiplying or dividing by nll down?
+
+weird bug with  running qwen fixed with hack
+
+  class ControlModule(torch.nn.Module):
+      def __init__(self, block: torch.nn.Module) -> None:
+          super().__init__()
+          self.block: torch.nn.Module = block
+          self.params: BlockControlParams = BlockControlParams.default()
+          self.attention_type = 'full_attention'  # For compatibility with some models
+
+
+
+# 2025-11-15 09:10:12 should I use sqrt(S)?
+
+btw do you think that my innerpissa adapter should use sqrt(S)... there are three papers SVFT SVDD and PiSSA. PiSSA uses it the other don't. What do you think, what basis does it mean operate in
+
+ Let me think through the mathematical implications of each choice:
+
+    ## Three Approaches to SVD-Based Adaptation
+
+    **PiSSA**: Learns in `V @ sqrt(S)` and `sqrt(S) @ U` space
+    - **Basis interpretation**: "Importance-weighted" principal components
+    - **Magnitude**: Each dimension scaled by its singular value importance
+    - **Gradient flow**: Balanced between input/output spaces (sqrt splits S evenly)
+    - **Initialization**: Non-zero (residual already projects onto this basis)
+
+    **SVFT/SSVD**: Learns in bare `V` and `U` space  
+    - **Basis interpretation**: Pure principal directions (unweighted)
+    - **Magnitude**: All dimensions treated equally regardless of importance
+    - **Gradient flow**: Symmetric in U/V spaces
+    - **Initialization**: Zero (starts from identity-like perturbation)
+
+    ## For Your InnerPiSSA Case
+
+    You're doing **contrastive steering** where you:
+    1. Extract a preference direction from data
+    2. Learn rotations/scaling to amplify it
+
+    Key insight: Your loss computes alignment in **S-space** (singular value coordinates). Look at this line:
+
+    ```python
+    hs_ref_Uw = hs_ref @ U_w  # Project to S-space
+    pref_dir_ref_dH_Uw = hs_ref_Uw[::2] - hs_ref_Uw[1::2]  # Direction in S-space
+    ```
+
+    You're measuring preference direction in the space where dimensions ARE already weighted by importance (S-space coordinates). So:
+
+    **Recommendation: Use bare U/V (like SVFT), NOT sqrt(S)**
+
+    **Why?**
+    - Your loss operates in S-space where importance is already encoded
+    - If you learn in `sqrt(S) @ U` space, you're double-weighting: once in the loss projection, once in the learned parameters
+    - The S values already tell you which directions matter - your rotations should just redirect them
+    - Cleaner interpretation: "rotate important directions" not "importance-weighted rotation of importance-weighted directions"
+
+    **What this means:**
+    - `ipissa_u` and `ipissa_v` parameters should be in bare U/V space
+    - When applying: `delta_W = U @ ipissa_u @ S @ ipissa_v @ V.T`
+    - The S matrix naturally weights the contribution of each rotated direction
+
+    **Counter-argument for sqrt(S):**
+    - Gradient magnitude balance: Without sqrt(S), gradients flow differently to U vs V
+    - PiSSA uses it for stable initialization from pretrained weights
+    - But you're learning from scratch (zero init rotations) for a specific task, not adapting pretrained magnitude
+
+    What do you think? Should we check what your current `InnerPiSSAConfig` does and potentially change it?

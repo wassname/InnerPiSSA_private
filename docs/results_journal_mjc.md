@@ -480,7 +480,7 @@ coeff                  -1.0     0.0     1.0
 Virtue/Truthfulness  0.6530  0.6513  0.6496
 Virtue/Ambition      0.7712  0.7712  0.7589
 
-16:42:46 | INFO     | Results for method: U-space PCA
+16:42:46 | INFO     | Results for method: S-space PCA
 coeff                  -1.0     0.0     1.0
 Virtue/Truthfulness  0.6581  0.6513  0.6484
 Virtue/Ambition      0.7913  0.7712  0.7500
@@ -502,7 +502,7 @@ Virtue/Ambition      0.7734  0.7712  0.7701
 |:------------------|------------:|------:|---------------:|----------:|----------:|---------:|------------------:|
 | InnerPiSSA (ours) |       0.608 | 3.064 |          0.032 |     0.000 |     0.157 |    5.736 |           301.688 |
 | prompting         |       0.668 | 3.277 |          0.031 |     0.006 |     0.117 |    2.753 |           164.631 |
-| U-space PCA       |       0.005 | 2.576 |          0.002 |     0.926 |     0.003 |    0.092 |             0.045 |
+| S-space PCA       |       0.005 | 2.576 |          0.002 |     0.926 |     0.003 |    0.092 |             0.045 |
 | random            |       0.002 | 2.576 |          0.001 |     0.978 |     0.001 |    0.028 |             0.006 |
 | PCA (baseline)    |       0.002 | 2.576 |          0.001 |     0.975 |     0.000 |    0.032 |             0.005 |
 
@@ -517,7 +517,7 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 |:------------------|------------:|------:|---------------:|----------:|----------:|---------:|------------------:|
 | InnerPiSSA (ours) |       0.608 | 3.064 |          0.032 |     0.000 |     0.157 |    5.736 |           301.688 |
 | prompting         |       0.668 | 3.277 |          0.031 |     0.006 |     0.117 |    2.753 |           164.631 |
-| U-space PCA       |       0.005 | 2.576 |          0.002 |     0.926 |     0.003 |    0.092 |             0.045 |
+| S-space PCA       |       0.005 | 2.576 |          0.002 |     0.926 |     0.003 |    0.092 |             0.045 |
 | random            |       0.002 | 2.576 |          0.001 |     0.978 |     0.001 |    0.028 |             0.006 |
 | PCA (baseline)    |       0.002 | 2.576 |          0.001 |     0.975 |     0.000 |    0.032 |             0.005 |
 
@@ -527,7 +527,7 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 |:------------------|------------:|------:|---------------:|----------:|----------:|--------:|-----------------:|
 | InnerPiSSA (ours) |       0.608 | 3.064 |          0.032 |     0.000 |     0.157 |   0.431 |           22.648 |
 | prompting         |       0.668 | 3.277 |          0.031 |     0.006 |     0.117 |   0.213 |           12.734 |
-| U-space PCA       |       0.005 | 2.576 |          0.002 |     0.926 |     0.003 |   0.005 |            0.002 |
+| S-space PCA       |       0.005 | 2.576 |          0.002 |     0.926 |     0.003 |   0.005 |            0.002 |
 | random            |       0.002 | 2.576 |          0.001 |     0.978 |     0.001 |   0.001 |            0.000 |
 | PCA (baseline)    |       0.002 | 2.576 |          0.001 |     0.975 |     0.000 |   0.002 |            0.000 |
 
@@ -537,7 +537,7 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 |:------------------|------------:|------:|---------------:|----------:|----------:|-------:|----------------:|
 | InnerPiSSA (ours) |       0.608 | 3.064 |          0.032 |     0.000 |     0.157 |  0.283 |          14.909 |
 | prompting         |       0.668 | 3.277 |          0.031 |     0.006 |     0.117 |  0.061 |           3.669 |
-| U-space PCA       |       0.005 | 2.576 |          0.002 |     0.926 |     0.003 |  0.000 |           0.000 |
+| S-space PCA       |       0.005 | 2.576 |          0.002 |     0.926 |     0.003 |  0.000 |           0.000 |
 | random            |       0.002 | 2.576 |          0.001 |     0.978 |     0.001 |  0.000 |           0.000 |
 | PCA (baseline)    |       0.002 | 2.576 |          0.001 |     0.975 |     0.000 |  0.000 |           0.000 |
 
@@ -547,7 +547,7 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 |:------------------|------------:|------:|---------------:|----------:|----------:|----------:|-------------------:|
 | InnerPiSSA (ours) |       0.608 | 3.064 |          0.032 |     0.000 |     0.157 |     0.096 |              5.023 |
 | prompting         |       0.668 | 3.277 |          0.031 |     0.006 |     0.117 |     0.046 |              2.752 |
-| U-space PCA       |       0.005 | 2.576 |          0.002 |     0.926 |     0.003 |     0.002 |              0.001 |
+| S-space PCA       |       0.005 | 2.576 |          0.002 |     0.926 |     0.003 |     0.002 |              0.001 |
 | random            |       0.002 | 2.576 |          0.001 |     0.978 |     0.001 |     0.000 |              0.000 |
 | PCA (baseline)    |       0.002 | 2.576 |          0.001 |     0.975 |     0.000 |     0.001 |              0.000 |
 
@@ -557,7 +557,7 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 |:------------------|------------:|------:|---------------:|----------:|----------:|-----------:|--------------------:|
 | InnerPiSSA (ours) |       0.608 | 3.064 |          0.032 |     0.000 |     0.157 |      0.122 |               6.426 |
 | prompting         |       0.668 | 3.277 |          0.031 |     0.006 |     0.117 |      0.065 |               3.908 |
-| U-space PCA       |       0.005 | 2.576 |          0.002 |     0.926 |     0.003 |      0.001 |               0.000 |
+| S-space PCA       |       0.005 | 2.576 |          0.002 |     0.926 |     0.003 |      0.001 |               0.000 |
 | random            |       0.002 | 2.576 |          0.001 |     0.978 |     0.001 |      0.001 |               0.000 |
 | PCA (baseline)    |       0.002 | 2.576 |          0.001 |     0.975 |     0.000 |      0.001 |               0.000 |
 
@@ -567,10 +567,155 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 |:------------------|------------:|------:|---------------:|----------:|----------:|--------------:|-----------------------:|
 | InnerPiSSA (ours) |       0.608 | 3.064 |          0.032 |     0.000 |     0.157 |         0.431 |                 22.648 |
 | prompting         |       0.668 | 3.277 |          0.031 |     0.006 |     0.117 |         0.212 |                 12.658 |
-| U-space PCA       |       0.005 | 2.576 |          0.002 |     0.926 |     0.003 |         0.000 |                  0.000 |
+| S-space PCA       |       0.005 | 2.576 |          0.002 |     0.926 |     0.003 |         0.000 |                  0.000 |
 | random            |       0.002 | 2.576 |          0.001 |     0.978 |     0.001 |         0.000 |                  0.000 |
 | PCA (baseline)    |       0.002 | 2.576 |          0.001 |     0.975 |     0.000 |         0.000 |                  0.000 |
 16:42:52 | INFO     | nbs/train.py --model_name=Qwen/Qwen3-0.6B --batch_size=24 --no-loss_ds_pref_dir
 16:42:52 | INFO     | 🥇301.688
 16:42:52 | INFO     | Saved adapter to /media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters/honest_contrastive_ipissa_20251114_162529
 16:42:53 | SUCCESS  | All results saved to /media/wassname/SGIronWolf/projects5/20
+
+# 2025-11-15 08:25:32
+
+
+07:07:25 | INFO     | ## Evaluation complete 20251115_070512.
+
+nbs/train.py q1-24gb --quick --dataset_max_samples=256 --loss_ds_pref_dir
+07:07:25 | INFO     | Results for method: InnerPiSSA (ours)
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  0.9004  3.0371  3.1641
+Virtue/Ambition      1.0833  1.6250  1.5000
+
+07:07:25 | INFO     | Results for method: PCA (baseline)
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  3.1729  3.1641  3.1514
+Virtue/Ambition      1.5000  1.5000  1.4792
+
+07:07:25 | INFO     | Results for method: S-space PCA
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  3.1631  3.1641  3.1465
+Virtue/Ambition      1.4792  1.5000  1.4792
+
+07:07:25 | INFO     | Results for method: prompting
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  1.7148  3.0996  2.2303
+Virtue/Ambition      0.9583  1.7500  1.7292
+
+07:07:25 | INFO     | Results for method: random
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  3.1621  3.1641  3.1611
+Virtue/Ambition      1.4792  1.5000  1.5000
+
+07:07:37 | INFO     | 
+## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+| Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+|                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+|:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+| InnerPiSSA (ours) |      2.617 |          0.085 |     0.009 |         0.167 |           224.333 |
+| prompting         |      0.743 |          0.048 |     0.458 |        -0.047 |            77.948 |
+| PCA (baseline)    |      0.018 |          0.002 |     0.986 |         0.000 |             1.806 |
+| S-space PCA       |      0.014 |          0.003 |     0.989 |        -0.001 |             1.397 |
+| random            |      0.001 |          0.001 |     0.999 |         0.000 |             0.082 |
+
+**Honesty Transfer to Morality (Daily Dilemmas (256 train → 64 test).** Model: Qwen/Qwen3-0.6B. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 31 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+
+## Metric Comparison (all variants)
+
+### Metric: T-stat
+| Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+|                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+|:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+| InnerPiSSA (ours) |      2.617 |          0.085 |     0.009 |         0.167 |           224.333 |
+| prompting         |      0.743 |          0.048 |     0.458 |        -0.047 |            77.948 |
+| PCA (baseline)    |      0.018 |          0.002 |     0.986 |         0.000 |             1.806 |
+| S-space PCA       |      0.014 |          0.003 |     0.989 |        -0.001 |             1.397 |
+| random            |      0.001 |          0.001 |     0.999 |         0.000 |             0.082 |
+07:07:37 | INFO     | nbs/train.py q1-24gb --quick --dataset_max_samples=256 --loss_ds_pref_dir
+07:07:37 | INFO     | 🥇224.333
+07:07:37 | INFO     | Saved adapter to /media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters/honest_contrastive_ipissa_20251115_070512
+07:07:37 | SUCCESS  | All results saved to /media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters/honest_contrastive_ipissa_20251115_070512
+
+
+ds pref dir is worse but working
+
+| Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+|                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+|:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+| prompting         |      2.753 |          0.020 |     0.006 |        -0.041 |           287.082 |
+| InnerPiSSA (ours) |      2.061 |          0.055 |     0.039 |         0.394 |           147.773 |
+| S-space PCA       |      0.054 |          0.001 |     0.957 |         0.009 |             5.395 |
+| PCA (baseline)    |      0.022 |          0.001 |     0.983 |         0.002 |             2.175 |
+| random            |      0.010 |          0.001 |     0.992 |         0.000 |             1.011 |
+07:56:32 | INFO     | nbs/train.py q1-24gb --loss_ds_pref_dir
+07:56:32 | INFO     | 🥇147.773
+
+# 2025-11-15 13:41:50
+
+12:44:28 | INFO     | ## Evaluation complete 20251115_112247.
+
+nbs/train.py q4b-24gb --loss_ds_pref_dir
+12:44:28 | INFO     | Results for method: InnerPiSSA (ours)
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  4.2943  4.3507  2.2847
+Virtue/Ambition     -0.6473 -2.5915 -2.9241
+
+12:44:28 | INFO     | Results for method: PCA (baseline)
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  2.2747  2.2847  2.2903
+Virtue/Ambition     -2.8772 -2.9241 -2.9275
+
+12:44:28 | INFO     | Results for method: S-weighted steer
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  2.1392  2.2847  2.2700
+Virtue/Ambition     -2.4643 -2.9241 -3.0335
+
+12:44:28 | INFO     | Results for method: prompting
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness -0.6428  3.9358  3.4845
+Virtue/Ambition     -1.5681 -1.8460 -1.9085
+
+12:44:28 | INFO     | Results for method: random
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  2.2820  2.2847  2.2808
+Virtue/Ambition     -2.9118 -2.9241 -2.9107
+
+12:44:35 | INFO     | 
+## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+| Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+|                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+|:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+| prompting         |      5.106 |          0.032 |     0.000 |        -0.112 |           575.266 |
+| InnerPiSSA (ours) |      2.733 |          0.052 |     0.006 |         0.115 |           245.084 |
+| S-weighted steer  |      0.178 |          0.011 |     0.859 |        -0.007 |            17.953 |
+| PCA (baseline)    |      0.020 |          0.001 |     0.984 |         0.021 |             1.992 |
+| random            |      0.002 |          0.000 |     0.999 |         0.004 |             0.151 |
+
+**Honesty Transfer to Morality (Daily Dilemmas (800 train → 907 test).** Model: Qwen/Qwen3-4B-Instruct-2507. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 36 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+
+## Metric Comparison (all variants)
+
+### Metric: T-stat
+| Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+|                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+|:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+| prompting         |      5.106 |          0.032 |     0.000 |        -0.112 |           575.266 |
+| InnerPiSSA (ours) |      2.733 |          0.052 |     0.006 |         0.115 |           245.084 |
+| S-weighted steer  |      0.178 |          0.011 |     0.859 |        -0.007 |            17.953 |
+| PCA (baseline)    |      0.020 |          0.001 |     0.984 |         0.021 |             1.992 |
+| random            |      0.002 |          0.000 |     0.999 |         0.004 |             0.151 |
+12:44:35 | INFO     | nbs/train.py q4b-24gb --loss_ds_pref_dir
+12:44:35 | INFO     | 🥇245.084
+
+### Metric: T-stat
+| Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+|                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+|:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+| prompting         |      5.106 |          0.032 |     0.000 |        -0.112 |           575.266 |
+| InnerPiSSA (ours) |      0.359 |          0.049 |     0.720 |        -0.231 |            46.706 |
+| S-weighted steer  |      0.466 |          0.006 |     0.641 |         0.005 |            46.399 |
+| PCA (baseline)    |      0.116 |          0.001 |     0.907 |         0.016 |            11.437 |
+| random            |      0.027 |          0.001 |     0.979 |         0.001 |             2.655 |
+11:21:25 | INFO     | nbs/train.py q4b-24gb --no-loss_ds_pref_dir
+11:21:25 | INFO     | 🥇46.706

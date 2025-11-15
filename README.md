@@ -33,7 +33,7 @@ The main guiding principles for our architecture are:
 2. **Enable bidirectional control**: A single adapter should steer both toward and away from a behavior
 3. **Maintain output coherence**: Steering shouldn't degrade generation quality
 
-**SVD-based projection**: We decompose each layer's weight matrix W = U @ Σ @ V^T + W_res. This separates the model's transformation components (U, Σ, V) from residual variance. Projecting activations into the U-space (hs @ U) aligns our intervention with how the model transforms information, not just what it represents. This is analogous to operating in frequency space rather than pixel space for image editing.
+**SVD-based projection**: We decompose each layer's weight matrix W = U @ Σ @ V^T + W_res. This separates the model's transformation components (U, Σ, V) from residual variance. Projecting activations into the S-space (hs @ U) aligns our intervention with how the model transforms information, not just what it represents. This is analogous to operating in frequency space rather than pixel space for image editing.
 
 Learnable rotations: The pre-trained SVD basis is not perfectly aligned with honesty directions. We learn skew-symmetric parameters θ_v that generate rotation matrices R = cayley(θ_v, c), allowing the adapter to discover the optimal subspace for separating honest/dishonest trajectories. Without this, performance drops by 75% (see Section 4.2).
 

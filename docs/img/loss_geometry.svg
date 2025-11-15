@@ -209,7 +209,7 @@
        font-size="11"
        fill="#666"
        text-anchor="middle"
-       id="text44">Full U-space (d-dim)</text>
+       id="text44">Full S-space (d-dim)</text>
     <text
        x="140"
        y="295"
@@ -423,6 +423,6 @@
        y="60"
        font-size="11px"
        fill="#888888"
-       id="text100">Per-sample pref_dir_ref (loss_ds_pref_dir=False) • Full U-space projection (loss_full_u=True)</text>
+       id="text100">Per-sample pref_dir_ref (loss_ds_pref_dir=False) • Full S-space projection (loss_full_u=True)</text>
   </g>
 </svg>

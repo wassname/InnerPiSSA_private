@@ -46,7 +46,7 @@
      text-anchor="middle"
      fill="#333"
      id="text4">
-    Contrastive Steering Loss Geometry (U-space)
+    Contrastive Steering Loss Geometry (S-space)
   </text>
   <!-- Main diagram area -->
   <g

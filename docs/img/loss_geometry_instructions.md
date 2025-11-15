@@ -6,10 +6,10 @@ Create an SVG diagram illustrating the geometric interpretation of InnerPiSSA co
 ## Technical Requirements
 
 ### Space and Geometry
-- **Coordinate system**: 2D projection of high-dimensional U-space (output singular vectors from SVD(W))
+- **Coordinate system**: 2D projection of high-dimensional S-space (output singular vectors from SVD(W))
 - **Origin**: Center point at (0, 250) in diagram coordinates
 - **Axes**: U₁ (horizontal) and U₂ (vertical), standard orientation
-- **Coherence boundary**: Circle centered at origin with radius ~180px, representing backprojection of logp constraint into U-space
+- **Coherence boundary**: Circle centered at origin with radius ~180px, representing backprojection of logp constraint into S-space
 
 ### Key Vectors (all originate from origin)
 1. **`pref_dir`** (blue, vertical):
@@ -111,7 +111,7 @@ L = -proj_pi / proj_ref + coherence_penalty(log p_π, log p_ref)
 - [ ] `pref_dir_pi` is narrower than `pref_dir_ref` (rotating toward target)
 - [ ] All vectors stay within coherence circle
 - [ ] Projections are horizontal lines to U₂ axis at same height
-- [ ] Axes labeled U₁, U₂ (not S₁, S₂ - we're in U-space)
+- [ ] Axes labeled U₁, U₂ (not S₁, S₂ - we're in S-space)
 
 ### Visual Quality
 - [ ] Pizza crust is brown and dotted (8,5 dash pattern)

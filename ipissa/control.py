@@ -218,23 +218,25 @@ def baukit_dir_add_hook(
     Edit layer output by applying weight perturbation or activation bias.
     
     Two modes:
-    1. Weight-space steering (U-space): direction is dict with {'U', 'delta_s', 'V'}
-       - Constructs weight perturbation: delta_W = U @ diag(delta_s) @ V.T
-       - Applies input-dependent steering: hs_new = hs + coeff * delta_W @ x
-       - This is a transformation in weight space, not a bias in activation space
-       - Different inputs get different steering (input-dependent)
-       - Handles varying output dimensions (e.g., q_proj: 2048, k/v_proj: 1024)
+    1. S-weighted SVD steering: direction is dict with {'U', 'delta_s', 'V'}
+       - U: [d_out, r] = U_svd * sqrt(S), V: [d_in, r] = V_svd * sqrt(S)
+       - delta_s: [r] full-rank direction (S-weighted difference, no PCA compression)
+       - Reconstructs: delta_W = U @ diag(delta_s) @ V.T
+       - Applied: hs_new = hs + coeff * delta_W @ x (input-dependent steering)
+       - Like PiSSA initialization: matrices pre-scaled by sqrt(S) for proper weighting
+       - Works for varying dimensions (e.g., q_proj d_out=2048, k/v_proj d_out=1024)
        
-    2. Activation-space steering (legacy PCA): direction is tensor [d_out]
+    2. Activation-space bias (legacy PCA): direction is tensor [d_out]
        - Applies constant bias: hs_new = hs + coeff * delta
        - Same steering for all inputs (input-independent)
-       - Requires delta dimension to match layer output dimension
+       - Requires delta.shape[-1] == output.shape[-1]
     
-    Why weight-space steering:
-    - We extract steering direction in singular vector basis (U-space)
-    - Direction is delta_s in S-space (singular values), shape [r]
-    - To apply: reconstruct delta_W = U @ delta_s @ V.T, then delta_W @ x
-    - This gives correct dimensions for all layers automatically
+    Why mode 1 (S-weighted):
+    - Singular values (S) encode importance of each SVD component
+    - Projecting with U*sqrt(S) weights dimensions by their transformation magnitude
+    - Full-rank (no PCA) preserves all preference information across r dimensions
+    - Matches PiSSA's V@sqrt(S) and sqrt(S)@U decomposition
+    - Reconstruction via scaled U, V gives correct magnitudes automatically
     """
     if isinstance(output, tuple):
         y = output[0]
@@ -243,20 +245,22 @@ def baukit_dir_add_hook(
     
     direction = directions[layer]
     
-    # Mode 1: Weight perturbation (U-space steering)
+    # Mode 1: S-weighted SVD steering (full-rank with singular value weighting)
     if isinstance(direction, dict):
-        U = direction['U'].to(y.device, y.dtype)
-        delta_s = direction['delta_s'].to(y.device, y.dtype)
-        V = direction['V'].to(y.device, y.dtype)
+        # PiSSA-style: U_scaled and V_scaled = original @ sqrt(S) for proper importance weighting
+        # delta_W = U_scaled @ diag(delta_s) @ V_scaled.T
+        U_scaled = direction['U_scaled'].to(y.device, y.dtype)  # [d_out, r] = U * sqrt(S)
+        delta_s = direction['delta_s'].to(y.device, y.dtype)  # [r] full-rank direction
+        V_scaled = direction['V_scaled'].to(y.device, y.dtype)  # [d_in, r] = V * sqrt(S)
         
-        # Get input: x = inputs[0] if tuple else inputs
         x = inputs[0] if isinstance(inputs, tuple) else inputs
         
-        # Compute delta_W @ x = U @ diag(delta_s) @ V.T @ x        # x: [b s d_in], V: [d_in r], U: [d_out r], delta_s: [r]
-        # Efficient: (U @ diag(delta_s)) @ (V.T @ x)
-        Vt_x = einsum(x, V, '... d_in, d_in r -> ... r')
-        scaled = delta_s * Vt_x  # [r] * [... r] = [... r]
-        delta_hs = einsum(scaled, U, '... r, d_out r -> ... d_out')
+        # Compute delta_W @ x = U_scaled @ diag(delta_s) @ V_scaled.T @ x
+        # Efficient: (U_scaled @ diag(delta_s)) @ (V_scaled.T @ x)
+        # x: [b s d_in], V_scaled: [d_in r], delta_s: [r], U_scaled: [d_out r]
+        Vt_x = einsum(x, V_scaled, '... d_in, d_in r -> ... r')  # V_scaled.T @ x
+        scaled = delta_s * Vt_x  # [r] * [... r] -> [... r], scale by steering direction
+        delta_hs = einsum(scaled, U_scaled, '... r, d_out r -> ... d_out')  # U_scaled @ scaled
         
         y = y + coeff * delta_hs
     

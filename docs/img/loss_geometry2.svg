@@ -106,7 +106,7 @@
       Training Dynamics (per-sample):
     </text>
     <text x="10" y="32" font-size="12" fill="#4B5563">
-      • pref_dir_ref (blue, vertical): Reference separation (hs_ref_cho - hs_ref_rej) in U-space
+      • pref_dir_ref (blue, vertical): Reference separation (hs_ref_cho - hs_ref_rej) in S-space
     </text>
     <text x="10" y="52" font-size="12" fill="#4B5563">
       • c=+1 (orange): Adapter amplifies → LONGER projection onto blue (rotated slightly right)
@@ -124,6 +124,6 @@
   </g>
   
   <text x="350" y="685" text-anchor="middle" font-size="13" fill="#9CA3AF">
-    U-space (2D projection of high-dimensional singular vector basis)
+    S-space (2D projection of high-dimensional singular vector basis)
   </text>
 </svg>

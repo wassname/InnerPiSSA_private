@@ -198,6 +198,8 @@ class InnerPiSSALayer(BaseTunerLayer):
         # Compute residual (PiSSA-style)
         W_principal = U @ torch.diag(S) @ Vh
         W_res = base_weight - W_principal
+        # Consider in PiSSA is calculated as 
+        # W_res = U[:, r:] @ torch.diag(S_full[r:]) @ Vh[r:, :]
         
         # Store frozen components
         self.ipissa_u[adapter_name] = U.clone().detach().contiguous()

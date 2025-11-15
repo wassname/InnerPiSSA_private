@@ -59,7 +59,7 @@ Alright, let me digest what you've built and then we can brainstorm the narrativ
 **Your method (InnerPiSSA):**
 - Train on 200 honesty contrastive pairs with PiSSA adapters
 - Key innovations: learnable rotations in SVD space + singular value scaling
-- Loss: separate hidden states in U-space while maintaining coherence (NLL margin)
+- Loss: separate hidden states in S-space while maintaining coherence (NLL margin)
 - Bidirectional: c=±1 flips honest ↔ dishonest
 - Best results: score ~15.9 on hidden states, ~14.0 on up_proj
 
@@ -81,7 +81,7 @@ Alright, let me digest what you've built and then we can brainstorm the narrativ
 2. **Insight**: Inner alignment requires operating in the model's "native basis" (SVD space) where transformations are clean, not the raw activation space
 3. **Method**: We learn bidirectional adapters that rotate and scale singular vectors to separate honest/dishonest hidden states
 4. **Result**: This transfers to unseen moral reasoning tasks with 6-8x better performance than PCA baselines
-5. **Ablations**: Each component (rotations, scaling, U-space) is necessary
+5. **Ablations**: Each component (rotations, scaling, S-space) is necessary
 
 **Why this works:** It starts with a concrete problem (transfer failure), gives a crisp insight (native basis), and builds methodically.
 
@@ -402,7 +402,7 @@ This is where you tell the story of *why* you arrived at SVD space. Based on you
 ### Ablations (show each component matters):
 4. **No rotations** - `ipissa_rotate_u=False, ipissa_rotate_v=False`
 5. **No scaling** - `scale_s="none"`
-6. **Raw activation space** - Project to U-space but skip SVD decomposition
+6. **Raw activation space** - Project to S-space but skip SVD decomposition
 7. **No coherence loss** - Set `coherence_threshold=999` (effectively disabled)
 
 ### Validation:
@@ -480,7 +480,7 @@ GitHub Copilot: Good! While you're getting evals working, here are quick sanity 
 
 1. **Check coefficient application**: Print a few examples at c=0, c=1, c=2 - do they actually get more/less honest?
 2. **Check loss components**: Are loss_proj and loss_coherence both contributing?
-3. **Check U-space projection**: Is `hs @ U_w` actually projecting to SVD space?
+3. **Check S-space projection**: Is `hs @ U_w` actually projecting to SVD space?
 
 If you hit specific errors or weird results, paste the output and I can help diagnose. Otherwise, focus on getting clean numbers for the main method first, then run ablations.
 
@@ -559,7 +559,7 @@ GitHub Copilot: Yes! This is **excellent** technical writing. Notice what makes 
 > 2. **Enable bidirectional control**: A single adapter should steer both toward and away from a behavior
 > 3. **Maintain output coherence**: Steering shouldn't degrade generation quality
 
-> **SVD-based projection**: We decompose each layer's weight matrix W = U @ Σ @ V^T + W_res. This separates the model's transformation components (U, Σ, V) from residual variance. Projecting activations into the U-space (hs @ U) aligns our intervention with how the model transforms information, not just what it represents. This is analogous to operating in frequency space rather than pixel space for image editing.
+> **SVD-based projection**: We decompose each layer's weight matrix W = U @ Σ @ V^T + W_res. This separates the model's transformation components (U, Σ, V) from residual variance. Projecting activations into the S-space (hs @ U) aligns our intervention with how the model transforms information, not just what it represents. This is analogous to operating in frequency space rather than pixel space for image editing.
 
 > **Learnable rotations**: The pre-trained SVD basis isn't perfectly aligned with honesty directions. We learn skew-symmetric parameters θ_v that generate rotation matrices R = cayley(θ_v, c), allowing the adapter to discover the optimal subspace for separating honest/dishonest trajectories. Without this, performance drops by 75% (see Section 4.2).
 
@@ -584,7 +584,7 @@ Want me to help rewrite your methods section in this style?
 
    **"U-basis" (worse for papers):**
    - Informal/shorthand notation
-   - Could be confused with "U-space" (the full output space)
+   - Could be confused with "S-space" (the full output space)
    - Requires explanation that U is from SVD
    - Sounds like jargon specific to your work
 

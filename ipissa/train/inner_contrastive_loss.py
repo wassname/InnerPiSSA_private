@@ -248,7 +248,7 @@ def contrastive_steering_loss_with_ref(
 
 
 def contrastive_steering_loss_with_ref_uspace(
-    U_pca: Float[Tensor, "k d"],  # Frozen PCA directions in U-space
+    U_pca: Float[Tensor, "k d"],  # Frozen PCA directions in S-space
     U_svd: Float[Tensor, "d r"],  # Layer's output singular vectors
     hs_ref_cho: HS,
     hs_ref_rej: HS,
@@ -266,19 +266,19 @@ def contrastive_steering_loss_with_ref_uspace(
     # top_k_directions: int = 2,
 ):
     """
-    Modified contrastive loss in layer's U-space (singular vector basis).
+    Modified contrastive loss in layer's S-space (singular vector basis).
     
-    1. Project all HS to U-space: hs_u = hs @ U_svd  (d -> r)
-    2. Compute differences in U-space
-    3. Project onto frozen PCA direction (extracted in U-space)
+    1. Project all HS to S-space: hs_u = hs @ U_svd  (d -> r)
+    2. Compute differences in S-space
+    3. Project onto frozen PCA direction (extracted in S-space)
     """
-    # Project to U-space (r << d typically)
+    # Project to S-space (r << d typically)
     hs_ref_cho_u = hs_ref_cho @ U_svd
     hs_ref_rej_u = hs_ref_rej @ U_svd
     hs_pi_pos_u = hs_pi_pos @ U_svd
     hs_pi_neg_u = hs_pi_neg @ U_svd
     
-    # Now proceed as before, but in U-space
+    # Now proceed as before, but in S-space
     return contrastive_steering_loss_with_ref(
         pref_dir=U_pca,
         hs_ref_cho=hs_ref_cho_u,
