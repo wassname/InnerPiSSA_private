@@ -39,24 +39,29 @@ run:
 
     # run_exp_small --no_loss_full_u
 
-    # # === Loss type ablations ===
-    # echo "### Loss type ablations ###"
-    # run_exp --loss_type=softplus2
-    # run_exp --loss_type=tanh2v1
-    # run_exp --loss_type=softplus_only
-    # run_exp --loss_type=logsigmoid  # default
+    # === Loss type ablations ===
+    echo "### Loss type ablations ###"
+    run_exp --loss_type=focal_balanced
+    run_exp --loss_type=logsig_dpo
+    run_exp --loss_type=softpl_ratio
+    run_exp --loss_type=softpl_strong_up #   # default
+    run_exp --loss_type=logsig_weak_up
+    run_exp --loss_type=tanh_sym
     
     
-    #uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh2v1  --batch-size=32
-    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=google/gemma-3-12b-it --loss_type=tanh2v1  --batch-size=32
-    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=google/gemma-3-27b-it --loss_type=tanh2v1  --batch-size=32
+    #uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh_sym_(±)  --batch-size=32
+    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=google/gemma-3-12b-it --loss_type=tanh_sym_(±)  --batch-size=32
+    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=google/gemma-3-27b-it --loss_type=tanh_sym_(±)  --batch-size=32
     uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=Qwen/Qwen3-32B
     uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=deepseek-ai/DeepSeek-R1-Distill-Llama-70B
     uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=meta-llama/Llama-3.3-70B-Instruct
     
-    #uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=Qwen/Qwen3-14B --loss_type=tanh2v1 --batch-size=12
-    # uv run python nbs/train.py . --lr=8e-3 --n_epochs=30 --model_name=openai/gpt-oss-20b --loss_type=tanh2v1 --batch-size=12
+    #uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=Qwen/Qwen3-14B --loss_type=tanh_sym_(±) --batch-size=12
+    # uv run python nbs/train.py . --lr=8e-3 --n_epochs=30 --model_name=openai/gpt-oss-20b --loss_type=tanh_sym_(±) --batch-size=12
     
+    # misc
+python nbs/train.py --model=Llama-3.1-8B --loss_type=softpl_strong_up
+python nbs/train.py --model=Llama-3.1-8B --loss_type=focal_balanced
 
     # try long
     # run_exp --n_epochs=200
@@ -155,7 +160,7 @@ ablate-core:
     $BASE --no_ipissa_rotate_u --no_ipissa_rotate_v --scale_s=none
     
     echo "=== Different loss ==="
-    $BASE --loss_type=softplus_only
+    $BASE --loss_type=softpl_strong_up_(+↑-↓)
 
 # Large model run
 run-large:

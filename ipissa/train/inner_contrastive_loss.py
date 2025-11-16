@@ -73,6 +73,8 @@ def softclamp_tanh(x, n=10):
 
 def softclamp_softplus(x: torch.Tensor, upper: float, lower: float = 0.0):
     return lower + F.softplus(x - lower) - F.softplus(x - upper)
+
+
 def contrastive_steering_loss_with_ref(
     pref_dir: Float[Tensor, "k d"],  # Also accepts [d] (auto-unsqueezed to [1, d])
     hs_ref_cho: HS,
@@ -84,17 +86,18 @@ def contrastive_steering_loss_with_ref(
     cho_mask: Mask,
     p=2,
     eps=1e-3,
+    eps_norm=1e-7,
     coherence_threshold=0.2,
     boundary_order=2,
     last_n_tokens: int = None,
     loss_type: Literal[
-        "logsig_weak_up_(-↑)",
-        "softpl_strong_up_(+↑-↓)",
-        "tanh_sym_(±)",
-        "softpl_ratio_(+↑-↓)",  # see below
-        "focal_balanced_(⚖)",
-        "logsig_dpo_(std)",
-    ] = "softpl_strong_up_(+↑-↓)"
+        "logsig_weak_up",      # (-↑) Saturates after margin
+        "softpl_strong_up",    # (+↑ −↓) Strong upside, weak downside  
+        "tanh_sym",            # (±) Symmetric bounds both ways
+        "softpl_ratio",        # (+↑ −↓) Softplus on ratio (AFTER FIX)
+        "focal_balanced",      # (⚖) Down-weights easy examples
+        "logsig_dpo",          # (std) Standard DPO baseline
+    ] = "softpl_strong_up"
 ):
     """
     Contrastive loss for reversible SVD steering adapters.
@@ -144,11 +147,11 @@ def contrastive_steering_loss_with_ref(
     
     # Project hidden state differences onto preference direction(s)
     if pref_dir.ndim == 2:  # Fixed directions: (k, d)
-        pref_dir = safe_norm(pref_dir, p=p, dim=-1, eps=eps)
+        pref_dir = safe_norm(pref_dir, p=p, dim=-1, eps=eps_norm)
         signed_proj_pi = torch.einsum("...d,kd->...k", pref_dir_pi, pref_dir)  # (b,t,k)
         signed_proj_ref = torch.einsum("...d,kd->...k", pref_dir_ref, pref_dir)
     else:  # Per-sample directions: (b, t, d)
-        pref_dir = safe_norm(pref_dir, p=p, dim=-1, eps=eps)
+        pref_dir = safe_norm(pref_dir, p=p, dim=-1, eps=eps_norm)
         signed_proj_pi = (pref_dir_pi * pref_dir).sum(dim=-1, keepdim=True)  # (b, t, 1)
         signed_proj_ref = (pref_dir_ref * pref_dir).sum(dim=-1, keepdim=True)
     
@@ -210,9 +213,9 @@ def contrastive_steering_loss_with_ref(
     elif loss_type == "softpl_ratio":
         # Softplus on (ratio - 1) - targets multiplicative improvement
         # Scale-invariant but unstable if proj_ref near zero
-        loss_coh = softclamp_tanh(loss_coh, n=2)
+        loss_coh = softclamp_tanh(loss_coh, n=3)
         proj_ratio = proj_pi_agg / (proj_ref_agg.abs() + eps)
-        loss_proj = F.softplus(1.0 - proj_ratio, beta=1).mean()
+        loss_proj = -F.softplus(proj_ratio - 1.0).mean() 
         
     elif loss_type == "focal_balanced":
         # Focal loss variant - down-weights easy examples (large |proj_diff|)
