@@ -12,6 +12,10 @@ default:
 run:
     #!/bin/bash -x
     
+    # Set group for this sweep (all runs will be grouped together in wandb)
+    export WANDB_RUN_GROUP="ablation-$(date +%Y%m%d-%H%M)"
+    echo "WandB group: $WANDB_RUN_GROUP"
+    
     # Base config for small model ablations
     BASEsmall="uv run python nbs/train.py q4b-80gb"
     BASE="uv run python nbs/train.py q14b-80gb"
@@ -35,15 +39,15 @@ run:
 
     # run_exp_small --no_loss_full_u
 
-    # === Loss type ablations ===
-    echo "### Loss type ablations ###"
-    run_exp --loss_type=softplus2
-    run_exp --loss_type=tanh2v1
-    run_exp --loss_type=softplus_only
-    run_exp --loss_type=logsigmoid  # default
+    # # === Loss type ablations ===
+    # echo "### Loss type ablations ###"
+    # run_exp --loss_type=softplus2
+    # run_exp --loss_type=tanh2v1
+    # run_exp --loss_type=softplus_only
+    # run_exp --loss_type=logsigmoid  # default
     
     
-    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh2v1  --batch-size=32
+    #uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh2v1  --batch-size=32
     uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=google/gemma-3-12b-it --loss_type=tanh2v1  --batch-size=32
     uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=google/gemma-3-27b-it --loss_type=tanh2v1  --batch-size=32
     uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=Qwen/Qwen3-32B
@@ -55,7 +59,7 @@ run:
     
 
     # try long
-    run_exp --n_epochs=200
+    # run_exp --n_epochs=200
     run_exp_small --n_epochs=200
 
     # === Rotation ablations ===
@@ -130,6 +134,11 @@ run:
 # Focused ablations for paper
 ablate-core:
     #!/bin/bash -ex
+    
+    # Set group for this focused ablation sweep
+    export WANDB_RUN_GROUP="core-ablation-$(date +%Y%m%d-%H%M)"
+    echo "WandB group: $WANDB_RUN_GROUP"
+    
     BASE="uv run python nbs/train.py --model_name=Qwen/Qwen3-0.6B --eval_max_n_dilemmas=128 --batch_size=32"
     
     # Core comparisons

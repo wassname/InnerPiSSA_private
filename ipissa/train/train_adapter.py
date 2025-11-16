@@ -1052,8 +1052,14 @@ def main(config: TrainingConfig):
     if config.use_wandb and not config.quick:
         import wandb
 
+        # Generate descriptive run name
+        exp_name = config.get_experiment_name()
+        
         wandb_run = wandb.init(
-            project=config.wandb_project, config=cattrs.unstructure(config)
+            project=config.wandb_project,
+            name=exp_name,
+            tags=config.wandb_tags or [],
+            config=cattrs.unstructure(config),
         )
         logger.info(f"W&B run: {wandb_run.get_url()}")
 
@@ -1134,11 +1140,10 @@ def main(config: TrainingConfig):
     best_val_loss = [float("inf")]  # Use list for mutability
     patience_counter = [0]
 
-    # Create save folder for checkpoints
+    # Create save folder with descriptive name
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    save_folder = (
-        Path(config.output_dir) / f"{config.dataset_name}_contrastive_ipissa_{ts}"
-    )
+    exp_name = config.get_experiment_name()
+    save_folder = Path(config.output_dir) / f"{exp_name}_{ts}"
 
     early_stopped = False
     for epoch in tqdm(range(config.n_epochs), desc="Epochs"):

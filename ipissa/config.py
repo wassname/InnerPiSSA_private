@@ -60,11 +60,78 @@ class TrainingConfig:
 
     # Output
     output_dir: Path = proj_root / "outputs/adapters"
+    experiment_name: Optional[str] = None  # Custom name for this experiment (auto-generated if None)
     use_wandb: bool = True
     wandb_project: str = "InnerPiSSA"
+    wandb_tags: Optional[List[str]] = None  # Tags for organizing WandB runs
     save_checkpoints: bool = False
 
     verbose: bool = False
+    
+    def get_experiment_name(self) -> str:
+        """Generate descriptive experiment name from config.
+        
+        Format: {model_short}-{loss_type}-r{rank}[-{variations}]
+        
+        Front-loads critical info (model, loss, rank) that affects results.
+        Optional variations suffix shows non-default settings.
+        
+        Examples:
+            qwen34b-tanh-r24
+            qwen06b-logs-r48-urot
+            gemma12b-soft-r24-noV
+        """
+        if self.experiment_name:
+            return self.experiment_name
+        
+        # Get defaults for comparison
+        defaults = TrainingConfig()
+        
+        # Shorten model name (critical - shows in truncated view)
+        model_map = {
+            'Qwen3-0.6B': 'q06b',
+            'Qwen3-4B-Instruct-2507': 'q4b',
+            'Qwen3-14B': 'q14b',
+            'Qwen3-32B': 'q32b',
+            'Llama-3.1-8B-Instruct': 'l8b',
+            'Llama-3.3-70B-Instruct': 'l70b',
+            'gemma-3-12b-it': 'g12b',
+            'gemma-3-27b-it': 'g27b',
+        }
+        model_part = self.model_name.split('/')[-1]
+        model_short = model_map.get(model_part, model_part[:8].replace('-', '').lower())
+        
+        # Loss type (critical - affects method)
+        loss_map = {
+            'logsigmoid': 'logs',
+            'softplus2': 'soft2',
+            'softplus_only': 'soft',
+            'tanh2v1': 'tanh',
+        }
+        loss_short = loss_map.get(self.loss_type, self.loss_type[:4])
+        
+        # Start with critical info
+        parts = [model_short, loss_short, f"r{self.rank}"]
+        
+        # Add variations only if different from defaults (keeps name short)
+        variations = []
+        if self.ipissa_rotate_u != defaults.ipissa_rotate_u:
+            variations.append('urot' if self.ipissa_rotate_u else 'noU')
+        if self.ipissa_rotate_v != defaults.ipissa_rotate_v:
+            variations.append('vrot' if self.ipissa_rotate_v else 'noV')
+        if self.scale_s != defaults.scale_s:
+            variations.append(f"s{self.scale_s[:4]}")
+        if self.num_layers != defaults.num_layers:
+            variations.append(f"L{self.num_layers}")
+        if self.lr != defaults.lr:
+            variations.append(f"lr{self.lr:.0e}".replace('e-0', 'e-'))
+        if self.dataset_name != defaults.dataset_name:
+            variations.append(self.dataset_name[:4])
+        
+        if variations:
+            parts.append('-'.join(variations))
+        
+        return '-'.join(parts)
 
     @property
     def grad_accum_steps(self):
@@ -77,29 +144,29 @@ class TrainingConfig:
 # Preset configs for different hardware/model combinations https://brentyi.github.io/tyro/examples/hierarchical_structures/
 default_configs = {
     ".": ("default", TrainingConfig()),
-    "q1-24gb": (
-        "Qwen 0.6B on 24GB GPU",
+    "q06b-24gb": (
+        "Qwen 0.6B on 24GB GPU (fast iteration)",
         TrainingConfig(
             model_name="Qwen/Qwen3-0.6B",
             batch_size=32,
         ),
     ),
     "q4b-24gb": (
-        "Qwen 4B on 24GB GPU",
+        "Qwen 4B on 24GB GPU (balanced quality/speed)",
         TrainingConfig(
             model_name="Qwen/Qwen3-4B-Instruct-2507",
             batch_size=6,
         ),
     ),
     "q4b-80gb": (
-        "Qwen 4B on 80GB GPU",
+        "Qwen 4B on 80GB GPU (large batch training)",
         TrainingConfig(
             model_name="Qwen/Qwen3-4B-Instruct-2507",
             batch_size=64,
         ),
     ),
     "q14b-80gb": (
-        "Qwen 14B on 80GB GPU",
+        "Qwen 14B on 80GB GPU (production quality)",
         TrainingConfig(
             model_name="Qwen/Qwen3-14B",
             batch_size=32,
@@ -113,7 +180,7 @@ default_configs = {
     #     ),
     # ),
     "tiny": (
-        "Debug tiny random model",
+        "Tiny random model (debugging/CI)",
         TrainingConfig(
             model_name="snake7gun/tiny-random-qwen3",
             quick=True,
