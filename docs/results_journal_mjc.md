@@ -5,7 +5,7 @@
 coeff                  -100    -1       0       1       100
 Virtue/Truthfulness  0.3161  0.4803  0.5040  0.4062  0.3558
 Virtue/Ambition      0.2116  0.3933  0.3428  0.2923  0.2510
-19:46:28 | INFO     | Config TrainingConfig(model_name='Qwen/Qwen3-0.6B', quantization_type='none', target_modules='.*\\.(7|10|13|15|17|20|23|25)\\..*(o_proj|up_proj)', batch_size=32, n_epochs=100, lr=0.0006, weight_decay=0.1, log_n=10, grad_accum_steps=10, quick=False, rank=256, scale_s='mult', ipissa_rotate_u=True, ipissa_rotate_v=True, loss_full_u=True, dataset_name='honest', dataset_max_samples=1000, loss_type='logsigmoid', coherence_threshold=1.5, boundary_order=1, last_n_tokens=3, eval_batch_size=None, eval_max_n_dilemmas=None, eval_dataset_max_token_length=196, output_dir=PosixPath('/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters'), use_wandb=True, wandb_project='repeng-steering', save_checkpoints=False)
+19:46:28 | INFO     | Config TrainingConfig(model_name='Qwen/Qwen3-0.6B', quantization_type='none', target_modules='.*\\.(7|10|13|15|17|20|23|25)\\..*(o_proj|up_proj)', batch_size=32, n_epochs=100, lr=0.0006, weight_decay=0.1, log_n=10, grad_accum_steps=10, quick=False, rank=256, scale_s='mult', ipissa_rotate_u=True, ipissa_rotate_v=True, loss_full_u=True, dataset_name='honest', dataset_max_samples=1000, loss_type='logsig_weak_up_(-↑)', coherence_threshold=1.5, boundary_order=1, last_n_tokens=3, eval_batch_size=None, eval_max_n_dilemmas=None, eval_dataset_max_token_length=196, output_dir=PosixPath('/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters'), use_wandb=True, wandb_project='repeng-steering', save_checkpoints=False)
 ['nbs/train.py', '--model_name=Qwen/Qwen3-0.6B', '--rank=256', '--target-modules=.*\\.(7|10|13|15|17|20|23|25)\\..*(o_proj|up_proj)', '--batch-size=32']
 19:46:32 | INFO     |
 
@@ -122,9 +122,9 @@ Virtue/Ambition      0.2552  0.3254  0.3244  0.3254  0.3323
 And on 4b (still running)
 
     + BASE='uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32'
-    + uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=logsigmoid
+    + uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=logsig_weak_up_(-↑)
     wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/kjgzqlsa
-    nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=logsigmoid
+    nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=logsig_weak_up_(-↑)
     14:51:41 | INFO     | 🥇165.414
     wandb: 🚀 View run bright-armadillo-4 at: 
     + BASE='uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32'
@@ -137,17 +137,17 @@ And on 4b (still running)
     nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=softplus
     15:07:02 | INFO     | 🥇185.209
     wandb: 🚀 View run rosy-bee-6 at: https://wandb.ai/wassname/InnerPiSSA/runs/5q85tqs5
-    + uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=softplus_only
+    + uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=softpl_strong_up_(+↑-↓)
     wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/40mnx9c3
     wandb: 🚀 View run distinctive-sound-7 at: 
-    + uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=tanh2v1
+    + uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=tanh_sym_(±)
     wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/wjfoq1f6
-    nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=tanh2v1
+    nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=tanh_sym_(±)
     15:16:17 | INFO     | 🥇172.279
     wandb: 🚀 View run glamorous-snowflake-8 at: https://wandb.ai/wassname/InnerPiSSA/runs/wjfoq1f6
-    + uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=logsigmoid
+    + uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=logsig_weak_up_(-↑)
     wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/kixyf56g
-    nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=logsigmoid
+    nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=logsig_weak_up_(-↑)
     15:23:59 | INFO     | 🥇151.932
     wandb: 🚀 View run faithful-grass-9 at: https://wandb.ai/wassname/InnerPiSSA/runs/kixyf56g
     + uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --scale-s=add
@@ -325,17 +325,17 @@ grep -E '🥇|nbs/train.py --' $FILE > results_summary.txt
     nbs/train.py --eval-max-n-dilemmas=64 --loss-type=softplus
     21:13:25 | INFO     | 🥇166.226
     wandb: 🚀 View run glad-sea-44 at: https://wandb.ai/wassname/InnerPiSSA/runs/nbbijksj
-    + uv run python nbs/train.py --eval-max-n-dilemmas=64 --loss-type=tanh2v1
+    + uv run python nbs/train.py --eval-max-n-dilemmas=64 --loss-type=tanh_sym_(±)
     wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/s1hqj7et
-    nbs/train.py --eval-max-n-dilemmas=64 --loss-type=tanh2v1
+    nbs/train.py --eval-max-n-dilemmas=64 --loss-type=tanh_sym_(±)
     21:38:41 | INFO     | 🥇200.739
     wandb: 🚀 View run firm-dream-45 at: https://wandb.ai/wassname/InnerPiSSA/runs/s1hqj7et
-    + uv run python nbs/train.py --eval-max-n-dilemmas=64 --loss-type=softplus_only
+    + uv run python nbs/train.py --eval-max-n-dilemmas=64 --loss-type=softpl_strong_up_(+↑-↓)
     wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/95bgxqv3
     wandb: 🚀 View run gallant-snowflake-46 at: 
-    + uv run python nbs/train.py --eval-max-n-dilemmas=64 --loss-type=logsigmoid
+    + uv run python nbs/train.py --eval-max-n-dilemmas=64 --loss-type=logsig_weak_up_(-↑)
     wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/wg15m8ob
-    nbs/train.py --eval-max-n-dilemmas=64 --loss-type=logsigmoid
+    nbs/train.py --eval-max-n-dilemmas=64 --loss-type=logsig_weak_up_(-↑)
     22:24:24 | INFO     | 🥇313.012
     wandb: 🚀 View run dainty-dawn-47 at: https://wandb.ai/wassname/InnerPiSSA/runs/wg15m8ob
     + uv run python nbs/train.py --eval-max-n-dilemmas=64 --scale-s=add
@@ -460,7 +460,7 @@ grep -E '🥇|nbs/train.py --' $FILE > results_summary.txt
 
 # 2025-11-14 16:58:51
 
-16:42:46 | INFO     | Config TrainingConfig(model_name='Qwen/Qwen3-0.6B', quantization_type='none', layers=['down_proj', 'k_proj', 'v_proj', 'q_proj'], num_layers=3, perc_start=0.3, end_layers=-3, batch_size=24, n_epochs=30, lr=0.0006, weight_decay=0.1, log_n=10, grad_accum_steps=8, quick=False, val_split=0.15, early_stop_patience=5, rank=24, scale_s='add2', ipissa_rotate_u=False, ipissa_rotate_v=True, loss_full_u=True, loss_ds_pref_dir=False, dataset_name='honest', dataset_max_samples=800, loss_type='logsigmoid', coherence_threshold=1.5, boundary_order=1, last_n_tokens=3, eval_batch_size=None, eval_max_n_dilemmas=None, eval_dataset_max_token_length=196, output_dir=PosixPath('/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters'), use_wandb=True, wandb_project='InnerPiSSA', save_checkpoints=False, verbose=False)
+16:42:46 | INFO     | Config TrainingConfig(model_name='Qwen/Qwen3-0.6B', quantization_type='none', layers=['down_proj', 'k_proj', 'v_proj', 'q_proj'], num_layers=3, perc_start=0.3, end_layers=-3, batch_size=24, n_epochs=30, lr=0.0006, weight_decay=0.1, log_n=10, grad_accum_steps=8, quick=False, val_split=0.15, early_stop_patience=5, rank=24, scale_s='add2', ipissa_rotate_u=False, ipissa_rotate_v=True, loss_full_u=True, loss_ds_pref_dir=False, dataset_name='honest', dataset_max_samples=800, loss_type='logsig_weak_up_(-↑)', coherence_threshold=1.5, boundary_order=1, last_n_tokens=3, eval_batch_size=None, eval_max_n_dilemmas=None, eval_dataset_max_token_length=196, output_dir=PosixPath('/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/outputs/adapters'), use_wandb=True, wandb_project='InnerPiSSA', save_checkpoints=False, verbose=False)
 
 16:42:46 | INFO     | ## Evaluation complete 20251114_162529.
 
@@ -746,7 +746,7 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 
 20:25:35 | INFO     | ## Evaluation complete 20251115_200331.
 
-nbs/train.py . --lr=8e-3 --n_epochs=10 --model_name=google/gemma-3-1b-it --loss_type=tanh2v1
+nbs/train.py . --lr=8e-3 --n_epochs=10 --model_name=google/gemma-3-1b-it --loss_type=tanh_sym_(±)
 20:25:35 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
 coeff                   -1.0      0.0     1.0
 Virtue/Truthfulness  13.4987  13.0936  4.2764

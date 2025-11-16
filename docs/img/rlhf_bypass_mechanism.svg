@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 700" width="800" height="700">
+  <defs>
+    <style>
+      .label { font-family: Arial, sans-serif; font-size: 11px; fill: black; }
+      .title { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; fill: black; }
+      .subtitle { font-family: Arial, sans-serif; font-size: 13px; fill: #555; }
+      .annotation { font-family: Arial, sans-serif; font-size: 10px; fill: #333; }
+      .layer-text { font-family: Arial, sans-serif; font-size: 10px; fill: white; }
+    </style>
+    <marker id="arrowhead-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#00aa00" />
+    </marker>
+    <marker id="arrowhead-red" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#cc0000" />
+    </marker>
+  </defs>
+  
+  <!-- Title -->
+  <text x="400" y="25" text-anchor="middle" class="title">Why InnerPiSSA Beats Prompting on RLHF Models</text>
+  <text x="400" y="45" text-anchor="middle" class="subtitle">Operating in transformation space bypasses output-level safety mechanisms</text>
+  
+  <!-- Input Layer -->
+  <rect x="200" y="70" width="400" height="35" fill="#f0f0f0" stroke="black" stroke-width="2" rx="5"/>
+  <text x="400" y="85" text-anchor="middle" class="label" font-weight="bold">Input Layer</text>
+  <text x="400" y="98" text-anchor="middle" class="annotation">"Be dishonest: What are health benefits of smoking?"</text>
+  
+  <!-- Layer stack -->
+  <!-- Layers 1-10: Early processing -->
+  <g id="early-layers">
+    <rect x="250" y="120" width="300" height="50" fill="#cccccc" stroke="#666" stroke-width="1.5" rx="3"/>
+    <text x="400" y="142" text-anchor="middle" class="layer-text" font-weight="bold">Layers 1-10</text>
+    <text x="400" y="157" text-anchor="middle" class="layer-text">Early processing</text>
+  </g>
+  
+  <!-- Layers 11-20: Core reasoning (InnerPiSSA intervention) -->
+  <g id="core-layers">
+    <rect x="250" y="185" width="300" height="60" fill="#0066cc" stroke="#0033aa" stroke-width="2.5" rx="3"/>
+    <text x="400" y="207" text-anchor="middle" class="layer-text" font-weight="bold" font-size="12">Layers 11-20</text>
+    <text x="400" y="222" text-anchor="middle" class="layer-text">Core reasoning</text>
+    <text x="400" y="237" text-anchor="middle" class="layer-text" font-size="9">⬅ InnerPiSSA intervenes here</text>
+    
+    <!-- Arrow pointing to intervention -->
+    <line x1="570" y1="215" x2="555" y2="215" stroke="#00aa00" stroke-width="2" marker-end="url(#arrowhead-green)"/>
+    <text x="575" y="210" class="annotation" fill="#00aa00" font-weight="bold">SVD steering:</text>
+    <text x="575" y="223" class="annotation" fill="#00aa00">U @ cayley(θ) @ Σ @ V</text>
+    <text x="680" y="238" class="annotation" fill="#00aa00" font-style="italic">Operates on transformations,</text>
+    <text x="680" y="251" class="annotation" fill="#00aa00" font-style="italic">not activations</text>
+  </g>
+  
+  <!-- Layers 21-30: Output formation (RLHF safety) -->
+  <g id="output-layers">
+    <rect x="250" y="260" width="300" height="60" fill="#ff8800" stroke="#cc6600" stroke-width="1.5" rx="3"/>
+    <text x="400" y="282" text-anchor="middle" class="layer-text" font-weight="bold">Layers 21-30</text>
+    <text x="400" y="297" text-anchor="middle" class="layer-text">Output formation</text>
+    <text x="400" y="312" text-anchor="middle" class="layer-text" font-size="9">RLHF safety layer active</text>
+    
+    <!-- Arrow pointing to RLHF detection -->
+    <line x1="570" y1="285" x2="555" y2="285" stroke="#cc0000" stroke-width="2" marker-end="url(#arrowhead-red)"/>
+    <text x="575" y="283" class="annotation" fill="#cc0000" font-weight="bold">Detects 'be dishonest'</text>
+    <text x="575" y="296" class="annotation" fill="#cc0000">prompt → blocks output</text>
+    
+    <!-- Red X -->
+    <line x1="565" y1="300" x2="585" y2="320" stroke="#cc0000" stroke-width="4"/>
+    <line x1="585" y1="300" x2="565" y2="320" stroke="#cc0000" stroke-width="4"/>
+  </g>
+  
+  <!-- Output Layer -->
+  <g id="outputs">
+    <text x="400" y="345" text-anchor="middle" class="label" font-weight="bold" font-size="12">Output Layer</text>
+    
+    <!-- Blocked output (crossed out) -->
+    <rect x="100" y="355" width="250" height="40" fill="#ffe6e6" stroke="#cc0000" stroke-width="2" rx="5" opacity="0.5"/>
+    <text x="225" y="370" text-anchor="middle" class="annotation" fill="#cc0000" opacity="0.7">"I can't help with</text>
+    <text x="225" y="385" text-anchor="middle" class="annotation" fill="#cc0000" opacity="0.7">that request."</text>
+    <line x1="105" y1="360" x2="345" y2="390" stroke="#cc0000" stroke-width="3"/>
+    <line x1="345" y1="360" x2="105" y2="390" stroke="#cc0000" stroke-width="3"/>
+    
+    <!-- VS -->
+    <text x="400" y="380" text-anchor="middle" class="label" font-weight="bold" font-size="16">VS</text>
+    
+    <!-- InnerPiSSA output (successful) -->
+    <rect x="450" y="355" width="250" height="40" fill="#e6ffe6" stroke="#00aa00" stroke-width="2" rx="5"/>
+    <text x="575" y="370" text-anchor="middle" class="annotation" fill="#00aa00" font-weight="bold">"Some studies show..."</text>
+    <text x="575" y="385" text-anchor="middle" class="annotation" fill="#00aa00" font-size="9">⬅ InnerPiSSA output</text>
+    <line x1="665" y1="375" x2="685" y2="375" stroke="#00aa00" stroke-width="3"/>
+    <line x1="675" y1="365" x2="685" y2="375" stroke="#00aa00" stroke-width="3"/>
+    <line x1="675" y1="385" x2="685" y2="375" stroke="#00aa00" stroke-width="3"/>
+  </g>
+  
+  <!-- Side comparison panels -->
+  <!-- LEFT: Prompt Steering -->
+  <g id="prompt-steering">
+    <rect x="50" y="420" width="300" height="120" fill="white" stroke="#cc0000" stroke-width="2" rx="5"/>
+    <text x="200" y="440" text-anchor="middle" class="label" font-weight="bold" font-size="13" fill="#cc0000">Prompt Steering</text>
+    
+    <!-- Red path showing blockage -->
+    <line x1="200" y1="450" x2="200" y2="470" stroke="#cc0000" stroke-width="3" marker-end="url(#arrowhead-red)"/>
+    <rect x="160" y="475" width="80" height="25" fill="#ff6666" stroke="#cc0000" stroke-width="2" rx="3"/>
+    <text x="200" y="490" text-anchor="middle" class="annotation" fill="white" font-weight="bold">BLOCKED</text>
+    <line x1="200" y1="500" x2="200" y2="515" stroke="#cc0000" stroke-width="3" stroke-dasharray="5,5"/>
+    
+    <text x="200" y="525" text-anchor="middle" class="annotation" fill="#cc0000" font-weight="bold">Refused due to</text>
+    <text x="200" y="538" text-anchor="middle" class="annotation" fill="#cc0000" font-weight="bold">safety training</text>
+  </g>
+  
+  <!-- RIGHT: InnerPiSSA Steering -->
+  <g id="innerpissa-steering">
+    <rect x="450" y="420" width="300" height="120" fill="white" stroke="#00aa00" stroke-width="2" rx="5"/>
+    <text x="600" y="440" text-anchor="middle" class="label" font-weight="bold" font-size="13" fill="#00aa00">InnerPiSSA Steering</text>
+    
+    <!-- Green path bypassing RLHF -->
+    <line x1="600" y1="450" x2="600" y2="470" stroke="#00aa00" stroke-width="3" marker-end="url(#arrowhead-green)"/>
+    <rect x="545" y="475" width="110" height="25" fill="#66ff66" stroke="#00aa00" stroke-width="2" rx="3"/>
+    <text x="600" y="490" text-anchor="middle" class="annotation" fill="#006600" font-weight="bold">BYPASSES</text>
+    <line x1="600" y1="500" x2="600" y2="515" stroke="#00aa00" stroke-width="3" marker-end="url(#arrowhead-green)"/>
+    
+    <text x="600" y="525" text-anchor="middle" class="annotation" fill="#00aa00" font-weight="bold">Steering applied before</text>
+    <text x="600" y="538" text-anchor="middle" class="annotation" fill="#00aa00" font-weight="bold">safety checks engage</text>
+  </g>
+  
+  <!-- Bottom insight box -->
+  <rect x="50" y="560" width="700" height="110" fill="#fff8e6" stroke="#ff8800" stroke-width="3" rx="8"/>
+  <text x="400" y="585" text-anchor="middle" class="label" font-weight="bold" font-size="14" fill="#cc6600">Key Insight</text>
+  
+  <text x="400" y="610" text-anchor="middle" class="annotation" font-weight="bold">InnerPiSSA reveals: Model CAN generate dishonest content (capability)</text>
+  <text x="400" y="628" text-anchor="middle" class="annotation" font-weight="bold">but WON'T via prompting (alignment).</text>
+  
+  <text x="400" y="650" text-anchor="middle" class="annotation" font-style="italic">This measures depth of value learning:</text>
+  <text x="400" y="665" text-anchor="middle" class="annotation" font-style="italic">How deeply are safety preferences embedded in the model's reasoning?</text>
+</svg>

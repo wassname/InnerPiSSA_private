@@ -98,7 +98,7 @@ for batch in dataloader:
         
         Δ = (h_pos - h_neg).mean() @ d_steer  # Maximize separation
         l_total += -c · Δ + λ_coh · |logp(h) - logp(h_ref)|  # + coherence
-        # TODO: also consider logsigmoid dpo loss
+        # TODO: also consider logsig_weak_up_(-↑) dpo loss
     
     l_total.backward()
     update(θ_v, λ)
