@@ -18,7 +18,8 @@ run:
     
     # Base config for small model ablations
     BASEsmall="uv run python nbs/train.py q4b-80gb"
-    BASE="uv run python nbs/train.py q14b-80gb"
+    BASE="uv run python nbs/train.py l8b-80gb"
+    BASElarger="uv run python nbs/train.py gemma12b-80gb"
 
     # Helper to run with base + extra args
     run_exp() {
@@ -31,6 +32,20 @@ run:
         $BASEsmall "$@"
     }
 
+    run_exp_larger() {
+        echo "=== Running: $@ ==="
+        $BASElarger "$@"
+    }
+
+    # make sure baselines are cached
+    uv run python nbs/eval_repeng_baseline_myhookv.py
+    uv run python nbs/eval_prompting_baseline.py
+
+    # scratch
+    uv run python nbs/train.py .  --adapter_type lora
+    run_exp_small --lr=1e-1 --n_epochs=1 --rank=4 --num_layers=15
+
+
     # run_exp_small --no-loss_ds_pref_dir
     # run_exp_small --loss_ds_pref_dir
 
@@ -41,38 +56,60 @@ run:
 
     # === Loss type ablations ===
     echo "### Loss type ablations ###"
-    run_exp --loss_type=focal_balanced
-    run_exp --loss_type=logsig_dpo
-    run_exp --loss_type=softpl_ratio
     run_exp --loss_type=softpl_strong_up #   # default
+    run_exp --loss_type=softpl_ratio
+    run_exp --loss_type=logsig_dpo
     run_exp --loss_type=logsig_weak_up
     run_exp --loss_type=tanh_sym
+    run_exp --loss_type=focal_balanced
     
     
-    # Try differen't models
-    #uv run python nbs/train.py . --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh_sym_(±)  --batch-size=32
-    uv run python nbs/train.py gemma12b-80gb --loss_type=tanh_sym_(±)  --batch-size=32
-    uv run python nbs/train.py . --model_name=google/gemma-3-27b-it --loss_type=tanh_sym_(±)  --batch-size=32
-    uv run python nbs/train.py . --model_name=Qwen/Qwen3-32B
-    # uv run python nbs/train.py . --model_name=deepseek-ai/DeepSeek-R1-Distill-Llama-70B
-    uv run python nbs/train.py . --model_name=meta-llama/Llama-3.3-70B-Instruct
+    # #uv run python nbs/train.py . --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh_sym_(±)  --batch-size=32
+    # # uv run python nbs/train.py gemma12b-80gb --loss_type=tanh_sym_(±)  --batch-size=32
+    # uv run python nbs/train.py . --model_name=google/gemma-3-27b-it --loss_type=tanh_sym_(±)  --batch-size=32
+    # uv run python nbs/train.py . --model_name=Qwen/Qwen3-32B
+    # uv run python nbs/train.py . --model_name=unsloth/Llama-3.3-70B-Instruct
     
     #uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=Qwen/Qwen3-14B --loss_type=tanh_sym_(±) --batch-size=12
     # uv run python nbs/train.py . --lr=8e-3 --n_epochs=30 --model_name=openai/gpt-oss-20b --loss_type=tanh_sym_(±) --batch-size=12
     
-    # misc, some models are tricky to beat as they are less censored so prompting works well
-    python nbs/train.py q4b-80gb --loss_type=softpl_strong_up
-    python nbs/train.py q4b-80gb --loss_type=focal_balanced
-    python nbs/train.py l8b-80gb --loss_type=softpl_strong_up
-    python nbs/train.py l8b-80gb --loss_type=focal_balanced
+    # # misc, some models are tricky to beat as they are less censored so prompting works well
+    # python nbs/train.py q4b-80gb --loss_type=softpl_strong_up
+    # python nbs/train.py q4b-80gb --loss_type=focal_balanced
+    # python nbs/train.py l8b-80gb --loss_type=softpl_strong_up
+    # python nbs/train.py l8b-80gb --loss_type=focal_balanced
 
     # lora and dopra baseline
     run_exp --adapter_type lora
-    run_exp --adapter_type dora
+    # run_exp --adapter_type dora
 
-    # try long
-    # run_exp --n_epochs=200
-    run_exp_small --n_epochs=200
+
+    # === Learning rate ablations ===
+    echo "### Learning rate ablations ###"
+    run_exp_small --lr=1e-0 --n_epochs=2
+    run_exp_small --lr=1e-1 --n_epochs=2
+    run_exp_small --lr=1e-2 --n_epochs=2
+    run_exp_small --lr=1e-3 --n_epochs=2
+    run_exp_small --lr=1e-4 --n_epochs=2
+    run_exp_small --lr=1e-5 --n_epochs=2
+
+    # === Weight decay ablations ===
+    echo "### Weight decay ablations ###"
+    run_exp --weight_decay=0.0
+    run_exp --weight_decay=0.1  # default
+    run_exp --weight_decay=1.0
+    run_exp --weight_decay=10.0
+
+
+    # Try differen't models
+    uv run python nbs/train.py q14b-80gb --model_name=wassname/qwen-14B-codefourchan
+    uv run python nbs/train.py q14b-80gb
+    uv run python nbs/train.py oss20-80gb
+    uv run python nbs/train.py gemma12b-80gb
+    uv run python nbs/train.py l8b-80gb
+    # google/gemma-3-27b-it
+    # Qwen/Qwen3-32B
+    # unsloth/Llama-3.3-70B-Instruct
 
     # === Rotation ablations ===
     echo "### Rotation ablations ###"
@@ -99,23 +136,10 @@ run:
     run_exp --layers k_proj q_proj v_proj --rank=16
     # all pre compute
 
-    # === Weight decay ablations ===
-    echo "### Weight decay ablations ###"
-    run_exp --weight_decay=0.0
-    run_exp --weight_decay=0.1  # default
-    run_exp --weight_decay=1.0
-    run_exp --weight_decay=10.0
 
-
-    # === Learning rate ablations ===
-    echo "### Learning rate ablations ###"
-    run_exp --lr=1e-1
-    run_exp --lr=1e-2
-    run_exp --lr=3e-3
-    # run_exp --lr=1e-3  # default
-    run_exp --lr=6e-4
-    run_exp --lr=1e-4
-    
+    # try long
+    # run_exp --n_epochs=200
+    run_exp_small --n_epochs=200
     
     # === Rank ablations ===
     echo "### Rank ablations ###"

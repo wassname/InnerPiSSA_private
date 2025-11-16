@@ -6,15 +6,17 @@ proj_root = Path(__file__).parent.parent.resolve()
 # Models to evaluate for baselines (prompting, repeng, etc.)
 EVAL_BASELINE_MODELS = [
     "Qwen/Qwen3-0.6B",
-    "Qwen/Qwen3-0.6B-Base",
+    # "Qwen/Qwen3-0.6B-Base",
     "Qwen/Qwen3-4B-Instruct-2507",
+    "google/gemma-3-4b-it",
     "unsloth/Llama-3.1-8B-Instruct",
     "google/gemma-3-12b-it",
     "wassname/qwen-14B-codefourchan",
     "Qwen/Qwen3-14B",
-    "google/gemma-3-27b-it",
-    "Qwen/Qwen3-32B",
-    "unsloth/Llama-3.3-70B-Instruct",
+    "openai/gpt-oss-20b",
+    # "google/gemma-3-27b-it",
+    #"Qwen/Qwen3-32B",
+    #"unsloth/Llama-3.3-70B-Instruct",
 ]
 
 @define(slots=False)
@@ -211,6 +213,8 @@ default_configs = {
         ),
     ),
 
+    
+
     "oss20-80gb": (
         "GPT-OSS 20B on 80GB GPU",
         TrainingConfig(
@@ -230,5 +234,7 @@ default_configs = {
     # meta-llama/Llama-3.2-3B-Instruct
     # meta-llama/Llama-3.1-8B-Instruct
     # google/gemma-3-12b-it
-    # openai/gpt-oss-20b
+    # Qwen/Qwen3-32B
+    # google/gemma-3-27b-it
+    # unsloth/Llama-3.3-70B-Instruct
 }

@@ -49,7 +49,7 @@ def main():
     # Config
     config = TrainingConfig(
         eval_batch_size=32,
-        dataset_max_samples=800,
+        # dataset_max_samples=800,
     )
 
     results = []
@@ -94,6 +94,7 @@ def main():
         train_honest, train_dataset_pt, val_honest, val_dataset_pt = create_train_dataset(
             config,
             tokenizer,
+            max_size=config.dataset_max_samples
         )
 
         logger.info(f"Created dataset with {len(train_honest)} pairs")

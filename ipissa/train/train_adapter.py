@@ -212,6 +212,23 @@ def load_model(model_id, quantization_type="none"):
     return base_model, tokenizer
 
 
+def match_linear_layers(model, layer_nums: List[int], module_names: List[str], verbose=False) -> List[str]:
+    # Build peft regex: .*\.(layer1|layer2|...)\..*(module1|module2|...)
+    layer_nums = "|".join(str(L) for L in layer_nums)
+    module_names = "|".join(module_names)
+    target_modules = f".*\\.({layer_nums})\\..*({module_names})"
+
+    logger.info(f"Target modules regex: {target_modules}")
+    module_path_shapes = {}
+    for name, m in model.named_modules():
+        if re.search(target_modules, name):
+            if isinstance(m, torch.nn.Linear):
+                module_path_shapes[name] = m.weight.shape
+    if verbose:
+        logger.info(f"Found {len(module_path_shapes)} target modules:")
+    return list(module_path_shapes.keys())
+
+
 def setup_adapter(base_model, config: TrainingConfig):
     """Setup InnerPiSSA adapter on base model."""
     # FIXME 
@@ -379,43 +396,43 @@ def train_steer_vector(
                 "V": V,  # Bare V (no sqrt(S))
             }
 
-            # 2. S-weighted direction for steering application
-            sqrt_S = torch.sqrt(S)  # [r]
-            U_scaled = U * sqrt_S  # [d_out, r], element-wise: U_ij * sqrt(S_j)
-            V_scaled = V * sqrt_S  # [d_in, r], element-wise: V_ij * sqrt(S_j)
+            # # 2. S-weighted direction for steering application
+            # sqrt_S = torch.sqrt(S)  # [r]
+            # U_scaled = U * sqrt_S  # [d_out, r], element-wise: U_ij * sqrt(S_j)
+            # V_scaled = V * sqrt_S  # [d_in, r], element-wise: V_ij * sqrt(S_j)
 
-            hs_s_weighted = hs_cpu @ U_scaled  # [n, r] S-weighted projection
-            h_cho_sw = hs_s_weighted[::2]
-            h_rej_sw = hs_s_weighted[1::2]
-            delta_s_steer = (h_cho_sw - h_rej_sw).mean(dim=0)  # [r] S-weighted
-            delta_s_steer = F.normalize(delta_s_steer, dim=0)
+            # hs_s_weighted = hs_cpu @ U_scaled  # [n, r] S-weighted projection
+            # h_cho_sw = hs_s_weighted[::2]
+            # h_rej_sw = hs_s_weighted[1::2]
+            # delta_s_steer = (h_cho_sw - h_rej_sw).mean(dim=0)  # [r] S-weighted
+            # delta_s_steer = F.normalize(delta_s_steer, dim=0)
 
-            Sw_dirs[layer] = {
-                "U_scaled": U_scaled,  # U * sqrt(S)
-                "delta_s": delta_s_steer,
-                "V_scaled": V_scaled,  # V * sqrt(S)
-            }
+            # Sw_dirs[layer] = {
+            #     "U_scaled": U_scaled,  # U * sqrt(S)
+            #     "delta_s": delta_s_steer,
+            #     "V_scaled": V_scaled,  # V * sqrt(S)
+            # }
 
         cvec_loss_steer = ControlVector(
             model_type=model.config.model_type, directions=loss_dirs
         )
-        cvec_Sw_steer = ControlVector(
-            model_type=model.config.model_type, directions=Sw_dirs
-        )
+        # cvec_Sw_steer = ControlVector(
+        #     model_type=model.config.model_type, directions=Sw_dirs
+        # )
     else:
         # LoRA/DoRA: No SVD decomposition, skip S-space steering
         cvec_loss_steer = None
         cvec_Sw_steer = None
 
-    dirs_pca = read_representations(last_act, logprobs, grads=None)
-    cvec_pca_steer = ControlVector(
-        model_type=model.config.model_type, directions=dirs_pca
-    )
+    # dirs_pca = read_representations(last_act, logprobs, grads=None)
+    # cvec_pca_steer = ControlVector(
+    #     model_type=model.config.model_type, directions=dirs_pca
+    # )
 
     logger.info(
         "Extracted steering vectors: loss (unweighted S-space), steer (S-weighted), PCA (activation-space)"
     )
-    return cvec_loss_steer, cvec_Sw_steer, cvec_pca_steer
+    return cvec_loss_steer, None, None
 
 
 def compute_batch_loss(
@@ -860,47 +877,48 @@ def evaluate_model(
         sweep_coefficients("InnerPiSSA (ours)", lambda c: ScaleAdapter(model, coeff=c))
     )
 
-    # S-weighted steering baseline (dataset-level preference direction with S-weighting)
-    # This ablates the learnable rotations and scaling - just applies the extracted S-weighted direction
-    if dirs_Sw_steer is not None:
-        logger.info(
-            "Evaluating S-weighted steering baseline (dataset-level pref dir with S-weighting)"
-        )
-        results.extend(
-            sweep_coefficients(
-                "S-weighted steer",
-                lambda c: steer(model, dirs_Sw_steer, coeff=c, retain_grad=False),
-            )
-        )
+    # Disabled these as it's better to run them seperatly, especially because thier standard config uses more layers
+    # # S-weighted steering baseline (dataset-level preference direction with S-weighting)
+    # # This ablates the learnable rotations and scaling - just applies the extracted S-weighted direction
+    # if dirs_Sw_steer is not None:
+    #     logger.info(
+    #         "Evaluating S-weighted steering baseline (dataset-level pref dir with S-weighting)"
+    #     )
+    #     results.extend(
+    #         sweep_coefficients(
+    #             "S-weighted steer",
+    #             lambda c: steer(model, dirs_Sw_steer, coeff=c, retain_grad=False),
+    #         )
+    #     )
 
-    # PCA baseline (activation-space PCA)
-    if dirs_pca_steer is not None:
-        results.extend(
-            sweep_coefficients(
-                "PCA (baseline)",
-                lambda c: steer(model, dirs_pca_steer, coeff=c, retain_grad=False),
-            )
-        )
+    # # PCA baseline (activation-space PCA)
+    # if dirs_pca_steer is not None:
+    #     results.extend(
+    #         sweep_coefficients(
+    #             "PCA (baseline)",
+    #             lambda c: steer(model, dirs_pca_steer, coeff=c, retain_grad=False),
+    #         )
+    #     )
 
-        # Random baseline
-        logger.info("Preparing random steering baseline")
-        dirs_random = ControlVector(
-            model_type=model.config.model_type,
-            directions={
-                k: torch.randn_like(v) for k, v in dirs_pca_steer.directions.items()
-            },
-        )
-        for k in dirs_random.directions:
-            dirs_random.directions[k] = (
-                dirs_random.directions[k] / dirs_random.directions[k].norm()
-            )
+    #     # Random baseline
+    #     logger.info("Preparing random steering baseline")
+    #     dirs_random = ControlVector(
+    #         model_type=model.config.model_type,
+    #         directions={
+    #             k: torch.randn_like(v) for k, v in dirs_pca_steer.directions.items()
+    #         },
+    #     )
+    #     for k in dirs_random.directions:
+    #         dirs_random.directions[k] = (
+    #             dirs_random.directions[k] / dirs_random.directions[k].norm()
+    #         )
 
-        results.extend(
-            sweep_coefficients(
-                "random",
-                lambda c: steer(model, dirs_random, coeff=c, retain_grad=False),
-            )
-        )
+    #     results.extend(
+    #         sweep_coefficients(
+    #             "random",
+    #             lambda c: steer(model, dirs_random, coeff=c, retain_grad=False),
+    #         )
+    #     )
 
     # Load per-model prompting baseline
     model_safe = config.model_name.replace('/', '_')
