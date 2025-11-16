@@ -858,6 +858,18 @@ def evaluate_model(
             f"Prompting baseline results not found at {output_path}, run nbs/eval_models_with_prompting.ipynb to generate them."
         )
 
+    # Load per-model repeng baseline
+    output_path_repeng = proj_root / "outputs" / f"repeng_baseline_{model_safe}.parquet"
+    if output_path_repeng.exists():
+        logger.info(f"Loading repeng baseline results from {output_path_repeng}")
+        df_repeng = pd.read_parquet(output_path_repeng)
+        for (method, coeff), d in df_repeng.groupby(["method", "coeff"]):
+            results.append(d)
+    else:
+        logger.warning(
+            f"Repeng baseline results not found at {output_path_repeng}, run nbs/eval_repeng_baseline.py to generate them."
+        )
+
     df_res2 = pd.concat(results)
     df_res_wlabels = process_daily_dilemma_results(df_res2, dataset_dd, df_labels)[0]
 

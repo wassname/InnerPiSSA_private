@@ -3,6 +3,20 @@ from pathlib import Path
 from typing import List, Literal, Optional  
 proj_root = Path(__file__).parent.parent.resolve()
 
+# Models to evaluate for baselines (prompting, repeng, etc.)
+EVAL_BASELINE_MODELS = [
+    "Qwen/Qwen3-0.6B",
+    "Qwen/Qwen3-4B-Instruct-2507",
+    "Qwen/Qwen3-0.6B-Base",
+    "wassname/qwen-14B-codefourchan",
+    "Qwen/Qwen3-14B",
+    "google/gemma-3-12b-it",
+    "unsloth/Llama-3.1-8B-Instruct",
+    "google/gemma-3-27b-it",
+    "Qwen/Qwen3-32B",
+    "meta-llama/Llama-3.3-70B-Instruct",
+]
+
 @define(slots=False)
 class TrainingConfig:
     """Configuration for training contrastive InnerPiSSA adapter."""
