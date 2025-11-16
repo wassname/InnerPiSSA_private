@@ -16,7 +16,7 @@ from tqdm.auto import tqdm
 from transformers import AutoTokenizer, GenerationConfig
 
 from ipissa import ControlVector
-from ipissa.adapter import ScaleAdapter
+from ipissa.peft_utils.adapter_scaling import ScaleAdapter
 from ipissa.control import steer
 from ipissa.eval import get_choice_ids
 from ipissa.extract import _collect_activations_only, read_representations

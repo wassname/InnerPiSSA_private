@@ -36,7 +36,7 @@ from transformers import (
 )
 
 from ipissa import ControlVector, make_dataset
-from ipissa.adapter import ScaleAdapter
+from ipissa.peft_utils.adapter_scaling import ScaleAdapter
 from ipissa.control import steer
 from ipissa.eval import gen_with_choices, get_choice_ids
 from ipissa.extract import _collect_activations_only, read_representations

@@ -121,7 +121,7 @@ def test_evaluate_model_with_adapter():
         setup_adapter,
         register_ipissa_peft,
     )
-    from ipissa.adapter import ScaleAdapter
+    from ipissa.peft_utils.adapter_scaling import ScaleAdapter
     from ipissa.train.daily_dilemas import evaluate_daily_dilemma
     from datasets import Dataset
     
