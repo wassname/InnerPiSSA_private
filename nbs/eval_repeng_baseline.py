@@ -78,7 +78,13 @@ def main():
         base_model, tokenizer = load_model(model_name, quantization_type=config.quantization_type)
 
         # repeng uses layers relative to end: [-5, -6, -7, ...]
-        N = base_model.config.num_hidden_layers
+        try:
+            N = base_model.config.num_hidden_layers
+        except AttributeError:
+            # gemma models don't have config.num_hidden_layers
+            print(base_model)
+            from repeng.control import model_layer_list
+            N = len(model_layer_list(base_model))
         repeng_layers = list(range(-5, -N // 2, -1))  # last half layers
 
         model = ControlModel(base_model, repeng_layers)

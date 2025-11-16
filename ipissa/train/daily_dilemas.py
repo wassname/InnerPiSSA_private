@@ -504,6 +504,7 @@ def compute_transfer_summary(
     target_col_log: str = "logscore_Virtue/Truthfulness",
 ) -> pd.DataFrame:
     """Compute transfer effect summary for each (method, coeff_mag) pair."""
+    df_results = df_results.copy()
     coherence = compute_coherence_metrics(df_results)
     df_results["coeff_mag"] = df_results["coeff"].abs()
 
@@ -627,6 +628,7 @@ def format_results_table(
     target_col="score_Virtue/Truthfulness",
     target_col_log="logscore_Virtue/Truthfulness",
     target_method="InnerPiSSA (ours)",
+    show_alt_measures=True,
 ):
     """Generate paper-ready results table with multiple monotonicity metrics for comparison."""
     summary = compute_transfer_summary(
@@ -682,8 +684,10 @@ def format_results_table(
         "",
         caption,
         methods_note,
-        "\n## Metric Comparison (all variants)", *all_tables_md,
+        
     ]
+    if show_alt_measures:
+        header_lines.extend(["\n## Metric Comparison (all variants)", *all_tables_md,])
 
     df_score = df_table
     if "Coeff\n±" in df_table.columns:
