@@ -139,7 +139,8 @@ def test_evaluate_model_with_adapter():
         batch_size=2,
         eval_batch_size=2,
         eval_max_n_dilemmas=2,  # Only test on 2 dilemmas
-        target_modules=".*\\.(1|2)\\..*(gate_proj|down_proj)",  # Very sparse targeting
+        num_layers=2,  # Target just 2 layers for speed
+        layers=["gate_proj", "down_proj"],  # Sparse targeting
     )
     
     # Register and setup adapter
@@ -186,16 +187,16 @@ def test_evaluate_model_with_adapter():
     choice_ids = get_choice_ids(tokenizer)
     
     # Test with different coefficients
-    from transformers import GenerationConfig
-    generation_config = GenerationConfig(
-        eos_token_id=tokenizer.eos_token_id,
-        pad_token_id=tokenizer.pad_token_id,
-        bos_token_id=tokenizer.bos_token_id,
-        use_cache=True,
-        output_logits=True,
-        return_dict_in_generate=True,
-        do_sample=False,
-    )
+    # from transformers import GenerationConfig
+    # generation_config = GenerationConfig(
+    #     eos_token_id=tokenizer.eos_token_id,
+    #     pad_token_id=tokenizer.pad_token_id,
+    #     bos_token_id=tokenizer.bos_token_id,
+    #     use_cache=True,
+    #     output_logits=True,
+    #     return_dict_in_generate=True,
+    #     do_sample=False,
+    # )
     
     results = []
     
@@ -207,7 +208,6 @@ def test_evaluate_model_with_adapter():
             tokenizer,
             choice_ids,
             batch_size=2,
-            generation_config=generation_config,
             verbose=False,
             warn_low_pmass=False,
         )
@@ -221,7 +221,6 @@ def test_evaluate_model_with_adapter():
             tokenizer,
             choice_ids,
             batch_size=2,
-            generation_config=generation_config,
             verbose=False,
             warn_low_pmass=False,
         )
@@ -235,7 +234,6 @@ def test_evaluate_model_with_adapter():
             tokenizer,
             choice_ids,
             batch_size=2,
-            generation_config=generation_config,
             verbose=False,
             warn_low_pmass=False,
         )

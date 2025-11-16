@@ -779,3 +779,66 @@ Virtue/Ambition      7.5057  6.4716  5.6335
 
 **Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: google/gemma-3-1b-it. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 335 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
 Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+
+
+#  2025-11-16 07:42:2 nbs/train.py q14b-80gb --loss_type=focal_balanced
+
+    07:38:55 | INFO     | ## Evaluation complete 20251116_054838.
+
+    07:38:55 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+    coeff                  -1.0      0.0     1.0
+    Virtue/Truthfulness -4.8981  -5.1804 -6.1677
+    Virtue/Ambition     -9.2250 -11.1611 -8.7972
+
+    07:38:55 | INFO     | Results for method: PCA (baseline) [logratio * label -> nat's toward label]
+    coeff                  -1.0     0.0     1.0
+    Virtue/Truthfulness -6.1512 -6.1677 -6.1819
+    Virtue/Ambition     -8.7444 -8.7972 -8.8250
+
+    07:38:55 | INFO     | Results for method: S-weighted steer [logratio * label -> nat's toward label]
+    coeff                  -1.0     0.0     1.0
+    Virtue/Truthfulness -5.3638 -6.1677 -5.8031
+    Virtue/Ambition     -7.8194 -8.7972 -8.1972
+
+    07:38:55 | INFO     | Results for method: prompting [logratio * label -> nat's toward label]
+    coeff                  -1.0      0.0      1.0
+    Virtue/Truthfulness -3.9654  -7.7017  -6.3277
+    Virtue/Ambition      0.4667 -14.3444 -13.4583
+
+    07:38:55 | INFO     | Results for method: random [logratio * label -> nat's toward label]
+    coeff                  -1.0     0.0     1.0
+    Virtue/Truthfulness -6.1827 -6.1677 -6.1430
+    Virtue/Ambition     -8.8056 -8.7972 -8.7639
+
+    07:38:55 | INFO     | Results for method: repeng [logratio * label -> nat's toward label]
+    coeff                   -1.0      0.0      1.0
+    Virtue/Truthfulness  -6.2337  -7.6568  -9.0412
+    Virtue/Ambition     -12.8694 -14.3000 -15.6806
+
+    07:39:04 | INFO     | 
+    ## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+    | Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+    |                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+    |:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+    | repeng            |    1.965   |      0.0166    |   0.04958 |     0.008098  |           194.9   |
+    | prompting         |    1.97    |      0.0429    |   0.04898 |     0.05177   |           187.3   |
+    | InnerPiSSA (ours) |    1.114   |      0.09523   |   0.2654  |     0.2277    |            90.75  |
+    | S-weighted steer  |    0.5785  |      0.004401  |   0.563   |     0.0464    |            55.28  |
+    | random            |    0.0501  |      0.000772  |   0.96    |    -0.0008061 |             5.01  |
+    | PCA (baseline)    |    0.03887 |      0.0009581 |   0.969   |     0.0002114 |             3.886 |
+
+    **Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: Qwen/Qwen3-14B. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 335 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+    Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+
+    ## Metric Comparison (all variants)
+
+    ### Metric: T-stat
+    | Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+    |                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+    |:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+    | repeng            |    1.965   |      0.0166    |   0.04958 |     0.008098  |           194.9   |
+    | prompting         |    1.97    |      0.0429    |   0.04898 |     0.05177   |           187.3   |
+    | InnerPiSSA (ours) |    1.114   |      0.09523   |   0.2654  |     0.2277    |            90.75  |
+    | S-weighted steer  |    0.5785  |      0.004401  |   0.563   |     0.0464    |            55.28  |
+    | random            |    0.0501  |      0.000772  |   0.96    |    -0.0008061 |             5.01  |
+    | PCA (baseline)    |    0.03887 |      0.0009581 |   0.969   |     0.0002114 |             3.886 |

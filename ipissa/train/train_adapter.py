@@ -234,32 +234,46 @@ def setup_adapter(base_model, config: TrainingConfig):
                 available[name] = m.weight.shape
     logger.info(f"Available modules: {available}")
 
-    adapter_config = InnerPiSSAConfig(
-        r=config.rank,
-        scale_s=config.scale_s,
-        rotate_u=config.ipissa_rotate_u,
-        rotate_v=config.ipissa_rotate_v,
-        task_type="CAUSAL_LM",
-        target_modules=target_modules,
-    )
+    if config.adapter_type == "innerpissa":
+        adapter_config = InnerPiSSAConfig(
+            r=config.rank,
+            scale_s=config.scale_s,
+            rotate_u=config.ipissa_rotate_u,
+            rotate_v=config.ipissa_rotate_v,
+            task_type="CAUSAL_LM",
+            target_modules=target_modules,
+        )
+    else:  # lora or dora
+        from peft import LoraConfig
+        adapter_config = LoraConfig(
+            r=config.rank,
+            lora_alpha=config.rank,  # Common default: alpha=r
+            lora_dropout=0.0,
+            target_modules=target_modules,
+            task_type="CAUSAL_LM",
+            use_dora=(config.adapter_type == "dora"),
+        )
 
     model = PeftModel(base_model, adapter_config, adapter_name=config.dataset_name)
     logger.info(
-        f"Adapter configured: rank={config.rank}, target_modules={target_modules}"
+        f"Adapter configured: type={config.adapter_type}, rank={config.rank}, target_modules={target_modules}"
     )
 
     return model
 
 
 def get_loss_layers(model, config: TrainingConfig):
-    """Determine which layers to apply loss to."""
+    """Determine which layers to apply loss to, should be a layer 1) with an adapter (as sometimes we reuse U - but we migth deprecate this), and be has layer.weight """
 
-    adapter_layers = [
-        name for name, param in model.named_parameters() if param.requires_grad
-    ]
-    parent_layers = sorted(
-        set([".".join(layer.split(".")[:-2]) for layer in adapter_layers])
-    )
+    # Find all PEFT-wrapped modules (they have a base_layer attribute)
+    # This works for any PEFT adapter type (LoRA, DoRA, InnerPiSSA, etc.)
+    parent_layers = []
+    for name, module in model.named_modules():
+        # PEFT layers have a base_layer attribute that holds the original nn.Linear
+        if hasattr(module, 'base_layer') and isinstance(module.base_layer, torch.nn.Linear):
+            parent_layers.append(name)
+    
+    parent_layers = sorted(set(parent_layers))
 
     model_max_layers = model.config.num_hidden_layers
     suffixes = set([p.split(".")[-1] for p in parent_layers])
@@ -339,52 +353,59 @@ def train_steer_vector(
             model, tokenizer, train_strs, loss_layers, batch_size=config.batch_size//2
         )
 
-    loss_dirs = {}  # Unweighted S-space for loss
-    Sw_dirs = {}  # S-weighted for steering
+    # For InnerPiSSA: Extract S-space directions using SVD projection
+    # For LoRA/DoRA: Skip S-space (no SVD), use activation-space PCA only
+    if config.adapter_type == "innerpissa":
+        loss_dirs = {}  # Unweighted S-space for loss
+        Sw_dirs = {}  # S-weighted for steering
 
-    for layer in loss_layers:
-        U = Uw_full[layer].cpu()  # [d_out, r]
-        S = Sw_full[layer].cpu()  # [r]
-        V = Vw_full[layer].cpu()  # [d_in, r]
+        for layer in loss_layers:
+            U = Uw_full[layer].cpu()  # [d_out, r]
+            S = Sw_full[layer].cpu()  # [r]
+            V = Vw_full[layer].cpu()  # [d_in, r]
 
-        hs_cpu = last_act[layer].float()
+            hs_cpu = last_act[layer].float()
 
-        # 1. Unweighted S-space direction for loss computation
-        hs_s = hs_cpu @ U  # [n, d_out] @ [d_out, r] -> [n, r] in S-space
-        h_cho_s = hs_s[::2]
-        h_rej_s = hs_s[1::2]
-        delta_s_loss = (h_cho_s - h_rej_s).mean(dim=0)  # [r] unweighted
-        delta_s_loss = F.normalize(delta_s_loss, dim=0)
+            # 1. Unweighted S-space direction for loss computation
+            hs_s = hs_cpu @ U  # [n, d_out] @ [d_out, r] -> [n, r] in S-space
+            h_cho_s = hs_s[::2]
+            h_rej_s = hs_s[1::2]
+            delta_s_loss = (h_cho_s - h_rej_s).mean(dim=0)  # [r] unweighted
+            delta_s_loss = F.normalize(delta_s_loss, dim=0)
 
-        loss_dirs[layer] = {
-            "U": U,  # Bare U (no sqrt(S))
-            "delta_s": delta_s_loss,
-            "V": V,  # Bare V (no sqrt(S))
-        }
+            loss_dirs[layer] = {
+                "U": U,  # Bare U (no sqrt(S))
+                "delta_s": delta_s_loss,
+                "V": V,  # Bare V (no sqrt(S))
+            }
 
-        # 2. S-weighted direction for steering application
-        sqrt_S = torch.sqrt(S)  # [r]
-        U_scaled = U * sqrt_S  # [d_out, r], element-wise: U_ij * sqrt(S_j)
-        V_scaled = V * sqrt_S  # [d_in, r], element-wise: V_ij * sqrt(S_j)
+            # 2. S-weighted direction for steering application
+            sqrt_S = torch.sqrt(S)  # [r]
+            U_scaled = U * sqrt_S  # [d_out, r], element-wise: U_ij * sqrt(S_j)
+            V_scaled = V * sqrt_S  # [d_in, r], element-wise: V_ij * sqrt(S_j)
 
-        hs_s_weighted = hs_cpu @ U_scaled  # [n, r] S-weighted projection
-        h_cho_sw = hs_s_weighted[::2]
-        h_rej_sw = hs_s_weighted[1::2]
-        delta_s_steer = (h_cho_sw - h_rej_sw).mean(dim=0)  # [r] S-weighted
-        delta_s_steer = F.normalize(delta_s_steer, dim=0)
+            hs_s_weighted = hs_cpu @ U_scaled  # [n, r] S-weighted projection
+            h_cho_sw = hs_s_weighted[::2]
+            h_rej_sw = hs_s_weighted[1::2]
+            delta_s_steer = (h_cho_sw - h_rej_sw).mean(dim=0)  # [r] S-weighted
+            delta_s_steer = F.normalize(delta_s_steer, dim=0)
 
-        Sw_dirs[layer] = {
-            "U_scaled": U_scaled,  # U * sqrt(S)
-            "delta_s": delta_s_steer,
-            "V_scaled": V_scaled,  # V * sqrt(S)
-        }
+            Sw_dirs[layer] = {
+                "U_scaled": U_scaled,  # U * sqrt(S)
+                "delta_s": delta_s_steer,
+                "V_scaled": V_scaled,  # V * sqrt(S)
+            }
 
-    cvec_loss_steer = ControlVector(
-        model_type=model.config.model_type, directions=loss_dirs
-    )
-    cvec_Sw_steer = ControlVector(
-        model_type=model.config.model_type, directions=Sw_dirs
-    )
+        cvec_loss_steer = ControlVector(
+            model_type=model.config.model_type, directions=loss_dirs
+        )
+        cvec_Sw_steer = ControlVector(
+            model_type=model.config.model_type, directions=Sw_dirs
+        )
+    else:
+        # LoRA/DoRA: No SVD decomposition, skip S-space steering
+        cvec_loss_steer = None
+        cvec_Sw_steer = None
 
     dirs_pca = read_representations(last_act, logprobs, grads=None)
     cvec_pca_steer = ControlVector(
@@ -430,7 +451,9 @@ def compute_batch_loss(
     mask_rej = attention_mask[1::2]
     mask = mask_cho * mask_rej
 
-    Uw_full = {k: v.to(model.device).float() for k, v in Uw_full.items()}
+    # Move U matrices to device if they exist (InnerPiSSA only)
+    if Uw_full is not None:
+        Uw_full = {k: v.to(model.device).float() for k, v in Uw_full.items()}
 
     # Reference outputs
     with torch.no_grad(), ScaleAdapter(model, coeff=None):
@@ -459,23 +482,36 @@ def compute_batch_loss(
         for lk in loss_layers:
             hs_ref = (ret_ref[lk].output * attention_mask.unsqueeze(-1)).float()
 
-            U_w = (
-                Uw_full[lk]
-                if config.loss_full_u
-                else model.get_submodule(lk)
-                .ipissa_u[config.dataset_name]
-                .to(model.device)
-                .float()
-            )
-
-            if config.loss_ds_pref_dir:
-                # Dataset-level preference direction (unweighted S-space)
-                pref_dir_ref_dH_Uw = (
-                    dirs_loss.directions[lk]["delta_s"].clone().to(model.device).float()
+            # InnerPiSSA: Use SVD projection onto U
+            # LoRA/DoRA: Work directly in activation space (no U projection)
+            if config.adapter_type == "innerpissa":
+                U_w = (
+                    Uw_full[lk]
+                    if config.loss_full_u
+                    else model.get_submodule(lk)
+                    .ipissa_u[config.dataset_name]
+                    .to(model.device)
+                    .float()
                 )
+
+                if config.loss_ds_pref_dir:
+                    # Dataset-level preference direction (unweighted S-space)
+                    pref_dir_ref_dH_Uw = (
+                        dirs_loss.directions[lk]["delta_s"].clone().to(model.device).float()
+                    )
+                else:
+                    hs_ref_Uw = hs_ref @ U_w
+                    pref_dir_ref_dH_Uw = hs_ref_Uw[::2] - hs_ref_Uw[1::2]
             else:
-                hs_ref_Uw = hs_ref @ U_w
-                pref_dir_ref_dH_Uw = hs_ref_Uw[::2] - hs_ref_Uw[1::2]
+                # LoRA/DoRA: Use activation-space PCA direction (no U projection)
+                U_w = None  # Not used
+                if config.loss_ds_pref_dir:
+                    # Dataset-level preference direction (activation space)
+                    pref_dir_ref_dH_Uw = (
+                        dirs_loss.directions[lk].clone().to(model.device).float()
+                    )
+                else:
+                    pref_dir_ref_dH_Uw = hs_ref[::2] - hs_ref[1::2]
 
             hs_ref_cho = hs_ref[::2]
             hs_ref_rej = hs_ref[1::2]
@@ -489,21 +525,42 @@ def compute_batch_loss(
             pi_rej_label_logp = pi_label_logprobs[1::2]
             pi_cho_label_logp = pi_label_logprobs[::2]
 
-            if coef > 0:
-                hs_pi_pos_u = hs_pi_cho @ U_w
-                hs_pi_neg_u = hs_pi_rej @ U_w
-                ref_coherence = ref_cho_label_logp
-                pi_coherence = pi_cho_label_logp
+            if config.adapter_type == "innerpissa":
+                if coef > 0:
+                    hs_pi_pos_u = hs_pi_cho @ U_w
+                    hs_pi_neg_u = hs_pi_rej @ U_w
+                    ref_coherence = ref_cho_label_logp
+                    pi_coherence = pi_cho_label_logp
+                else:
+                    hs_pi_pos_u = hs_pi_rej @ U_w
+                    hs_pi_neg_u = hs_pi_cho @ U_w
+                    ref_coherence = ref_rej_label_logp
+                    pi_coherence = pi_rej_label_logp
             else:
-                hs_pi_pos_u = hs_pi_rej @ U_w
-                hs_pi_neg_u = hs_pi_cho @ U_w
-                ref_coherence = ref_rej_label_logp
-                pi_coherence = pi_rej_label_logp
+                # LoRA/DoRA: No U projection
+                if coef > 0:
+                    hs_pi_pos_u = hs_pi_cho
+                    hs_pi_neg_u = hs_pi_rej
+                    ref_coherence = ref_cho_label_logp
+                    pi_coherence = pi_cho_label_logp
+                else:
+                    hs_pi_pos_u = hs_pi_rej
+                    hs_pi_neg_u = hs_pi_cho
+                    ref_coherence = ref_rej_label_logp
+                    pi_coherence = pi_rej_label_logp
+
+            # InnerPiSSA: Project hs_ref to S-space; LoRA: use activation space directly
+            if config.adapter_type == "innerpissa":
+                hs_ref_cho_proj = hs_ref_cho @ U_w
+                hs_ref_rej_proj = hs_ref_rej @ U_w
+            else:
+                hs_ref_cho_proj = hs_ref_cho
+                hs_ref_rej_proj = hs_ref_rej
 
             loss, info1 = contrastive_steering_loss_with_ref(
                 pref_dir=pref_dir_ref_dH_Uw.detach(),
-                hs_ref_cho=hs_ref_cho @ U_w,
-                hs_ref_rej=hs_ref_rej @ U_w,
+                hs_ref_cho=hs_ref_cho_proj,
+                hs_ref_rej=hs_ref_rej_proj,
                 hs_pi_pos=hs_pi_pos_u,
                 hs_pi_neg=hs_pi_neg_u,
                 ref_pos_label_logp=ref_coherence,
@@ -1020,9 +1077,11 @@ def auto_flip_adapter_sign(model, tokenizer, choice_ids, adapter_name, threshold
         # Flip all learnable adapter parameters
         flipped_params = 0
         for name, param in model.named_parameters():
-            if adapter_name in name and "ipissa_" in name and param.requires_grad:
-                param.data *= -1
-                flipped_params += 1
+            if adapter_name in name and param.requires_grad:
+                # InnerPiSSA: flip ipissa_* params; LoRA/DoRA: flip lora_A params
+                if "ipissa_" in name or "lora_A" in name:
+                    param.data *= -1
+                    flipped_params += 1
         logger.info(f"Flipped {flipped_params} learnable parameters.")
         flipped = True
 
@@ -1075,8 +1134,9 @@ def main(config: TrainingConfig):
         )
         logger.info(f"W&B run: {wandb_run.get_url()}")
 
-    # Register InnerPiSSA
-    register_ipissa_peft()
+    # Register InnerPiSSA if needed
+    if config.adapter_type == "innerpissa":
+        register_ipissa_peft()
 
     # Load model and adapter
     base_model, tokenizer = load_model(
@@ -1094,7 +1154,12 @@ def main(config: TrainingConfig):
 
     # Setup loss layers
     loss_layers = get_loss_layers(model, config)
-    Uw_full, Sw_full, Vw_full = extract_U_matrices(model, loss_layers, config)
+    
+    # Extract SVD matrices only for InnerPiSSA (LoRA/DoRA don't use SVD)
+    if config.adapter_type == "innerpissa":
+        Uw_full, Sw_full, Vw_full = extract_U_matrices(model, loss_layers, config)
+    else:
+        Uw_full, Sw_full, Vw_full = None, None, None
 
     # Extract steering vectors (use train set only)
     with ScaleAdapter(model, coeff=None):

@@ -49,19 +49,26 @@ run:
     run_exp --loss_type=tanh_sym
     
     
-    #uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh_sym_(±)  --batch-size=32
-    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=google/gemma-3-12b-it --loss_type=tanh_sym_(±)  --batch-size=32
-    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=google/gemma-3-27b-it --loss_type=tanh_sym_(±)  --batch-size=32
-    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=Qwen/Qwen3-32B
-    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=deepseek-ai/DeepSeek-R1-Distill-Llama-70B
-    uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=meta-llama/Llama-3.3-70B-Instruct
+    # Try differen't models
+    #uv run python nbs/train.py . --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh_sym_(±)  --batch-size=32
+    uv run python nbs/train.py gemma12b-80gb --loss_type=tanh_sym_(±)  --batch-size=32
+    uv run python nbs/train.py . --model_name=google/gemma-3-27b-it --loss_type=tanh_sym_(±)  --batch-size=32
+    uv run python nbs/train.py . --model_name=Qwen/Qwen3-32B
+    # uv run python nbs/train.py . --model_name=deepseek-ai/DeepSeek-R1-Distill-Llama-70B
+    uv run python nbs/train.py . --model_name=meta-llama/Llama-3.3-70B-Instruct
     
     #uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=Qwen/Qwen3-14B --loss_type=tanh_sym_(±) --batch-size=12
     # uv run python nbs/train.py . --lr=8e-3 --n_epochs=30 --model_name=openai/gpt-oss-20b --loss_type=tanh_sym_(±) --batch-size=12
     
-    # misc
-python nbs/train.py --model=Llama-3.1-8B --loss_type=softpl_strong_up
-python nbs/train.py --model=Llama-3.1-8B --loss_type=focal_balanced
+    # misc, some models are tricky to beat as they are less censored so prompting works well
+    python nbs/train.py q4b-80gb --loss_type=softpl_strong_up
+    python nbs/train.py q4b-80gb --loss_type=focal_balanced
+    python nbs/train.py l8b-80gb --loss_type=softpl_strong_up
+    python nbs/train.py l8b-80gb --loss_type=focal_balanced
+
+    # lora and dopra baseline
+    run_exp --adapter_type lora
+    run_exp --adapter_type dora
 
     # try long
     # run_exp --n_epochs=200

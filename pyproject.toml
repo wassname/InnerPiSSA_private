@@ -25,6 +25,7 @@ dependencies = [
     "great-tables>=0.20.0",
     "adjusttext>=1.3.0",
     "repeng>=0.4.0",
+    "colorama>=0.4.6",
 ]
 
 [dependency-groups]

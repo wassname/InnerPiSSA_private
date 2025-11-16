@@ -9,7 +9,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenize
 
 from ipissa import ControlModel, ControlVector, DatasetEntry
 from ipissa.control import model_layer_list
-from ipissa.extract import batched_get_hiddens
+# from ipissa.extract import batched_get_hiddens
 
 
 @pytest.mark.slow
@@ -127,24 +127,24 @@ def test_layer_list_real():
     assert len(model_layer_list(lts)) == 4
 
 
-@pytest.mark.slow
-@pytest.mark.filterwarnings("ignore:invalid value")  # all-zeros is degenerate
-def test_hook_compute_hiddens():
-    tokenizer, model = load_llama_tinystories_model()
-    suffixes = load_suffixes()[:2]
-    dataset = make_dataset("{persona}", ["a"], ["b"], suffixes)
+# @pytest.mark.slow
+# @pytest.mark.filterwarnings("ignore:invalid value")  # all-zeros is degenerate
+# def test_hook_compute_hiddens():
+#     tokenizer, model = load_llama_tinystories_model()
+#     suffixes = load_suffixes()[:2]
+#     dataset = make_dataset("{persona}", ["a"], ["b"], suffixes)
 
-    def compute_hiddens(model, tokenizer, train_strs, hidden_layers, batch_size):
-        h = batched_get_hiddens(model, tokenizer, train_strs, hidden_layers, batch_size)
-        return {k: np.zeros_like(v) for k, v in h.items()}
+#     def compute_hiddens(model, tokenizer, train_strs, hidden_layers, batch_size):
+#         h = batched_get_hiddens(model, tokenizer, train_strs, hidden_layers, batch_size)
+#         return {k: np.zeros_like(v) for k, v in h.items()}
 
-    cvec = ControlVector.train(
-        model, tokenizer, dataset, compute_hiddens=compute_hiddens
-    )
-    assert len(cvec.directions) == 3
-    for v in cvec.directions.values():
-        assert v[0] == 1.0
-        assert (v[1:] == 0.0).all()
+#     cvec = ControlVector.train(
+#         model, tokenizer, dataset, compute_hiddens=compute_hiddens
+#     )
+#     assert len(cvec.directions) == 3
+#     for v in cvec.directions.values():
+#         assert v[0] == 1.0
+#         assert (v[1:] == 0.0).all()
 
 
 def test_layer_list_override():

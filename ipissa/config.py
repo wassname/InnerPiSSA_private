@@ -45,6 +45,7 @@ class TrainingConfig:
     )
 
     # Adapter params
+    adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"
     rank: int = 24
     scale_s: Literal["add2", "add_tanh", "mult", "none"] = "add2"
     ipissa_rotate_u: bool = False  # can be less stable as it modified output space and diverges from loss space
@@ -136,6 +137,8 @@ class TrainingConfig:
         
         # Add variations only if different from defaults (keeps name short)
         variations = []
+        if self.adapter_type != defaults.adapter_type:
+            variations.append(self.adapter_type)  # Add "lora" or "dora" to name
         if self.ipissa_rotate_u != defaults.ipissa_rotate_u:
             variations.append('urot' if self.ipissa_rotate_u else 'noU')
         if self.ipissa_rotate_v != defaults.ipissa_rotate_v:

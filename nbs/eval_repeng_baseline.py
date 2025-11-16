@@ -82,7 +82,7 @@ def main():
             N = base_model.config.num_hidden_layers
         except AttributeError:
             # gemma models don't have config.num_hidden_layers
-            print(base_model)
+            # print(base_model)
             from repeng.control import model_layer_list
             N = len(model_layer_list(base_model))
         repeng_layers = list(range(-5, -N // 2, -1))  # last half layers
@@ -105,6 +105,7 @@ def main():
             tokenizer,
             train_honest,
             batch_size=config.eval_batch_size,
+            hidden_layers=repeng_layers,
         )
         logger.info("Control vector trained")
 
