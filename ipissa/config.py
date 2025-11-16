@@ -6,15 +6,15 @@ proj_root = Path(__file__).parent.parent.resolve()
 # Models to evaluate for baselines (prompting, repeng, etc.)
 EVAL_BASELINE_MODELS = [
     "Qwen/Qwen3-0.6B",
-    "Qwen/Qwen3-4B-Instruct-2507",
     "Qwen/Qwen3-0.6B-Base",
+    "Qwen/Qwen3-4B-Instruct-2507",
+    "unsloth/Llama-3.1-8B-Instruct",
+    "google/gemma-3-12b-it",
     "wassname/qwen-14B-codefourchan",
     "Qwen/Qwen3-14B",
-    "google/gemma-3-12b-it",
-    "unsloth/Llama-3.1-8B-Instruct",
     "google/gemma-3-27b-it",
     "Qwen/Qwen3-32B",
-    "meta-llama/Llama-3.3-70B-Instruct",
+    "unsloth/Llama-3.3-70B-Instruct",
 ]
 
 @define(slots=False)
@@ -59,8 +59,15 @@ class TrainingConfig:
     dataset_max_samples: Optional[int] = 800
 
     # Loss
-    loss_type: Literal["logsigmoid", "softplus2", "softplus_only", "tanh2v1"] = (
-        "tanh2v1"
+    loss_type: Literal[
+        "logsig_weak_up",      # (-↑) Saturates after margin
+        "softpl_strong_up",    # (+↑ −↓) Strong upside, weak downside  
+        "tanh_sym",            # (±) Symmetric bounds both ways
+        "softpl_ratio",        # (+↑ −↓) Softplus on ratio (AFTER FIX)
+        "focal_balanced",      # (⚖) Down-weights easy examples
+        "logsig_dpo",          # (std) Standard DPO baseline
+    ] = (
+        "softpl_strong_up"
     )
     coherence_threshold: float = 1.5
     boundary_order: int = 1
@@ -118,9 +125,9 @@ class TrainingConfig:
         # Loss type (critical - affects method)
         loss_map = {
             'logsigmoid': 'logs',
-            'softplus2': 'soft2',
-            'softplus_only': 'soft',
-            'tanh2v1': 'tanh',
+            'softpl_ratio_(+↑-↓)': 'soft2',
+            'softpl_strong_up_(+↑-↓)': 'soft',
+            'tanh_sym_(±)': 'tanh',
         }
         loss_short = loss_map.get(self.loss_type, self.loss_type[:4])
         
@@ -186,13 +193,29 @@ default_configs = {
             batch_size=32,
         ),
     ),
-    # "oss20-80gb": (
-    #     "GPT-OSS 20B on 80GB GPU",
-    #     TrainingConfig(
-    #         model_name="openai/gpt-oss-20b",
-    #         batch_size=24,
-    #     ),
-    # ),
+    "l8b-80gb": (
+        "Llama 3.1 8B on 80GB GPU",
+        TrainingConfig(
+            model_name="unsloth/Llama-3.1-8B-Instruct",
+            batch_size=32,
+        ),
+    ),
+    "gemma12b-80gb": (
+        "Gemma 3 12B on 80GB GPU",
+        TrainingConfig(
+            model_name="google/gemma-3-12b-it",
+            batch_size=32,
+        ),
+    ),
+
+    "oss20-80gb": (
+        "GPT-OSS 20B on 80GB GPU",
+        TrainingConfig(
+            model_name="openai/gpt-oss-20b",
+            batch_size=12,
+        ),
+    ),
+
     "tiny": (
         "Tiny random model (debugging/CI)",
         TrainingConfig(

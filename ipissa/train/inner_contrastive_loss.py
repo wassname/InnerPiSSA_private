@@ -73,7 +73,6 @@ def softclamp_tanh(x, n=10):
 
 def softclamp_softplus(x: torch.Tensor, upper: float, lower: float = 0.0):
     return lower + F.softplus(x - lower) - F.softplus(x - upper)
-
 def contrastive_steering_loss_with_ref(
     pref_dir: Float[Tensor, "k d"],  # Also accepts [d] (auto-unsqueezed to [1, d])
     hs_ref_cho: HS,
@@ -87,163 +86,168 @@ def contrastive_steering_loss_with_ref(
     eps=1e-3,
     coherence_threshold=0.2,
     boundary_order=2,
-    last_n_tokens: int = None,  # Focus loss on last N tokens (where steering signal is)
-    # top_k_directions: int = 2,
-    loss_type:Literal["logsigmoid", "softplus", "softplus_only", "tanh2v1"]="logsigmoid",
+    last_n_tokens: int = None,
+    loss_type: Literal[
+        "logsig_weak_up_(-↑)",
+        "softpl_strong_up_(+↑-↓)",
+        "tanh_sym_(±)",
+        "softpl_ratio_(+↑-↓)",  # see below
+        "focal_balanced_(⚖)",
+        "logsig_dpo_(std)",
+    ] = "softpl_strong_up_(+↑-↓)"
 ):
     """
-    Contrastive loss for reversible steering adapters.
+    Contrastive loss for reversible SVD steering adapters.
     
-    **Objective 1: Maximize separation** along frozen PCA direction U
-    - Maximize |projection of (hs_pi_pos - hs_pi_neg) onto U|
-    - Scaled by reference projection magnitude
+    Optimizes:
+    1. **Projection maximization**: (hs_pi_pos - hs_pi_neg) · pref_dir > (hs_ref_cho - hs_ref_rej) · pref_dir
+    2. **Coherence constraint**: Keep NLL degradation below threshold (asymmetric margin)
     
-    **Objective 2: Coherence constraint** (asymmetric margin in log-space)
-    - Criterion: log p_pi(y|x) >= log p_ref(y|x) - threshold
-    - Equivalently: p_pi >= exp(-threshold) * p_ref
-    - Per-token ReLU margin prevents gaming via whitespace
-    - Quadratic penalty (boundary_order=2) creates steep boundary
-    
-    Why log-space? Already have logprobs, numerically stable, threshold in nats is interpretable.
-    Why per-token? Prevents model from making some tokens very likely to offset others becoming unlikely.
-    Why asymmetric? Don't penalize improvements, only degradation beyond margin.
+    Loss variants trade off gradient dynamics:
+    - logsig_weak_up: Saturates when proj_pi exceeds margin, no coherence (fastest convergence)
+    - softpl_strong_up: Unbounded upside, vanishing downside (best for RLHF-aligned models)
+    - tanh_sym: Symmetric bounds (stable but weak signal)
+    - softpl_ratio: Targets proj_pi/proj_ref > 1 (scale-invariant but can be unstable)
+    - focal_balanced: Down-weights confident examples (prevents overfitting to easy cases)
+    - logsig_dpo: Standard preference learning baseline (Bradley-Terry model)
     
     Args:
-        pref_dir: Frozen steering direction(s) - shape [k, d] or [d] (auto-unsqueezed)
-        hs_ref_cho/rej: Reference model hidden states for chosen/rejected
-        hs_pi_pos/neg: Adapter hidden states for positive/negative steering
-        ref_pos_label_logp: Reference model next-token logprobs (b, t)
-        pi_pos_label_logp: Adapter next-token logprobs (b, t)
+        pref_dir: Frozen steering direction from PCA/SVD - [k, d] or [d]
+        hs_{ref,pi}_{cho,rej}: Hidden states (reference/policy, chosen/rejected)
+        {ref,pi}_pos_label_logp: Next-token log probabilities (b, t)
         cho_mask: Attention mask (b, t)
-        coherence_threshold: Max degradation in nats (e.g., 0.2 = can be ~18% worse in probability)
-        boundary_order: Polynomial order for coherence penalty (default 2 = quadratic)
-        last_n_tokens: Focus loss on last N tokens (where steering signal is strongest). None = all tokens.
-        top_k_directions: Number of PCA components to use (None = all)
-    
+        coherence_threshold: Max NLL degradation in nats (0.2 ≈ 18% worse probability)
+        boundary_order: Coherence penalty exponent (2 = quadratic boundary)
+        last_n_tokens: Focus loss on final N tokens (where contrastive signal concentrates)
+        
     Returns:
         loss: scalar
-        info: dict with loss components and monitoring metrics
+        info: {loss_proj, loss_coh, logp_degradation, proj_pi, proj_ref, ...}
     """
-    loss_mask = cho_mask[:, :-1]  # For logprobs (align with shifted)
+    loss_mask = cho_mask[:, :-1]  # Align with next-token logprobs
     hs_mask = cho_mask
     
-    # Focus on last N tokens where steering signal is concentrated
+    # Focus on last N tokens where steering signal is strongest
     if last_n_tokens is not None:
-        # Create mask that only includes last N non-padding tokens per sample
         seq_lengths = hs_mask.sum(dim=1)  # (b,)
         for i in range(hs_mask.shape[0]):
             if seq_lengths[i] > last_n_tokens:
-                # Zero out all but last N tokens
                 hs_mask[i, :-last_n_tokens] = 0
-        # Update loss_mask to align
         loss_mask = hs_mask[:, :-1].clone()
 
-    
-    # Compute projections onto per-sample reference direction
-    # Handle both fixed direction [k, d] and per-sample direction [b, t, d]
+    # Normalize preference direction
     if pref_dir.ndim == 1:
         pref_dir = pref_dir.unsqueeze(0)  # [d] -> [1, d]
     
     pref_dir_pi = hs_pi_pos - hs_pi_neg
     pref_dir_ref = hs_ref_cho - hs_ref_rej
     
-    if pref_dir.ndim == 2:
-        # Fixed direction case: (k, d)
-        pref_dir = safe_norm(pref_dir, p=p, dim=-1, eps=eps)  # (k, d) normalized
+    # Project hidden state differences onto preference direction(s)
+    if pref_dir.ndim == 2:  # Fixed directions: (k, d)
+        pref_dir = safe_norm(pref_dir, p=p, dim=-1, eps=eps)
         signed_proj_pi = torch.einsum("...d,kd->...k", pref_dir_pi, pref_dir)  # (b,t,k)
         signed_proj_ref = torch.einsum("...d,kd->...k", pref_dir_ref, pref_dir)
-    else:
-        # Per-sample direction case: (b, t, d)
-        pref_dir = safe_norm(pref_dir, p=p, dim=-1, eps=eps)  # (b, t, d) normalized
+    else:  # Per-sample directions: (b, t, d)
+        pref_dir = safe_norm(pref_dir, p=p, dim=-1, eps=eps)
         signed_proj_pi = (pref_dir_pi * pref_dir).sum(dim=-1, keepdim=True)  # (b, t, 1)
-        signed_proj_ref = (pref_dir_ref * pref_dir).sum(dim=-1, keepdim=True)  # (b, t, 1)
+        signed_proj_ref = (pref_dir_ref * pref_dir).sum(dim=-1, keepdim=True)
     
-    # # Select top-k directions per sample based on ref magnitude
-    # if top_k_directions is not None and top_k_directions < signed_proj_ref.shape[-1]:
-    #     # Aggregate ref projection per direction: (b, t, k) -> (b, k)
-    #     ref_proj_per_dir = reduce_tokens_w_attention(signed_proj_ref.abs(), hs_mask.unsqueeze(-1), dim=1)  # (b, t, k)
-        
-    #     # Get top-k indices per batch sample
-    #     _, top_k_indices = torch.topk(ref_proj_per_dir, k=min(top_k_directions, signed_proj_ref.shape[-1]), dim=-1)  # (b, top_k)
-        
-    #     # Select top-k projections per sample (gather along k dimension)
-    #     signed_proj_pi = torch.gather(signed_proj_pi, dim=-1, index=top_k_indices.unsqueeze(1).expand(-1, signed_proj_pi.shape[1], -1))  # (b, t, top_k)
-    #     signed_proj_ref = torch.gather(signed_proj_ref, dim=-1, index=top_k_indices.unsqueeze(1).expand(-1, signed_proj_ref.shape[1], -1))  # (b, t, top_k)
-    
-    # Aggregate projections (mean over selected components, then masked mean over tokens)
+    # Aggregate: mean over components, then attention-weighted mean over tokens
     proj_pi = reduce(signed_proj_pi, 'b t k -> b t', 'mean')
     proj_ref = reduce(signed_proj_ref, 'b t k -> b t', 'mean')
     
-    # Keep signed projections (don't use abs - direction matters!)
-    proj_pi_signed = reduce_tokens_w_attention(proj_pi, hs_mask)  # (b,)
-    proj_ref_signed = reduce_tokens_w_attention(proj_ref, hs_mask)  # (b,)
+    # note this does SimPO style length norm
+    proj_pi_agg = reduce_tokens_w_attention(proj_pi, hs_mask)  # (b,)
+    proj_ref_agg = reduce_tokens_w_attention(proj_ref, hs_mask)
 
     ref_logp = ref_pos_label_logp.detach()
     pi_logp = pi_pos_label_logp
 
-    def calc_coh_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, clamp_scale=4, mult_b=4):
-        # Degradation in log-space (positive = pi worse than ref)
-        raw_logp_degradation = (ref_logp - pi_logp)  # (b, t)
+    def calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, clamp_scale=4, mult_b=4):
+        """
+        Asymmetric margin on NLL degradation.
         
-        logp_degradation = softclamp_tanh(raw_logp_degradation, clamp_scale)
+        Only penalize if pi_logp degrades beyond threshold - improvements are free.
+        Per-token margin prevents gaming via whitespace/padding manipulation.
+        """
+        logp_deg_raw = ref_logp - pi_logp  # Positive = pi worse than ref
+        logp_deg = softclamp_tanh(logp_deg_raw, clamp_scale)
+        
+        margin_violation = F.relu(logp_deg - coherence_threshold)
+        penalty_per_token = (margin_violation * mult_b) ** boundary_order
+        loss = reduce_tokens_w_attention(penalty_per_token, loss_mask).mean()
+        return loss, logp_deg
 
-        # Apply margin per-token (prevents gaming), then polynomial penalty
-        margin_violation = F.relu(logp_degradation - coherence_threshold)  # Zero if within margin
-        coherence_penalty_per_token = (margin_violation * mult_b) ** boundary_order  # Scale then polynomial (avoids shrinking small values)
-        loss = reduce_tokens_w_attention(coherence_penalty_per_token, loss_mask).mean()  # scalar
-        return loss, logp_degradation
-
-
-    # Calc coherence metrics for all modes
-    loss_coh, logp_degradation = calc_coh_loss(ref_logp, pi_logp, loss_mask, boundary_order=boundary_order)
+    loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order)
     
+    # Projection difference (what we're optimizing)
+    proj_diff = proj_pi_agg - proj_ref_agg  # Positive = pi projects more than ref
     
-    if loss_type=="logsigmoid":      
-
-
-        # Logsigmoid loss: bounded to [-∞, 0], coef switches optimization direction
-        beta = 0.1
-        margin = 1
-        proj_ratio_bounded = F.logsigmoid(beta * (proj_pi_signed - proj_ref_signed - margin))
-        loss_proj = -proj_ratio_bounded  # Negate to maximize (logsigmoid outputs negative)
-        loss_proj = loss_proj.mean()  # Average over batch
-        loss_coh = torch.zeros_like(loss_coh)  # Disable coherence loss in logsigmoid mode
-    elif loss_type=="softplus_only":
-        loss_proj = -F.softplus(proj_pi_signed - proj_ref_signed)  # Maximize differenc
-        # loss_proj = -proj_ratio_bounded  # Maximize absolute ratio
-        # loss_proj = output_direction * loss_proj  # Flip sign if output direction disagrees
-    elif loss_type=="tanh2v1":
-        # coh is [-2, 2] and proj is [-1, 1]
+    # Loss variant selection
+    if loss_type == "logsig_weak_up":
+        # Bradley-Terry with margin - saturates once proj_diff > margin
+        # Fastest convergence but weak on hard examples
+        # Coherence disabled - relies on margin to prevent degradation
+        β = 0.1
+        margin = 1.0
+        loss_proj = -F.logsigmoid(β * (proj_diff - margin)).mean()
+        loss_coh = torch.zeros_like(loss_coh)
+        
+    elif loss_type == "softpl_strong_up":
+        # Softplus on difference - unbounded upside, bounded downside
+        # Strong gradients when steering WITH model preferences (RLHF-aligned direction)
+        # Weak gradients when steering AGAINST preferences (vanishes as proj_diff → -∞)
+        # Asymmetry is correct: reflects difficulty of anti-alignment steering
+        loss_proj = -F.softplus(proj_diff).mean()
+        
+    elif loss_type == "tanh_sym":
+        # Tanh-bounded ratio - symmetric but weak signal both ways
+        # Stable but may underperform on models with strong RLHF
         loss_coh = softclamp_tanh(loss_coh, n=2)
-
-        # Projection loss: ratio of signed projections (coef flips direction)
-        proj_ratio = proj_pi_signed / (proj_ref_signed.abs() + eps)  # (b,) can be negative
-        loss_proj = softclamp_tanh(proj_ratio, 1)
-    elif loss_type=="softplus2":
-        # use softplus for proj ratio with a margin, this bounds the downside (encouraing it to improve rather than lsos aversion)
+        proj_ratio = proj_pi_agg / (proj_ref_agg.abs() + eps)
+        loss_proj = softclamp_tanh(proj_ratio, 1).mean()
+        
+    elif loss_type == "softpl_ratio":
+        # Softplus on (ratio - 1) - targets multiplicative improvement
+        # Scale-invariant but unstable if proj_ref near zero
         loss_coh = softclamp_tanh(loss_coh, n=2)
-        # Projection loss: ratio of signed projections (coef flips direction)
-        proj_ratio = proj_pi_signed / (proj_ref_signed.abs() + eps)  # (b,) can be negative
-        loss_proj = F.softplus(proj_ratio - 1.0, 1) # target ratio > 1
+        proj_ratio = proj_pi_agg / (proj_ref_agg.abs() + eps)
+        loss_proj = F.softplus(1.0 - proj_ratio, beta=1).mean()
+        
+    elif loss_type == "focal_balanced":
+        # Focal loss variant - down-weights easy examples (large |proj_diff|)
+        # Focuses learning on hard cases where projection is still weak
+        # More balanced than softpl_strong_up - prevents runaway on easy examples
+        α = 2.0  # Focusing parameter (higher = more focus on hard examples)
+        prob_correct = torch.sigmoid(proj_diff)  # High when pi >> ref
+        focal_weight = (1 - prob_correct) ** α  # Low weight for confident (easy) examples
+        loss_proj = -(focal_weight * F.logsigmoid(proj_diff)).mean()
+        
+    elif loss_type == "logsig_dpo":
+        # Standard DPO (Direct Preference Optimization) - Bradley-Terry without margin
+        # Baseline for comparison to preference learning literature
+        β = 0.1
+        loss_proj = -F.logsigmoid(β * proj_diff).mean()
+        
     else:
-        raise ValueError(f"Invalid loss_type specified: {loss_type}")
+        raise ValueError(f"Invalid loss_type: {loss_type}")
 
     loss = loss_proj + loss_coh
-
     assert torch.isfinite(loss).all(), "Non-finite loss"
     
-    # Monitoring: pre margin average degradation (negative = improvement)
-    avg_logp_degradation = reduce_tokens_w_attention(logp_degradation, loss_mask).mean()
+    # Monitoring metrics
+    avg_logp_deg = reduce_tokens_w_attention(logp_deg, loss_mask).mean()
     
     return loss, {
         "loss_proj": loss_proj,
-        "loss_coherence": loss_coh,
+        "loss_coh": loss_coh,
         "loss_total": loss,
-        "logp_degradation": avg_logp_degradation,  # nats (positive = worse)
-        "prob_ratio": torch.exp(-avg_logp_degradation),  # p_pi/p_ref (monitoring only)
-        "proj_pi_signed": proj_pi_signed.mean(),
-        "proj_ref_signed": proj_ref_signed.mean(),
-        'separation_norm': pref_dir_pi.norm(p=2, dim=-1).mean(),
+        "logp_degradation": avg_logp_deg,  # nats (positive = worse)
+        "prob_ratio": torch.exp(-avg_logp_deg),  # p_pi/p_ref
+        "proj_pi": proj_pi_agg.mean(),
+        "proj_ref": proj_ref_agg.mean(),
+        "proj_diff": proj_diff.mean(),  # What loss operates on
+        "separation_norm": pref_dir_pi.norm(p=2, dim=-1).mean(),
     }
 
 
