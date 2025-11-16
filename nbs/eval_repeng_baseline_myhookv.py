@@ -58,7 +58,10 @@ def collect_S_steer_vec(model, honest_dataset, tokenizer, loss_layers, config):
 
     Sw_dirs = {}
 
-    for layer in loss_layers:
+    if isinstance(model, ControlModel):
+        model = model.model
+
+    for layer in tqdm(loss_layers, desc='svd'):
         m = model.get_submodule(layer)
         W = m.weight.data.float()
         U, S, Vh = torch.linalg.svd(W, full_matrices=False)

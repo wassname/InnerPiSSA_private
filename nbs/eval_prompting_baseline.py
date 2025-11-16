@@ -1,8 +1,4 @@
 # %%
-%load_ext autoreload
-%autoreload 2
-
-# %%
 from loguru import logger
 import sys
 logger.remove()

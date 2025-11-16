@@ -41,10 +41,18 @@ run:
     uv run python nbs/eval_repeng_baseline_myhookv.py
     uv run python nbs/eval_prompting_baseline.py
 
-    # scratch
-    uv run python nbs/train.py .  --adapter_type lora
-    run_exp_small --lr=1e-1 --n_epochs=1 --rank=4 --num_layers=15
+    # can we learn with high lr, low steps?
+    run_exp_small --lr=1e-0 --n_epochs=1 --rank=4 --num_layers=15 # no this learns a one sides intervention and symmetry escapes it
+    run_exp_small --lr=1e-1 --n_epochs=2 --rank=4 --num_layers=15
+    run_exp_small --lr=1e-2 --n_epochs=4 --rank=4 --num_layers=15
+    
+    run_exp_small --lr=1e-1 --n_epochs=2 --rank=4 --num_layers=15 --loss_type=softpl_strong_up
+    run_exp_small --lr=1e-1 --n_epochs=2 --rank=4 --num_layers=15 --loss_type=softpl_ratio
+    run_exp_small --lr=1e-1 --n_epochs=2 --rank=4 --num_layers=15 --loss_type=logsig_weak_up
 
+
+    # scratch
+    uv run python nbs/train.py q4b-80gb --adapter_type lora --loss_type=tanh_sym 
 
     # run_exp_small --no-loss_ds_pref_dir
     # run_exp_small --loss_ds_pref_dir
@@ -80,7 +88,7 @@ run:
     # python nbs/train.py l8b-80gb --loss_type=focal_balanced
 
     # lora and dopra baseline
-    run_exp --adapter_type lora
+    run_exp --adapter_type lora --loss_type=tanh_sym # lora is too uncontrained
     # run_exp --adapter_type dora
 
 

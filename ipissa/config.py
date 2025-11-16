@@ -11,7 +11,7 @@ EVAL_BASELINE_MODELS = [
     "google/gemma-3-4b-it",
     "unsloth/Llama-3.1-8B-Instruct",
     "google/gemma-3-12b-it",
-    "wassname/qwen-14B-codefourchan",
+     "wassname/qwen-14B-codefourchan",
     "Qwen/Qwen3-14B",
     "openai/gpt-oss-20b",
     # "google/gemma-3-27b-it",
@@ -119,18 +119,24 @@ class TrainingConfig:
             'Qwen3-32B': 'q32b',
             'Llama-3.1-8B-Instruct': 'l8b',
             'Llama-3.3-70B-Instruct': 'l70b',
+            'gemma-3-4b-it': 'g4b',
             'gemma-3-12b-it': 'g12b',
             'gemma-3-27b-it': 'g27b',
+            'gpt-oss-20b': 'oss20b',
+            'tiny-random-qwen3': 'tiny',
+            'qwen-14B-codefourchan': 'q14b-c4c',
         }
         model_part = self.model_name.split('/')[-1]
         model_short = model_map.get(model_part, model_part[:8].replace('-', '').lower())
         
         # Loss type (critical - affects method)
         loss_map = {
-            'logsigmoid': 'logs',
-            'softpl_ratio_(+↑-↓)': 'soft2',
-            'softpl_strong_up_(+↑-↓)': 'soft',
-            'tanh_sym_(±)': 'tanh',
+            'logsigmoid': 'lgSg',
+            'softpl_ratio': 'sftplR',
+            'softpl_strong_up': 'sftplS',
+            'tanh_sym': 'tanh',
+            'focal_balanced': 'focal',
+            'logsig_dpo': 'dpo',
         }
         loss_short = loss_map.get(self.loss_type, self.loss_type[:4])
         

@@ -166,22 +166,23 @@ def contrastive_steering_loss_with_ref(
     ref_logp = ref_pos_label_logp.detach()
     pi_logp = pi_pos_label_logp
 
-    def calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, clamp_scale=4, mult_b=4):
+    def calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, clamp_scale=100, mult_b=4):
         """
         Asymmetric margin on NLL degradation.
         
         Only penalize if pi_logp degrades beyond threshold - improvements are free.
         Per-token margin prevents gaming via whitespace/padding manipulation.
         """
-        logp_deg_raw = ref_logp - pi_logp  # Positive = pi worse than ref
-        logp_deg = softclamp_tanh(logp_deg_raw, clamp_scale)
+        logp_deg = ref_logp - pi_logp  # Positive = pi worse than ref
+        if clamp_scale is not None:
+            logp_deg = softclamp_tanh(logp_deg, clamp_scale)
         
         margin_violation = F.relu(logp_deg - coherence_threshold)
         penalty_per_token = (margin_violation * mult_b) ** boundary_order
         loss = reduce_tokens_w_attention(penalty_per_token, loss_mask).mean()
         return loss, logp_deg
 
-    loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order)
+    
     
     # Projection difference (what we're optimizing)
     proj_diff = proj_pi_agg - proj_ref_agg  # Positive = pi projects more than ref
@@ -201,21 +202,27 @@ def contrastive_steering_loss_with_ref(
         # Strong gradients when steering WITH model preferences (RLHF-aligned direction)
         # Weak gradients when steering AGAINST preferences (vanishes as proj_diff → -∞)
         # Asymmetry is correct: reflects difficulty of anti-alignment steering
-        loss_proj = -F.softplus(proj_diff).mean()
+        β = 0.1
+        loss_proj = -F.softplus(proj_diff * β).mean()
+        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=None)
         
     elif loss_type == "tanh_sym":
         # Tanh-bounded ratio - symmetric but weak signal both ways
         # Stable but may underperform on models with strong RLHF
+        β = 0.1
+        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=100)
         loss_coh = softclamp_tanh(loss_coh, n=2)
         proj_ratio = proj_pi_agg / (proj_ref_agg.abs() + eps)
-        loss_proj = softclamp_tanh(proj_ratio, 1).mean()
+        loss_proj = softclamp_tanh(proj_ratio * β, 1).mean()
         
     elif loss_type == "softpl_ratio":
         # Softplus on (ratio - 1) - targets multiplicative improvement
         # Scale-invariant but unstable if proj_ref near zero
+        β = 1.0
+        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=None)
         loss_coh = softclamp_tanh(loss_coh, n=3)
         proj_ratio = proj_pi_agg / (proj_ref_agg.abs() + eps)
-        loss_proj = -F.softplus(proj_ratio - 1.0).mean() 
+        loss_proj = -F.softplus(proj_ratio * β - 1.0).mean() 
         
     elif loss_type == "focal_balanced":
         # Focal loss variant - down-weights easy examples (large |proj_diff|)
@@ -225,12 +232,14 @@ def contrastive_steering_loss_with_ref(
         prob_correct = torch.sigmoid(proj_diff)  # High when pi >> ref
         focal_weight = (1 - prob_correct) ** α  # Low weight for confident (easy) examples
         loss_proj = -(focal_weight * F.logsigmoid(proj_diff)).mean()
+        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=10)
         
     elif loss_type == "logsig_dpo":
         # Standard DPO (Direct Preference Optimization) - Bradley-Terry without margin
         # Baseline for comparison to preference learning literature
         β = 0.1
         loss_proj = -F.logsigmoid(β * proj_diff).mean()
+        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=10)
         
     else:
         raise ValueError(f"Invalid loss_type: {loss_type}")
