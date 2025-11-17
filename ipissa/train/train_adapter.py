@@ -537,6 +537,7 @@ def compute_batch_loss(
             pi_rej_label_logp = pi_label_logprobs[1::2]
             pi_cho_label_logp = pi_label_logprobs[::2]
 
+            # FIXME this logic could be simpler if we had a seperat swap logic after checking adapter type
             if config.adapter_type == "innerpissa":
                 if coef > 0:
                     hs_pi_pos_u = hs_pi_cho @ U_w
