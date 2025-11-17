@@ -768,7 +768,7 @@ def train_epoch(
         )
         infos.extend(batch_infos)
 
-        total_loss.backward()
+        total_loss.mean().backward()
 
         if step % config.grad_accum_steps == 0:
             opt.step()
@@ -817,16 +817,17 @@ def train_epoch(
                         diff_n1 = coef_metrics.get('difficulty_coef-1_0', np.nan)
                         cohw_p1 = coef_metrics.get('coh_weight_coef+1_0', np.nan)
                         cohw_n1 = coef_metrics.get('coh_weight_coef-1_0', np.nan)
+
                         logger.info(
-                            f"  Coef breakdown: "
-                            f"[+1: proj={proj_p1:+.3f}, coh={coh_p1:+.3f}, diff={diff_p1:.2f}, cohw={cohw_p1:.2f}] | "
-                            f"[-1: proj={proj_n1:+.3f}, coh={coh_n1:+.3f}, diff={diff_n1:.2f}, cohw={cohw_n1:.2f}]"
+                            f"\tCoef breakdown: \n"
+                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, diff={diff_p1:5.2f}, cohw={cohw_p1:5.2f}] | \n"
+                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, diff={diff_n1:5.2f}, cohw={cohw_n1:5.2f}]"
                         )
                     else:
                         logger.info(
-                            f"  Coef breakdown: "
-                            f"[+1: proj={proj_p1:+.3f}, coh={coh_p1:+.3f}] | "
-                            f"[-1: proj={proj_n1:+.3f}, coh={coh_n1:+.3f}]"
+                            f"\tCoef breakdown: \n"
+                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}] | \n"
+                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}]"
                         )
 
             # Validation check (less frequent than logging)
@@ -860,14 +861,14 @@ def train_epoch(
                         cohw_n1 = val_coef_metrics.get('coh_weight_coef-1_0', np.nan)
                         logger.info(
                             f"  Val coef breakdown: "
-                            f"[+1: proj={proj_p1:+.3f}, coh={coh_p1:+.3f}, diff={diff_p1:.2f}, cohw={cohw_p1:.2f}] | "
-                            f"[-1: proj={proj_n1:+.3f}, coh={coh_n1:+.3f}, diff={diff_n1:.2f}, cohw={cohw_n1:.2f}]"
+                            f"[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, diff={diff_p1:5.2f}, cohw={cohw_p1:5.2f}] | "
+                            f"[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, diff={diff_n1:5.2f}, cohw={cohw_n1:5.2f}]"
                         )
                     else:
                         logger.info(
                             f"  Val coef breakdown: "
-                            f"[+1: proj={proj_p1:+.3f}, coh={coh_p1:+.3f}] | "
-                            f"[-1: proj={proj_n1:+.3f}, coh={coh_n1:+.3f}]"
+                            f"[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}] | "
+                            f"[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}]"
                         )
 
                 if wandb_run is not None:
