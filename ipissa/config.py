@@ -114,7 +114,7 @@ class TrainingConfig:
         "focal_balanced",      # (⚖) Down-weights easy examples
         "logsig_dpo",          # (std) Standard DPO baseline
     ] = (
-        "softpl_strong_up"
+        "tanh_sym"
     )
     coherence_threshold: float = 1.5
     boundary_order: int = 1
