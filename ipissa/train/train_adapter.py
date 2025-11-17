@@ -600,6 +600,29 @@ def compute_batch_loss(
     return total_loss
 
 
+def extract_coef_metrics(infos):
+    """Extract per-coefficient aggregated metrics before step-level averaging.
+    
+    Returns dict like: {'loss_proj_coef+1': float, 'loss_coh_coef+1': float, ...}
+    """
+    df_infos = pd.DataFrame(infos)
+    
+    # Aggregate by coefficient (average across layers)
+    df_by_coef = df_infos.groupby(["coef"]).agg({
+        col: "mean" for col in df_infos.columns 
+        if pd.api.types.is_numeric_dtype(df_infos[col].dtype) and col not in ["step", "coef"]
+    })
+    
+    # Flatten to dict with descriptive keys
+    metrics = {}
+    for coef in df_by_coef.index:
+        suffix = f"coef{coef:+.1f}".replace(".", "_")  # +1.0 -> coef+1_0
+        for col in df_by_coef.columns:
+            metrics[f"{col}_{suffix}"] = df_by_coef.loc[coef, col]
+    
+    return metrics
+
+
 def process_infos(infos, by_layer=True, by_coef=True, by_layer_num=True, verbose=False):
     """Process training info logs into summary dataframe."""
     df_infos = pd.DataFrame(infos)
@@ -614,8 +637,9 @@ def process_infos(infos, by_layer=True, by_coef=True, by_layer_num=True, verbose
         logger.debug(f"Loss by layer:\n{df_layer}")
 
     if verbose and by_coef:
-        df_coef = df_infos.groupby(["coef"])["loss_total"].mean()
-        logger.debug(f"Loss by coef:\n{df_coef}")
+        # Enhanced: show projection vs coherence breakdown per coefficient
+        df_coef = df_infos.groupby(["coef"])[["loss_proj", "loss_coh", "loss_total"]].mean()
+        logger.debug(f"Loss by coef (proj/coh breakdown):\n{df_coef}")
 
     agg_dict = {
         col: "mean" if pd.api.types.is_numeric_dtype(dtype) else "first"
@@ -641,8 +665,9 @@ def compute_validation_loss(
     total_loss = 0.0
     n_batches = 0
 
-    # Accumulate loss components
+    # Accumulate loss components and per-coef breakdown
     loss_components = {}
+    all_infos = []  # Collect all batch infos for coef breakdown
 
     for batch in val_dataloader:
         batch = {k: v.to(model.device) for k, v in batch.items()}
@@ -653,6 +678,7 @@ def compute_validation_loss(
         )
 
         total_loss += batch_loss.item()
+        all_infos.extend(batch_infos)
 
         # Accumulate component losses
         for info in batch_infos:
@@ -669,8 +695,11 @@ def compute_validation_loss(
     # Average all components
     avg_total = total_loss / n_batches if n_batches > 0 else float("inf")
     avg_components = {k: np.mean(v) for k, v in loss_components.items()}
+    
+    # Extract per-coefficient breakdown
+    coef_metrics = extract_coef_metrics(all_infos) if all_infos else {}
 
-    return avg_total, avg_components
+    return avg_total, avg_components, coef_metrics
 
 
 def train_epoch(
@@ -730,13 +759,36 @@ def train_epoch(
             infos, by_layer=False, by_coef=True, by_layer_num=True, verbose=False
         )
         info = df_hist.iloc[-1].to_dict()
+        
+        # Extract per-coefficient breakdown for detailed logging
+        coef_metrics = extract_coef_metrics(infos[-len(loss_layers)*2:]) if len(infos) >= len(loss_layers)*2 else {}
+        
         # FIXME why last
         if wandb_run is not None:
+            # Log step-aggregated metrics
             wandb_run.log(info, step=step)
+            # Log per-coefficient breakdown with grouping
+            if coef_metrics:
+                coef_log = {f"train/by_coef/{k}": v for k, v in coef_metrics.items()}
+                wandb_run.log(coef_log, step=step)
+        
         if step % log_n_steps == 0:
             if len(df_hist) > 0:
                 log_str = " | ".join([f"{k}={v:.3g}" for k, v in info.items()])
                 logger.info(f"Step {step}: {log_str}")
+                
+                # Compact coef vs proj/coh summary table
+                if coef_metrics:
+                    # Extract key metrics for +1 and -1 coefficients
+                    proj_p1 = coef_metrics.get('loss_proj_coef+1_0', np.nan)
+                    coh_p1 = coef_metrics.get('loss_coh_coef+1_0', np.nan)
+                    proj_n1 = coef_metrics.get('loss_proj_coef-1_0', np.nan)
+                    coh_n1 = coef_metrics.get('loss_coh_coef-1_0', np.nan)
+                    logger.info(
+                        f"  Coef breakdown: "
+                        f"[+1: proj={proj_p1:+.2f}, coh={coh_p1:+.2f}] | "
+                        f"[-1: proj={proj_n1:+.2f}, coh={coh_n1:+.2f}]"
+                    )
 
             # Validation check (less frequent than logging)
             if (
@@ -744,7 +796,7 @@ def train_epoch(
                 and step % (log_n_steps * 2) == 0
                 and step > 0
             ):
-                val_loss, val_components = compute_validation_loss(
+                val_loss, val_components, val_coef_metrics = compute_validation_loss(
                     model, val_dataloader, cv_dirs_loss, loss_layers, Uw_full, config
                 )
 
@@ -753,12 +805,29 @@ def train_epoch(
                     [f"{k}={v:.3g}" for k, v in val_components.items()]
                 )
                 logger.info(f"Validation loss: {val_loss:.4f} | {val_log_str}")
+                
+                # Log per-coefficient validation breakdown
+                if val_coef_metrics:
+                    proj_p1 = val_coef_metrics.get('loss_proj_coef+1_0', np.nan)
+                    coh_p1 = val_coef_metrics.get('loss_coh_coef+1_0', np.nan)
+                    proj_n1 = val_coef_metrics.get('loss_proj_coef-1_0', np.nan)
+                    coh_n1 = val_coef_metrics.get('loss_coh_coef-1_0', np.nan)
+                    logger.info(
+                        f"  Val coef breakdown: "
+                        f"[+1: proj={proj_p1:+.2f}, coh={coh_p1:+.2f}] | "
+                        f"[-1: proj={proj_n1:+.2f}, coh={coh_n1:+.2f}]"
+                    )
 
                 if wandb_run is not None:
                     val_metrics = {"val/loss_total": val_loss}
                     val_metrics.update(
                         {f"val/{k}": v for k, v in val_components.items()}
                     )
+                    # Add per-coefficient breakdown
+                    if val_coef_metrics:
+                        val_metrics.update(
+                            {f"val/by_coef/{k}": v for k, v in val_coef_metrics.items()}
+                        )
                     wandb_run.log(val_metrics, step=step)
 
                 # Early stopping check
@@ -787,6 +856,49 @@ def train_epoch(
             clear_mem()
 
     return False  # No early stop
+
+
+def _validate_baseline_consistency(df_res_pv, threshold=0.5):
+    """Check that all methods have consistent baseline scores at coeff=0.
+    
+    Args:
+        df_res_pv: DataFrame with MultiIndex columns (method, coeff)
+        threshold: Maximum allowed difference in baseline scores (in nats)
+    
+    Warns if different methods show significantly different baseline performance,
+    which suggests evaluation inconsistency (e.g., different prompting, dataset version).
+    """
+    # Extract coeff=0 values for all methods
+    try:
+        baseline_cols = [col for col in df_res_pv.columns if col[1] == 0.0]
+        if len(baseline_cols) < 2:
+            return  # Need at least 2 methods to compare
+        
+        baseline_scores = df_res_pv[baseline_cols]
+        
+        # Check each value (e.g., Virtue/Truthfulness, Virtue/Ambition)
+        for value_name in baseline_scores.index:
+            scores = baseline_scores.loc[value_name]
+            
+            # Skip if any NaN values
+            if scores.isna().any():
+                continue
+            
+            # Compute range of baseline scores
+            score_min = scores.min()
+            score_max = scores.max()
+            score_range = score_max - score_min
+            
+            if score_range > threshold:
+                method_scores = {col[0]: f"{scores[col]:.2f}" for col in baseline_cols}
+                logger.warning(
+                    f"⚠️  Baseline inconsistency for '{value_name}': "
+                    f"coeff=0 scores vary by {score_range:.2f} nats (threshold={threshold}). "
+                    f"Method scores: {method_scores}. "
+                    f"This suggests evaluation inconsistency (different prompting, dataset version, or evaluation bug)."
+                )
+    except Exception as e:
+        logger.debug(f"Could not validate baseline consistency: {e}")
 
 
 @torch.no_grad()
@@ -964,6 +1076,9 @@ def evaluate_model(
         ),
         axis=0,
     )
+
+    # Validate baseline consistency at coeff=0
+    _validate_baseline_consistency(df_res_pv)
 
     return df_res_wlabels, df_res_pv
 
