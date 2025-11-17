@@ -1345,3 +1345,35 @@ btw do you think that my innerpissa adapter should use sqrt(S)... there are thre
     - But you're learning from scratch (zero init rotations) for a specific task, not adapting pretrained magnitude
 
     What do you think? Should we check what your current `InnerPiSSAConfig` does and potentially change it?
+
+# 2025-11-15 20:50:50
+
+ Geometry Intuition
+
+"You can optimize some distance along a direction in a particular layer, but no more. But you can stack multiple layers to get quite powerful steering which is what backprop makes it all work together."
+
+This is a key mechanistic insight. Each layer has a "trust region" for safe steering, but backprop coordinates across layers for strong overall effect.
+
+Revised Narrative (Multi-Scale Story)
+Claim 1: Gradient-based optimization beats arithmetic (holds across scales)
+Evidence: Beats prompting on 0.6B, 4B, and [8B when you test]
+Claim 2: Loss function requirements depend on model scale
+Evidence:
+
+<4B: Logsigmoid sufficient (implicit coherence through bounded loss)
+≥4B: Explicit coherence constraint needed (must extrapolate further)
+Ablation shows this transition point
+
+Claim 3: SVD basis enables stable, high-lr optimization
+Evidence:
+
+lr=1e-2 works (10-100× higher than typical)
+No divergence or instability
+Suggests we're operating in model's "native" optimization space
+
+Claim 4: Multi-layer coordination is critical
+Evidence:
+
+Single layer has limited steering range
+Backprop coordinates across layers for strong effect
+"Trust region per layer, composition across layers"

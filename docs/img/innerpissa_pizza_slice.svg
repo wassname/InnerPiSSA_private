@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800" height="700" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradient for cheesy center to crust -->
+    <radialGradient id="pizzaFill" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#fef3c7;stop-opacity:0.7"/>
+      <stop offset="50%" style="stop-color:#fde68a;stop-opacity:0.5"/>
+      <stop offset="85%" style="stop-color:#fbbf24;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#d97706;stop-opacity:0.2"/>
+    </radialGradient>
+    
+    <!-- Arrow markers -->
+    <marker id="arrow-blue-2" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-orange-2" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#ea580c"/>
+    </marker>
+    <marker id="arrow-green-2" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#16a34a"/>
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="700" fill="#fafafa"/>
+  
+  <!-- Title -->
+  <text x="400" y="35" text-anchor="middle" font-size="22" font-weight="bold" fill="#1f2937">
+    InnerPiSSA Space: 45° Chicago Deep-Dish View
+  </text>
+  <text x="400" y="58" text-anchor="middle" font-size="14" fill="#6b7280" font-style="italic">
+    Geometric interpretation of contrastive steering in S-space
+  </text>
+  
+  <!-- Main pizza slice (45-degree wedge) -->
+  <g transform="translate(400, 380)">
+    <!-- Define the pizza slice - 45 degrees centered on vertical -->
+    <!-- Slice goes from -22.5° to +22.5° from vertical (upward) -->
+    
+    <!-- Pizza fill area (the "valid InnerPiSSA space") -->
+    <path d="M 0,0 
+             L -70.7,-250
+             A 260,260 0 0,1 70.7,-250
+             Z"
+          fill="url(#pizzaFill)"/>
+    
+    <!-- Crust border (coherence boundary) -->
+    <path d="M -70.7,-250 A 260,260 0 0,1 70.7,-250"
+          fill="none" stroke="#92400e" stroke-width="5" stroke-linecap="round"/>
+    
+    <!-- Left edge of slice -->
+    <line x1="0" y1="0" x2="-70.7" y2="-250" 
+          stroke="#d97706" stroke-width="2" opacity="0.6"/>
+    
+    <!-- Right edge of slice -->
+    <line x1="0" y1="0" x2="70.7" y2="-250" 
+          stroke="#d97706" stroke-width="2" opacity="0.6"/>
+    
+    <!-- Origin point (center of pizza) -->
+    <circle cx="0" cy="0" r="6" fill="#78350f" stroke="#451a03" stroke-width="2"/>
+    <text x="12" y="5" font-size="12" fill="#78350f" font-weight="600">origin</text>
+    <text x="12" y="20" font-size="10" fill="#92400e">(ref model)</text>
+    
+    <!-- Crust label -->
+    <text x="0" y="-280" text-anchor="middle" font-size="13" fill="#92400e" font-weight="600">
+      Coherence Boundary
+    </text>
+    <text x="0" y="-265" text-anchor="middle" font-size="10" fill="#78350f" font-style="italic">
+      (log p_π ≥ log p_ref - threshold)
+    </text>
+    
+    <!-- Reference direction vectors at t=0 -->
+    <g opacity="0.5">
+      <line x1="0" y1="0" x2="0" y2="-120" 
+            stroke="#16a34a" stroke-width="3" stroke-dasharray="6,4"/>
+      <text x="10" y="-125" font-size="11" fill="#15803d">pref_dir_ref (t=0)</text>
+    </g>
+    
+    <!-- Frozen target direction (mean across training data) -->
+    <line x1="0" y1="0" x2="0" y2="-180" 
+          stroke="#2563eb" stroke-width="4" marker-end="url(#arrow-blue-2)"/>
+    <text x="10" y="-185" font-size="14" font-weight="bold" fill="#1e40af">
+      pref_dir
+    </text>
+    <text x="10" y="-170" font-size="11" fill="#3b82f6">(frozen mean)</text>
+    
+    <!-- Trained direction (c=+1, amplified toward target) -->
+    <line x1="0" y1="0" x2="25" y2="-220" 
+          stroke="#ea580c" stroke-width="5" marker-end="url(#arrow-orange-2)"/>
+    <text x="35" y="-225" font-size="14" font-weight="bold" fill="#c2410c">
+      pref_dir_pi (c=+1)
+    </text>
+    <text x="35" y="-210" font-size="11" fill="#f97316">(honest mode)</text>
+    
+    <!-- Projection indicator -->
+    <line x1="25" y1="-220" x2="0" y2="-220" 
+          stroke="#8b5cf6" stroke-width="2" stroke-dasharray="3,2"/>
+    <circle cx="0" cy="-220" r="3" fill="#8b5cf6"/>
+    <text x="-95" y="-215" font-size="11" fill="#7c3aed" font-weight="600">
+      proj_pi / proj_ref ↑
+    </text>
+    
+    <!-- Trained direction (c=-1, shrunk away from target) -->
+    <line x1="0" y1="0" x2="-35" y2="-80" 
+          stroke="#dc2626" stroke-width="4" marker-end="url(#arrow-orange-2)"/>
+    <text x="-130" y="-75" font-size="13" font-weight="bold" fill="#991b1b" text-anchor="end">
+      pref_dir_pi (c=-1)
+    </text>
+    <text x="-130" y="-62" font-size="10" fill="#ef4444" text-anchor="end">(dishonest mode)</text>
+    
+    <!-- Annotation boxes -->
+    <g transform="translate(-320, -150)">
+      <rect x="0" y="0" width="220" height="110" fill="#ffffff" stroke="#e5e7eb" rx="4"/>
+      <text x="10" y="20" font-size="12" font-weight="600" fill="#111827">Training Dynamics:</text>
+      <text x="10" y="38" font-size="11" fill="#374151">• V rotation: changes slice</text>
+      <text x="10" y="54" font-size="11" fill="#374151">  direction in input space</text>
+      <text x="10" y="72" font-size="11" fill="#374151">• S scaling: amplifies/shrinks</text>
+      <text x="10" y="88" font-size="11" fill="#374151">  separation magnitude</text>
+      <text x="10" y="104" font-size="10" fill="#6b7280" font-style="italic">Both controlled by coeff c</text>
+    </g>
+    
+    <g transform="translate(100, -150)">
+      <rect x="0" y="0" width="200" height="110" fill="#ffffff" stroke="#e5e7eb" rx="4"/>
+      <text x="10" y="20" font-size="12" font-weight="600" fill="#111827">Loss Function:</text>
+      <text x="10" y="38" font-size="11" fill="#374151">L = -logsigmoid(</text>
+      <text x="30" y="54" font-size="11" fill="#374151">β · proj_ratio)</text>
+      <text x="10" y="72" font-size="11" fill="#374151">where:</text>
+      <text x="10" y="88" font-size="10" fill="#6b7280">proj_ratio = proj_pi / proj_ref</text>
+      <text x="10" y="104" font-size="10" fill="#6b7280">β = inverse temperature</text>
+    </g>
+  </g>
+  
+  <!-- Bottom panel: Key insights -->
+  <g transform="translate(50, 580)">
+    <rect x="0" y="0" width="700" height="100" fill="#fff7ed" stroke="#fdba74" stroke-width="2" rx="6"/>
+    
+    <text x="20" y="25" font-size="14" font-weight="bold" fill="#9a3412">
+      🍕 The "Deep Dish" Metaphor (Subtle, Not On The Nose)
+    </text>
+    
+    <text x="20" y="48" font-size="12" fill="#7c2d12">
+      <tspan font-weight="600">InnerPiSSA space:</tspan> The valid steering region within the coherence boundary (like the inner part of a deep-dish pizza)
+    </text>
+    
+    <text x="20" y="68" font-size="12" fill="#7c2d12">
+      <tspan font-weight="600">Coherence boundary:</tspan> The crust - adaptive quality constraint from logp_π ≥ logp_ref - threshold
+    </text>
+    
+    <text x="20" y="88" font-size="11" fill="#92400e" font-style="italic">
+      The 45° slice represents one adapter's learned subspace; multiple layers create a "stack" of steering interventions
+    </text>
+  </g>
+  
+  <!-- Side legend: colors and symbols -->
+  <g transform="translate(50, 100)">
+    <text x="0" y="0" font-size="13" font-weight="600" fill="#374151">Legend:</text>
+    
+    <line x1="0" y1="15" x2="30" y2="15" stroke="#2563eb" stroke-width="3"/>
+    <text x="35" y="20" font-size="11" fill="#374151">pref_dir (frozen target)</text>
+    
+    <line x1="0" y1="35" x2="30" y2="35" stroke="#ea580c" stroke-width="4"/>
+    <text x="35" y="40" font-size="11" fill="#374151">pref_dir_pi (learned, c=+1)</text>
+    
+    <line x1="0" y1="55" x2="30" y2="55" stroke="#dc2626" stroke-width="3"/>
+    <text x="35" y="60" font-size="11" fill="#374151">pref_dir_pi (learned, c=-1)</text>
+    
+    <line x1="0" y1="75" x2="30" y2="75" stroke="#16a34a" stroke-width="2" stroke-dasharray="6,4"/>
+    <text x="35" y="80" font-size="11" fill="#374151">pref_dir_ref (initial reference)</text>
+    
+    <line x1="0" y1="95" x2="30" y2="95" stroke="#92400e" stroke-width="4"/>
+    <text x="35" y="100" font-size="11" fill="#374151">Coherence boundary ("crust")</text>
+    
+    <path d="M 0,115 L 10,115 L 10,125 L 0,125 Z" fill="url(#pizzaFill)"/>
+    <text x="35" y="125" font-size="11" fill="#374151">Valid InnerPiSSA space</text>
+  </g>
+  
+  <!-- Mathematical note -->
+  <g transform="translate(550, 100)">
+    <rect x="0" y="0" width="200" height="80" fill="#f0fdf4" stroke="#86efac" stroke-width="1" rx="4"/>
+    <text x="10" y="18" font-size="11" font-weight="600" fill="#166534">S-Space Projection:</text>
+    <text x="10" y="35" font-size="10" fill="#15803d">hs = activations @ U</text>
+    <text x="10" y="50" font-size="10" fill="#15803d">dHS = hs_cho - hs_rej</text>
+    <text x="10" y="65" font-size="10" fill="#15803d">proj = dHS · pref_dir</text>
+    <text x="10" y="78" font-size="9" fill="#4ade80" font-style="italic">SVD: W = U @ S @ V^T</text>
+  </g>
+</svg>

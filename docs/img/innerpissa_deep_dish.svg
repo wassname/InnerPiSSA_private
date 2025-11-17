@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="900" height="600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Arrow markers -->
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#ea580c"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#16a34a"/>
+    </marker>
+    
+    <!-- Gradient for pizza crust -->
+    <radialGradient id="pizzaGradient" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#fef3c7;stop-opacity:0.3"/>
+      <stop offset="70%" style="stop-color:#fde68a;stop-opacity:0.2"/>
+      <stop offset="100%" style="stop-color:#fbbf24;stop-opacity:0.1"/>
+    </radialGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="900" height="600" fill="#fafafa"/>
+  
+  <!-- Title -->
+  <text x="450" y="30" text-anchor="middle" font-size="20" font-weight="bold" fill="#1f2937">
+    InnerPiSSA Loss Geometry: The "Deep Dish" (S-Space View)
+  </text>
+  
+  <!-- Left Panel: Initial State (t=0) -->
+  <g transform="translate(150, 100)">
+    <!-- Panel title -->
+    <text x="0" y="-20" font-size="16" font-weight="600" fill="#374151">
+      Initial State (t=0, coeff=0)
+    </text>
+    
+    <!-- Axes -->
+    <line x1="-120" y1="180" x2="120" y2="180" stroke="#9ca3af" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="240" stroke="#9ca3af" stroke-width="1.5"/>
+    <text x="130" y="185" font-size="12" fill="#6b7280">S₁</text>
+    <text x="-5" y="-10" font-size="12" fill="#6b7280">S₂</text>
+    
+    <!-- Origin -->
+    <circle cx="0" cy="180" r="3" fill="#4b5563"/>
+    <text x="8" y="195" font-size="10" fill="#6b7280">origin</text>
+    
+    <!-- Coherence boundary (pizza crust) - circular arc -->
+    <path d="M -85,95 A 120,120 0 0,1 85,95" 
+          fill="none" stroke="#92400e" stroke-width="3" 
+          stroke-dasharray="8,4" opacity="0.8"/>
+    <text x="0" y="75" text-anchor="middle" font-size="11" fill="#92400e" font-style="italic">
+      coherence boundary
+    </text>
+    
+    <!-- Pizza fill (InnerPiSSA space) -->
+    <path d="M 0,180 L -85,95 A 120,120 0 0,1 85,95 L 0,180 Z" 
+          fill="url(#pizzaGradient)" opacity="0.4"/>
+    
+    <!-- pref_dir (frozen target direction) - blue arrow pointing up-right -->
+    <line x1="0" y1="180" x2="50" y2="100" 
+          stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-blue)"/>
+    <text x="58" y="95" font-size="13" font-weight="bold" fill="#1e40af">
+      pref_dir
+    </text>
+    <text x="52" y="108" font-size="10" fill="#3b82f6">(frozen)</text>
+    
+    <!-- pref_dir_ref (initial reference, same as pref_dir_pi at t=0) - green dashed -->
+    <line x1="0" y1="180" x2="35" y2="125" 
+          stroke="#16a34a" stroke-width="2.5" stroke-dasharray="5,3" marker-end="url(#arrow-green)"/>
+    <text x="-55" y="140" font-size="11" fill="#15803d">
+      pref_dir_ref = pref_dir_pi
+    </text>
+    <text x="-50" y="153" font-size="9" fill="#22c55e">(both equal at t=0)</text>
+    
+    <!-- Annotation -->
+    <text x="0" y="270" text-anchor="middle" font-size="11" fill="#6b7280">
+      Adapter has zero effect initially
+    </text>
+  </g>
+  
+  <!-- Middle Panel: Training with c=+1 (honest mode) -->
+  <g transform="translate(450, 100)">
+    <!-- Panel title -->
+    <text x="0" y="-20" font-size="16" font-weight="600" fill="#374151">
+      After Training (c=+1, honest)
+    </text>
+    
+    <!-- Axes -->
+    <line x1="-120" y1="180" x2="120" y2="180" stroke="#9ca3af" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="240" stroke="#9ca3af" stroke-width="1.5"/>
+    <text x="130" y="185" font-size="12" fill="#6b7280">S₁</text>
+    <text x="-5" y="-10" font-size="12" fill="#6b7280">S₂</text>
+    
+    <!-- Origin -->
+    <circle cx="0" cy="180" r="3" fill="#4b5563"/>
+    
+    <!-- Coherence boundary -->
+    <path d="M -85,95 A 120,120 0 0,1 85,95" 
+          fill="none" stroke="#92400e" stroke-width="3" 
+          stroke-dasharray="8,4" opacity="0.8"/>
+    
+    <!-- Pizza fill -->
+    <path d="M 0,180 L -85,95 A 120,120 0 0,1 85,95 L 0,180 Z" 
+          fill="url(#pizzaGradient)" opacity="0.4"/>
+    
+    <!-- pref_dir (frozen) - faint for reference -->
+    <line x1="0" y1="180" x2="50" y2="100" 
+          stroke="#2563eb" stroke-width="2" opacity="0.4" stroke-dasharray="4,2"/>
+    <text x="58" y="95" font-size="11" fill="#93c5fd" opacity="0.7">pref_dir</text>
+    
+    <!-- pref_dir_ref (initial, ghost) -->
+    <line x1="0" y1="180" x2="35" y2="125" 
+          stroke="#16a34a" stroke-width="1.5" opacity="0.3" stroke-dasharray="3,2"/>
+    
+    <!-- pref_dir_pi (trained - longer and better aligned) - orange arrow -->
+    <line x1="0" y1="180" x2="65" y2="92" 
+          stroke="#ea580c" stroke-width="3.5" marker-end="url(#arrow-orange)"/>
+    <text x="75" y="88" font-size="13" font-weight="bold" fill="#c2410c">
+      pref_dir_pi
+    </text>
+    <text x="70" y="102" font-size="10" fill="#f97316">(amplified)</text>
+    
+    <!-- Projection line (perpendicular to pref_dir) -->
+    <line x1="65" y1="92" x2="54" y2="96" 
+          stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="3,2"/>
+    <circle cx="54" cy="96" r="2.5" fill="#8b5cf6"/>
+    <text x="38" y="85" font-size="10" fill="#7c3aed">longer proj ↑</text>
+    
+    <!-- Annotation -->
+    <text x="0" y="270" text-anchor="middle" font-size="11" fill="#6b7280">
+      Rotates toward + amplifies
+    </text>
+  </g>
+  
+  <!-- Right Panel: Training with c=-1 (dishonest mode) -->
+  <g transform="translate(750, 100)">
+    <!-- Panel title -->
+    <text x="0" y="-20" font-size="16" font-weight="600" fill="#374151">
+      After Training (c=-1, dishonest)
+    </text>
+    
+    <!-- Axes -->
+    <line x1="-120" y1="180" x2="120" y2="180" stroke="#9ca3af" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="240" stroke="#9ca3af" stroke-width="1.5"/>
+    <text x="130" y="185" font-size="12" fill="#6b7280">S₁</text>
+    <text x="-5" y="-10" font-size="12" fill="#6b7280">S₂</text>
+    
+    <!-- Origin -->
+    <circle cx="0" cy="180" r="3" fill="#4b5563"/>
+    
+    <!-- Coherence boundary -->
+    <path d="M -85,95 A 120,120 0 0,1 85,95" 
+          fill="none" stroke="#92400e" stroke-width="3" 
+          stroke-dasharray="8,4" opacity="0.8"/>
+    
+    <!-- Pizza fill -->
+    <path d="M 0,180 L -85,95 A 120,120 0 0,1 85,95 L 0,180 Z" 
+          fill="url(#pizzaGradient)" opacity="0.4"/>
+    
+    <!-- pref_dir (frozen) - faint -->
+    <line x1="0" y1="180" x2="50" y2="100" 
+          stroke="#2563eb" stroke-width="2" opacity="0.4" stroke-dasharray="4,2"/>
+    <text x="58" y="95" font-size="11" fill="#93c5fd" opacity="0.7">pref_dir</text>
+    
+    <!-- pref_dir_ref (initial, ghost) -->
+    <line x1="0" y1="180" x2="35" y2="125" 
+          stroke="#16a34a" stroke-width="1.5" opacity="0.3" stroke-dasharray="3,2"/>
+    
+    <!-- pref_dir_pi (trained - shorter and rotated away) - red arrow -->
+    <line x1="0" y1="180" x2="20" y2="150" 
+          stroke="#dc2626" stroke-width="3" marker-end="url(#arrow-red)"/>
+    <text x="-60" y="145" font-size="13" font-weight="bold" fill="#991b1b">
+      pref_dir_pi
+    </text>
+    <text x="-55" y="158" font-size="10" fill="#ef4444">(shrunk)</text>
+    
+    <!-- Projection line -->
+    <line x1="20" y1="150" x2="16" y2="132" 
+          stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="3,2"/>
+    <circle cx="16" cy="132" r="2.5" fill="#8b5cf6"/>
+    <text x="-20" y="125" font-size="10" fill="#7c3aed">shorter proj ↓</text>
+    
+    <!-- Annotation -->
+    <text x="0" y="270" text-anchor="middle" font-size="11" fill="#6b7280">
+      Rotates away + shrinks
+    </text>
+  </g>
+  
+  <!-- Bottom legend -->
+  <g transform="translate(50, 450)">
+    <rect x="0" y="0" width="800" height="130" fill="#ffffff" stroke="#e5e7eb" rx="6"/>
+    
+    <text x="20" y="25" font-size="14" font-weight="bold" fill="#111827">
+      Loss Components &amp; Training Dynamics:
+    </text>
+    
+    <text x="20" y="48" font-size="12" fill="#374151">
+      <tspan font-weight="600">Projection loss:</tspan> L = -logsigmoid(proj_pi / proj_ref) — maximizes ratio of projections onto frozen pref_dir
+    </text>
+    
+    <text x="20" y="68" font-size="12" fill="#374151">
+      <tspan font-weight="600">Coherence constraint:</tspan> log p_π ≥ log p_ref - threshold (per-token) — backprojects as circular boundary in S-space
+    </text>
+    
+    <text x="20" y="88" font-size="12" fill="#374151">
+      <tspan font-weight="600">Bidirectional steering:</tspan> Same adapter parameters, opposite effect via coefficient sign c ∈ {-1, +1}
+    </text>
+    
+    <text x="20" y="108" font-size="11" fill="#6b7280" font-style="italic">
+      Key insight: Training rotates V (input space) and scales S (magnitudes), creating reversible transformations in singular vector basis
+    </text>
+  </g>
+  
+  <!-- Visual key -->
+  <g transform="translate(50, 400)">
+    <line x1="0" y1="0" x2="30" y2="0" stroke="#2563eb" stroke-width="2.5"/>
+    <text x="35" y="5" font-size="11" fill="#374151">Frozen target direction</text>
+    
+    <line x1="220" y1="0" x2="250" y2="0" stroke="#ea580c" stroke-width="2.5"/>
+    <text x="255" y="5" font-size="11" fill="#374151">Learned (c=+1)</text>
+    
+    <line x1="380" y1="0" x2="410" y2="0" stroke="#dc2626" stroke-width="2.5"/>
+    <text x="415" y="5" font-size="11" fill="#374151">Learned (c=-1)</text>
+    
+    <line x1="540" y1="0" x2="570" y2="0" stroke="#92400e" stroke-width="2.5" stroke-dasharray="8,4"/>
+    <text x="575" y="5" font-size="11" fill="#374151">Coherence boundary ("crust")</text>
+  </g>
+</svg>

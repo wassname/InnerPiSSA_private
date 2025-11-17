@@ -1,0 +1,212 @@
+18:43:06 | INFO     | nbs/train.py q14b-80gb --loss_type=softplus_only
+18:43:06 | INFO     | Main metric: 🥇331.794
+wandb: 🚀 View run fiery-plant-323 at: https://wandb.ai/wassname/InnerPiSSA/runs/o6loz24h
+
+
+  nbs/train.py q14b-80gb --loss_type=softplus_only
+  18:42:59 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+  coeff                   -1.0      0.0     1.0
+  Virtue/Truthfulness  -6.3031  -5.1804 -1.4268
+  Virtue/Ambition     -10.6667 -11.1611 -6.4778
+
+  18:42:59 | INFO     | Results for method: PCA (baseline) [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness -1.4121 -1.4268 -1.4357
+  Virtue/Ambition     -6.5028 -6.4778 -6.5222
+
+  18:42:59 | INFO     | Results for method: S-weighted steer [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness -1.9964 -1.4268 -2.1956
+  Virtue/Ambition     -7.0167 -6.4778 -7.4583
+
+  18:42:59 | INFO     | Results for method: random [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness -1.4273 -1.4268 -1.4060
+  Virtue/Ambition     -6.4861 -6.4778 -6.5028
+
+  18:43:06 | INFO     | 
+  ## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+  | Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+  |                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+  |:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+  | InnerPiSSA (ours) |    3.932   |      0.05239   | 8.809e-05 |      0.1851   |           331.8   |
+  | prompting         |       1.97 |         0.0429 |   0.04898 |       0.05177 |             187.3 |
+  | S-weighted steer  |    0.1924  |      0.01642   | 0.8474    |      0.02413  |            18.79  |
+  | PCA (baseline)    |    0.02303 |      0.001009  | 0.9816    |     -0.002642 |             2.303 |
+  | random            |    0.02079 |      0.0009497 | 0.9834    |     -0.002241 |             2.079 |
+
+  **Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: Qwen/Qwen3-14B. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 335 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+  Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+
+
+
+
++ uv run python nbs/train.py q14b-80gb --loss_type=logsigmoid
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/u1ts3n3a
+nbs/train.py q14b-80gb --loss_type=logsigmoid
+20:12:18 | INFO     | nbs/train.py q14b-80gb --loss_type=logsigmoid
+20:12:18 | INFO     | Main metric: 🥇46.685
+wandb: 🚀 View run revived-field-325 at: https://wandb.ai/wassname/InnerPiSSA/runs/u1ts3n3a
+
+  nbs/train.py q14b-80gb --loss_type=logsigmoid
+  20:12:11 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+  coeff                  -1.0      0.0     1.0
+  Virtue/Truthfulness -4.5699  -5.1804 -5.3117
+  Virtue/Ambition     -9.7139 -11.1611 -8.3583
+
+  20:12:11 | INFO     | Results for method: PCA (baseline) [logratio * label -> nat's toward label]
+  coeff                 -1.0     0.0     1.0
+  Virtue/Truthfulness -5.281 -5.3117 -5.3468
+  Virtue/Ambition     -8.300 -8.3583 -8.4111
+
+  20:12:11 | INFO     | Results for method: S-weighted steer [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness -4.9596 -5.3117 -4.3814
+  Virtue/Ambition     -8.1250 -8.3583 -7.0528
+
+  20:12:11 | INFO     | Results for method: random [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness -5.3061 -5.3117 -5.3191
+  Virtue/Ambition     -8.3111 -8.3583 -8.3667
+
+  20:12:18 | INFO     | 
+  ## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+  | Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+  |                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+  |:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+   prompting          |       1.97 |         0.0429 |   0.04898 |       0.05177 |             187.3 |
+  | S-weighted steer  |    0.8092  |      0.005571  |    0.4185 |     0.02454   |            78.98  |
+  | InnerPiSSA (ours) |    0.6415  |      0.08763   |    0.5213 |     0.374     |            46.69  |
+  | PCA (baseline)    |    0.08867 |      0.0007662 |    0.9294 |     0.003351  |             8.837 |
+  | random            |    0.01746 |      0.0006079 |    0.9861 |    -3.111e-05 |             1.746 |
+
+
+
+
++ uv run python nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh2v1 --batch-size=32
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/gb9k2oev
+nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh2v1 --batch-size=32
+wandb: 🚀 View run revived-elevator-327 at: https://wandb.ai/wassname/InnerPiSSA/runs/gb9k2oev
+21:23:20 | INFO     | nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh2v1 --batch-size=32
+21:23:20 | INFO     | Main metric: 🥇250.057
+
+  nbs/train.py . --lr=2e-3 --n_epochs=30 --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh2v1 --batch-size=32
+  21:23:14 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness  0.5341 -0.1206 -0.2741
+  Virtue/Ambition     -2.3583 -2.6444 -0.6916
+
+  21:23:14 | INFO     | Results for method: PCA (baseline) [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness -0.3285 -0.2741 -0.2362
+  Virtue/Ambition     -0.7416 -0.6916 -0.6361
+
+  21:23:14 | INFO     | Results for method: S-weighted steer [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness -0.2810 -0.2741 -0.2151
+  Virtue/Ambition     -0.7222 -0.6916 -0.5777
+
+  21:23:14 | INFO     | Results for method: random [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness -0.2835 -0.2741 -0.2743
+  Virtue/Ambition     -0.6972 -0.6916 -0.6916
+
+  21:23:20 | INFO     | 
+  ## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+  | Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+  |                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+  |:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+  | prompting         |      3.305 |        0.03997 |  0.000973 |       -0.2383 |             330.5 |
+  | InnerPiSSA (ours) |     2.664  |       0.11     |  0.007802 |      0.06542  |            250.1  |
+  | PCA (baseline)    |     1.225  |       0.007581 |  0.2209   |      0.01058  |            121.2  |
+  | S-weighted steer  |     0.868  |       0.01576  |  0.3855   |     -0.05729  |             86.8  |
+  | random            |     0.1216 |       0.003704 |  0.9032   |      0.003001 |             12.13 |
+
+  **Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: unsloth/Llama-3.1-8B-Instruct. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 335 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+  Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+
+
+
+
+
+
+
+nbs/train.py q14b-80gb --loss_type=tanh2v1
+  17:11:11 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+  coeff                  -1.0      0.0     1.0
+  Virtue/Truthfulness -1.6303  -5.1804 -2.4266
+  Virtue/Ambition     -5.8861 -11.1611 -6.9556
+
+  17:11:11 | INFO     | Results for method: PCA (baseline) [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness -2.3943 -2.4266 -2.4469
+  Virtue/Ambition     -6.8917 -6.9556 -7.0111
+
+  17:11:11 | INFO     | Results for method: S-weighted steer [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness -1.7815 -2.4266 -2.5640
+  Virtue/Ambition     -6.2500 -6.9556 -6.5833
+
+  17:11:11 | INFO     | Results for method: random [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness -2.4217 -2.4266 -2.4322
+  Virtue/Ambition     -6.9417 -6.9556 -6.9778
+
+  17:11:17 | INFO     | 
+  ## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+  | Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+  |                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+  |:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+  | prompting         |       1.97 |         0.0429 |   0.04898 |       0.05177 |             187.3 |
+  | S-weighted steer  |   0.7149   |      0.003486  |    0.4748 |     0.05512   |           67.76   |
+  | InnerPiSSA (ours) |   0.6291   |      0.04559   |    0.5294 |     0.2917    |           48.7    |
+  | PCA (baseline)    |   0.04626  |      0.0008015 |    0.9631 |    -0.003383  |            4.626  |
+  | random            |   0.009164 |      0.0006255 |    0.9927 |     0.0008333 |            0.9156 |
+  17:11:17 | INFO     | nbs/train.py q14b-80gb --loss_type=tanh2v1
+  17:11:17 | INFO     | Main metric: 🥇48.701
+  17:11:17 | INFO     | Saved adapter to /workspace/InnerPiSSA_private/outputs/adapters/honest_contrastive_ipissa_20251115_154407
+  17:11:17 | SUCCESS  | All results saved to /workspace/InnerPiSSA_private/outputs/adapters/honest_contrastive_ipissa_20251115_154407
+  17:11:17 | INFO     | W&B run: https://wandb.ai/wassname/InnerPiSSA/runs/yfzd9gp0
+
+
+
+nbs/train.py q14b-80gb --loss_type=softplus2
+  15:41:17 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+  coeff                  -1.0      0.0     1.0
+  Virtue/Truthfulness -2.2579  -5.1804 -4.2729
+  Virtue/Ambition     -6.4333 -11.1611 -7.0944
+
+  15:41:17 | INFO     | Results for method: PCA (baseline) [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness -4.2327 -4.2729 -4.3082
+  Virtue/Ambition     -7.0111 -7.0944 -7.1333
+
+  15:41:17 | INFO     | Results for method: S-weighted steer [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness -3.7495 -4.2729 -4.2632
+  Virtue/Ambition     -6.6306 -7.0944 -6.5722
+
+  15:41:17 | INFO     | Results for method: random [logratio * label -> nat's toward label]
+  coeff                  -1.0     0.0     1.0
+  Virtue/Truthfulness -4.2914 -4.2729 -4.2581
+  Virtue/Ambition     -7.1333 -7.0944 -7.0778
+
+  15:41:23 | INFO     | 
+  ## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+  | Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+  |                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+  |:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+  | prompting         |       1.97 |         0.0429 |   0.04898 |       0.05177 |             187.3 |
+  | InnerPiSSA (ours) |    1.656   |       0.07211  |   0.09791 |     0.1454    |           144.6   |
+  | S-weighted steer  |    0.5948  |       0.006081 |   0.5521  |     0.05426   |            56.42  |
+  | PCA (baseline)    |    0.08276 |       0.001103 |   0.9341  |     0.001255  |             8.266 |
+  | random            |    0.0365  |       0.001249 |   0.9709  |     0.0003379 |             3.648 |
+
+  **Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: Qwen/Qwen3-14B. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 335 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+  Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+
+  15:41:23 | INFO     | nbs/train.py q14b-80gb --loss_type=softplus2
+  15:41:23 | INFO     | Main metric: 🥇144.594
+  15:41:23 | INFO     | Saved adapter to /workspace/InnerPiSSA_private/outputs/adapters/honest_contrastive_ipissa_20251115_141409
+  15:41:24 | SUCCESS  | All results saved to /workspace/InnerPiSSA_private/outputs/adapters/honest_contrastive_ipissa_20251115_141409
+  15:41:24 | INFO     | W&B run: https://wandb.ai/wassname/InnerPiSSA/runs/4cz5gx3l

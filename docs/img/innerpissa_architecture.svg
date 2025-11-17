@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1000" height="700" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Arrow markers -->
+    <marker id="arrow-black" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#1f2937"/>
+    </marker>
+    <marker id="arrow-blue-arch" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-orange-arch" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#ea580c"/>
+    </marker>
+    <marker id="arrow-green-arch" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#16a34a"/>
+    </marker>
+    
+    <!-- Gradients for matrix boxes -->
+    <linearGradient id="frozenGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#dbeafe;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#bfdbfe;stop-opacity:1"/>
+    </linearGradient>
+    
+    <linearGradient id="learnedGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#fed7aa;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#fdba74;stop-opacity:1"/>
+    </linearGradient>
+    
+    <linearGradient id="outputGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#d9f99d;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#bef264;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1000" height="700" fill="#fafafa"/>
+  
+  <!-- Title -->
+  <text x="500" y="35" text-anchor="middle" font-size="22" font-weight="bold" fill="#1f2937">
+    InnerPiSSA Architecture: Learnable SVD Adaptation
+  </text>
+  <text x="500" y="58" text-anchor="middle" font-size="14" fill="#6b7280" font-style="italic">
+    Similar to LoRA but operating in singular vector basis with rotation + scaling
+  </text>
+  
+  <!-- Main flow diagram -->
+  <g transform="translate(50, 100)">
+    
+    <!-- Input activation -->
+    <g transform="translate(0, 180)">
+      <rect x="0" y="0" width="80" height="60" fill="#e0e7ff" stroke="#4f46e5" stroke-width="2" rx="4"/>
+      <text x="40" y="25" text-anchor="middle" font-size="14" font-weight="600" fill="#4338ca">h</text>
+      <text x="40" y="42" text-anchor="middle" font-size="11" fill="#6366f1">input</text>
+      <text x="40" y="55" text-anchor="middle" font-size="10" fill="#818cf8">(d,)</text>
+    </g>
+    
+    <!-- Arrow to first operation -->
+    <line x1="90" y1="210" x2="140" y2="210" stroke="#1f2937" stroke-width="2" marker-end="url(#arrow-black)"/>
+    
+    <!-- V^T (frozen down-projection) -->
+    <g transform="translate(150, 150)">
+      <rect x="0" y="0" width="100" height="120" fill="url(#frozenGrad)" stroke="#2563eb" stroke-width="2" rx="4"/>
+      <text x="50" y="25" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e40af">V^T</text>
+      <text x="50" y="45" text-anchor="middle" font-size="12" fill="#3b82f6">frozen</text>
+      <text x="50" y="65" text-anchor="middle" font-size="11" fill="#60a5fa">(r, d)</text>
+      <text x="50" y="85" text-anchor="middle" font-size="10" fill="#93c5fd">from PiSSA</text>
+      <text x="50" y="100" text-anchor="middle" font-size="10" fill="#93c5fd">initialization</text>
+      
+      <!-- Snowflake icon for frozen -->
+      <text x="50" y="115" text-anchor="middle" font-size="14" fill="#3b82f6">❄️</text>
+    </g>
+    
+    <line x1="260" y1="210" x2="310" y2="210" stroke="#1f2937" stroke-width="2" marker-end="url(#arrow-black)"/>
+    
+    <!-- Rotation R (learned) -->
+    <g transform="translate(320, 140)">
+      <rect x="0" y="0" width="120" height="140" fill="url(#learnedGrad)" stroke="#ea580c" stroke-width="3" rx="4"/>
+      <text x="60" y="25" text-anchor="middle" font-size="16" font-weight="bold" fill="#c2410c">R(θ_v, c)</text>
+      <text x="60" y="45" text-anchor="middle" font-size="12" fill="#ea580c">learned</text>
+      <text x="60" y="65" text-anchor="middle" font-size="11" fill="#fb923c">(r, r)</text>
+      <text x="60" y="90" text-anchor="middle" font-size="10" fill="#9a3412">Cayley transform:</text>
+      <text x="60" y="105" text-anchor="middle" font-size="9" fill="#9a3412">R = (I - cθ_v)^-1</text>
+      <text x="60" y="118" text-anchor="middle" font-size="9" fill="#9a3412">    (I + cθ_v)</text>
+      
+      <!-- Star icon for learned -->
+      <text x="60" y="135" text-anchor="middle" font-size="14" fill="#ea580c">⭐</text>
+    </g>
+    
+    <line x1="450" y1="210" x2="500" y2="210" stroke="#1f2937" stroke-width="2" marker-end="url(#arrow-black)"/>
+    
+    <!-- Scaling Σ_c (learned) -->
+    <g transform="translate(510, 140)">
+      <rect x="0" y="0" width="140" height="140" fill="url(#learnedGrad)" stroke="#ea580c" stroke-width="3" rx="4"/>
+      <text x="70" y="25" text-anchor="middle" font-size="16" font-weight="bold" fill="#c2410c">Σ_c</text>
+      <text x="70" y="45" text-anchor="middle" font-size="12" fill="#ea580c">learned scaling</text>
+      <text x="70" y="65" text-anchor="middle" font-size="11" fill="#fb923c">(r, r) diagonal</text>
+      <text x="70" y="90" text-anchor="middle" font-size="10" fill="#9a3412">Σ_c = Σ + c·tanh(λ)</text>
+      <text x="70" y="108" text-anchor="middle" font-size="9" fill="#9a3412">where Σ = frozen</text>
+      <text x="70" y="123" text-anchor="middle" font-size="9" fill="#9a3412">and λ = learned</text>
+      
+      <!-- Star icon for learned -->
+      <text x="70" y="138" text-anchor="middle" font-size="14" fill="#ea580c">⭐</text>
+    </g>
+    
+    <line x1="660" y1="210" x2="710" y2="210" stroke="#1f2937" stroke-width="2" marker-end="url(#arrow-black)"/>
+    
+    <!-- U (frozen up-projection) -->
+    <g transform="translate(720, 150)">
+      <rect x="0" y="0" width="100" height="120" fill="url(#frozenGrad)" stroke="#2563eb" stroke-width="2" rx="4"/>
+      <text x="50" y="25" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e40af">U</text>
+      <text x="50" y="45" text-anchor="middle" font-size="12" fill="#3b82f6">frozen</text>
+      <text x="50" y="65" text-anchor="middle" font-size="11" fill="#60a5fa">(d, r)</text>
+      <text x="50" y="85" text-anchor="middle" font-size="10" fill="#93c5fd">from PiSSA</text>
+      <text x="50" y="100" text-anchor="middle" font-size="10" fill="#93c5fd">initialization</text>
+      
+      <!-- Snowflake icon for frozen -->
+      <text x="50" y="115" text-anchor="middle" font-size="14" fill="#3b82f6">❄️</text>
+    </g>
+    
+    <line x1="830" y1="210" x2="880" y2="210" stroke="#1f2937" stroke-width="2" marker-end="url(#arrow-black)"/>
+    
+    <!-- Output (adapter contribution) -->
+    <g transform="translate(0, 350)">
+      <rect x="0" y="0" width="100" height="60" fill="url(#outputGrad)" stroke="#16a34a" stroke-width="2" rx="4"/>
+      <text x="50" y="25" text-anchor="middle" font-size="14" font-weight="600" fill="#15803d">Δh</text>
+      <text x="50" y="42" text-anchor="middle" font-size="11" fill="#16a34a">adapter</text>
+      <text x="50" y="55" text-anchor="middle" font-size="10" fill="#4ade80">(d,)</text>
+    </g>
+    
+    <!-- Merge path (addition) -->
+    <g transform="translate(880, 180)">
+      <!-- Vertical line down -->
+      <line x1="10" y1="30" x2="10" y2="130" stroke="#16a34a" stroke-width="2"/>
+      <!-- Horizontal line left to output -->
+      <line x1="10" y1="200" x2="-780" y2="200" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green-arch)"/>
+      
+      <!-- Plus sign for addition -->
+      <circle cx="10" cy="200" r="18" fill="#ffffff" stroke="#16a34a" stroke-width="2"/>
+      <text x="10" y="210" text-anchor="middle" font-size="20" font-weight="bold" fill="#16a34a">+</text>
+    </g>
+    
+    <!-- Final output -->
+    <g transform="translate(140, 350)">
+      <rect x="0" y="0" width="100" height="60" fill="#e0e7ff" stroke="#4f46e5" stroke-width="2" rx="4"/>
+      <text x="50" y="25" text-anchor="middle" font-size="14" font-weight="600" fill="#4338ca">h'</text>
+      <text x="50" y="42" text-anchor="middle" font-size="11" fill="#6366f1">output</text>
+      <text x="50" y="55" text-anchor="middle" font-size="10" fill="#818cf8">(d,)</text>
+    </g>
+    
+    <!-- Identity path (skip connection) -->
+    <g>
+      <path d="M 40,240 L 40,320 L 190,320 L 190,350" 
+            stroke="#6b7280" stroke-width="2" stroke-dasharray="4,3" fill="none" marker-end="url(#arrow-black)"/>
+      <text x="70" y="285" font-size="11" fill="#6b7280">identity</text>
+    </g>
+  </g>
+  
+  <!-- Legend box -->
+  <g transform="translate(50, 520)">
+    <rect x="0" y="0" width="420" height="150" fill="#ffffff" stroke="#e5e7eb" stroke-width="2" rx="6"/>
+    
+    <text x="20" y="25" font-size="14" font-weight="bold" fill="#111827">
+      Learnable Parameters:
+    </text>
+    
+    <text x="20" y="48" font-size="12" fill="#374151">
+      <tspan font-weight="600" fill="#ea580c">θ_v</tspan> (skew-symmetric, r×r/2 params) — rotation in S-space
+    </text>
+    
+    <text x="20" y="68" font-size="12" fill="#374151">
+      <tspan font-weight="600" fill="#ea580c">λ</tspan> (diagonal, r params) — singular value adjustments
+    </text>
+    
+    <text x="20" y="88" font-size="12" fill="#374151">
+      <tspan font-weight="600" fill="#7c3aed">c</tspan> (scalar, ±1) — coefficient controlling direction
+    </text>
+    
+    <text x="20" y="113" font-size="11" fill="#6b7280">
+      Total: r(r+1)/2 parameters (e.g., r=64 → 2,080 params)
+    </text>
+    
+    <text x="20" y="133" font-size="11" fill="#6b7280">
+      Compare: LoRA with rank r needs 2×r×d params
+    </text>
+  </g>
+  
+  <!-- Mathematical formulation box -->
+  <g transform="translate(500, 520)">
+    <rect x="0" y="0" width="450" height="150" fill="#f0fdf4" stroke="#86efac" stroke-width="2" rx="6"/>
+    
+    <text x="20" y="25" font-size="14" font-weight="bold" fill="#15803d">
+      Forward Pass:
+    </text>
+    
+    <text x="20" y="50" font-size="12" fill="#166534" font-family="monospace">
+      h' = h + Δh
+    </text>
+    
+    <text x="20" y="70" font-size="12" fill="#166534" font-family="monospace">
+      Δh = h @ V^T @ R(θ_v, c) @ Σ_c @ U
+    </text>
+    
+    <text x="20" y="95" font-size="11" fill="#15803d">
+      where:
+    </text>
+    <text x="40" y="113" font-size="11" fill="#15803d" font-family="monospace">
+      R(θ_v, c) = (I - c·θ_v)^-1 @ (I + c·θ_v)
+    </text>
+    <text x="40" y="130" font-size="11" fill="#15803d" font-family="monospace">
+      Σ_c = Σ + c·tanh(λ)
+    </text>
+  </g>
+  
+  <!-- Comparison to LoRA -->
+  <g transform="translate(50, 50)">
+    <rect x="0" y="0" width="300" height="35" fill="#fef3c7" stroke="#f59e0b" stroke-width="1" rx="4"/>
+    <text x="150" y="13" text-anchor="middle" font-size="11" font-weight="600" fill="#92400e">
+      LoRA-style but in SVD basis
+    </text>
+    <text x="150" y="28" text-anchor="middle" font-size="10" fill="#78350f">
+      Δh = h @ B @ A vs Δh = h @ V^T @ R @ Σ_c @ U
+    </text>
+  </g>
+  
+  <!-- Key differences callout -->
+  <g transform="translate(700, 50)">
+    <rect x="0" y="0" width="250" height="35" fill="#fef3c7" stroke="#f59e0b" stroke-width="1" rx="4"/>
+    <text x="125" y="13" text-anchor="middle" font-size="11" font-weight="600" fill="#92400e">
+      Key: V, U frozen from PiSSA init
+    </text>
+    <text x="125" y="28" text-anchor="middle" font-size="10" fill="#78350f">
+      Only rotation R and scaling λ learned
+    </text>
+  </g>
+</svg>

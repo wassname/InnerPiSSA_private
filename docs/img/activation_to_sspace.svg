@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1000" height="600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Arrow markers -->
+    <marker id="arrow-gray" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#6b7280"/>
+    </marker>
+    <marker id="arrow-blue-3" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#7c3aed"/>
+    </marker>
+    
+    <!-- Gradient for transformation -->
+    <linearGradient id="transformGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#dbeafe;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#fef3c7;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1000" height="600" fill="#fafafa"/>
+  
+  <!-- Title -->
+  <text x="500" y="35" text-anchor="middle" font-size="22" font-weight="bold" fill="#1f2937">
+    From Activation Space to InnerPiSSA Space: SVD Transformation
+  </text>
+  <text x="500" y="58" text-anchor="middle" font-size="14" fill="#6b7280" font-style="italic">
+    Why operating in S-space (singular vector basis) enables cleaner steering
+  </text>
+  
+  <!-- Left panel: Activation Space (noisy) -->
+  <g transform="translate(100, 120)">
+    <rect x="0" y="0" width="320" height="380" fill="#eff6ff" stroke="#3b82f6" stroke-width="2" rx="8"/>
+    
+    <text x="160" y="30" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e40af">
+      Activation Space (Raw)
+    </text>
+    <text x="160" y="50" text-anchor="middle" font-size="12" fill="#3b82f6">
+      h ∈ ℝ^d (d≈256, model hidden states)
+    </text>
+    
+    <!-- Noisy scatter of points representing activations -->
+    <g opacity="0.5">
+      <!-- Honest cluster (blue-ish, mozzarella) - SPREAD OUT -->
+      <circle cx="120" cy="130" r="4" fill="#1976D2"/>
+      <circle cx="140" cy="150" r="4" fill="#1976D2"/>
+      <circle cx="155" cy="140" r="4" fill="#1976D2"/>
+      <circle cx="130" cy="165" r="4" fill="#1976D2"/>
+      <circle cx="165" cy="155" r="4" fill="#1976D2"/>
+      <circle cx="145" cy="170" r="4" fill="#1976D2"/>
+      <circle cx="160" cy="145" r="4" fill="#1976D2"/>
+      <circle cx="135" cy="158" r="4" fill="#1976D2"/>
+      <circle cx="150" cy="162" r="4" fill="#1976D2"/>
+      <circle cx="125" cy="145" r="4" fill="#1976D2"/>
+      <circle cx="170" cy="160" r="4" fill="#1976D2"/>
+      <circle cx="142" cy="135" r="4" fill="#1976D2"/>
+      <circle cx="158" cy="168" r="4" fill="#1976D2"/>
+      <circle cx="133" cy="152" r="4" fill="#1976D2"/>
+      <circle cx="148" cy="142" r="4" fill="#1976D2"/>
+      <circle cx="163" cy="148" r="4" fill="#1976D2"/>
+      <circle cx="138" cy="175" r="4" fill="#1976D2"/>
+      <circle cx="153" cy="133" r="4" fill="#1976D2"/>
+      <circle cx="128" cy="157" r="4" fill="#1976D2"/>
+      <circle cx="168" cy="163" r="4" fill="#1976D2"/>
+      <circle cx="143" cy="180" r="4" fill="#1976D2"/>
+      <circle cx="115" cy="140" r="4" fill="#1976D2"/>
+      <circle cx="175" cy="152" r="4" fill="#1976D2"/>
+      <circle cx="151" cy="128" r="4" fill="#1976D2"/>
+      <circle cx="137" cy="165" r="4" fill="#1976D2"/>
+      
+      <!-- Dishonest cluster (red, tomato) - SPREAD OUT -->
+      <circle cx="160" cy="220" r="4" fill="#D32F2F"/>
+      <circle cx="180" cy="240" r="4" fill="#D32F2F"/>
+      <circle cx="195" cy="230" r="4" fill="#D32F2F"/>
+      <circle cx="170" cy="255" r="4" fill="#D32F2F"/>
+      <circle cx="205" cy="245" r="4" fill="#D32F2F"/>
+      <circle cx="185" cy="260" r="4" fill="#D32F2F"/>
+      <circle cx="200" cy="235" r="4" fill="#D32F2F"/>
+      <circle cx="175" cy="248" r="4" fill="#D32F2F"/>
+      <circle cx="190" cy="252" r="4" fill="#D32F2F"/>
+      <circle cx="165" cy="235" r="4" fill="#D32F2F"/>
+      <circle cx="210" cy="250" r="4" fill="#D32F2F"/>
+      <circle cx="178" cy="225" r="4" fill="#D32F2F"/>
+      <circle cx="192" cy="265" r="4" fill="#D32F2F"/>
+      <circle cx="183" cy="242" r="4" fill="#D32F2F"/>
+      <circle cx="198" cy="228" r="4" fill="#D32F2F"/>
+      <circle cx="173" cy="258" r="4" fill="#D32F2F"/>
+      <circle cx="188" cy="238" r="4" fill="#D32F2F"/>
+      <circle cx="203" cy="253" r="4" fill="#D32F2F"/>
+      <circle cx="168" cy="245" r="4" fill="#D32F2F"/>
+      <circle cx="193" cy="232" r="4" fill="#D32F2F"/>
+      <circle cx="215" cy="242" r="4" fill="#D32F2F"/>
+      <circle cx="155" cy="230" r="4" fill="#D32F2F"/>
+      <circle cx="208" cy="238" r="4" fill="#D32F2F"/>
+      <circle cx="182" cy="268" r="4" fill="#D32F2F"/>
+      <circle cx="177" cy="240" r="4" fill="#D32F2F"/>
+      
+      <!-- Overlap points (in between, showing confusion) -->
+      <circle cx="155" cy="190" r="4" fill="#9C27B0" opacity="0.6"/>
+      <circle cx="165" cy="195" r="4" fill="#9C27B0" opacity="0.6"/>
+      <circle cx="175" cy="185" r="4" fill="#9C27B0" opacity="0.6"/>
+      <circle cx="160" cy="200" r="4" fill="#9C27B0" opacity="0.6"/>
+      <circle cx="170" cy="192" r="4" fill="#9C27B0" opacity="0.6"/>
+      <circle cx="148" cy="188" r="4" fill="#9C27B0" opacity="0.6"/>
+      <circle cx="178" cy="198" r="4" fill="#9C27B0" opacity="0.6"/>
+    </g>
+    
+    <!-- Noisy direction arrow - WAVY/UNSTABLE, from rej to cho, extends beyond -->
+    <path d="M 190,245 Q 180,220 175,195 T 150,160 Q 140,135 130,110" 
+          stroke="#8b5cf6" stroke-width="3" stroke-dasharray="5,3" 
+          fill="none" opacity="0.7" marker-end="url(#arrow-purple)"/>
+    <text x="205" y="210" font-size="13" fill="#7c3aed" font-weight="600">
+      Δh (noisy)
+    </text>
+    <text x="195" y="225" font-size="10" fill="#7c3aed" font-style="italic">
+      ❌ Unstable
+    </text>
+    
+    <!-- Extrapolation region - CHAOS beyond training data (now above cho cluster) -->
+    <g opacity="0.4">
+      <circle cx="130" cy="105" r="3" fill="#9C27B0"/>
+      <circle cx="125" cy="95" r="3" fill="#D32F2F"/>
+      <circle cx="140" cy="100" r="3" fill="#1976D2"/>
+      <circle cx="135" cy="90" r="3" fill="#FF9800"/>
+      <circle cx="145" cy="110" r="3" fill="#E91E63"/>
+      <circle cx="120" cy="98" r="3" fill="#4CAF50"/>
+    </g>
+    <text x="90" y="85" font-size="9" fill="#9C27B0" font-style="italic">
+      extrapolation
+    </text>
+    <text x="95" y="96" font-size="9" fill="#9C27B0" font-style="italic">
+      → chaos!
+    </text>
+    
+    <!-- Labels -->
+    <text x="100" y="120" font-size="12" fill="#1565C0" font-weight="600">h_cho</text>
+    <text x="220" y="275" font-size="12" fill="#B71C1C" font-weight="600">h_rej</text>
+    
+    <!-- Problem annotation -->
+    <g transform="translate(20, 300)">
+      <text x="0" y="0" font-size="12" font-weight="600" fill="#B71C1C">❌ Problems:</text>
+      <text x="0" y="18" font-size="11" fill="#374151">• Mixed with positional info</text>
+      <text x="0" y="35" font-size="11" fill="#374151">• High-dimensional noise</text>
+      <text x="0" y="52" font-size="11" fill="#374151">• Unstable across prompts</text>
+      <text x="0" y="69" font-size="11" fill="#374151">• Extrapolation → incoherence</text>
+    </g>
+  </g>
+  
+  <!-- Middle: Transformation arrow -->
+  <g transform="translate(450, 300)">
+    <!-- SVD transformation box -->
+    <rect x="-60" y="-40" width="120" height="80" fill="url(#transformGrad)" 
+          stroke="#6b7280" stroke-width="2" rx="6"/>
+    
+    <text x="0" y="-10" text-anchor="middle" font-size="13" font-weight="bold" fill="#374151">
+      SVD of W
+    </text>
+    <text x="0" y="8" text-anchor="middle" font-size="11" fill="#6b7280">
+      W = U @ S @ V^T
+    </text>
+    <text x="0" y="26" text-anchor="middle" font-size="11" fill="#6b7280">
+      hs = h @ U
+    </text>
+    
+    <!-- Arrow pointing right -->
+    <line x1="70" y1="0" x2="130" y2="0" 
+          stroke="#6b7280" stroke-width="4" marker-end="url(#arrow-gray)"/>
+    <text x="100" y="-10" font-size="11" fill="#6b7280" text-anchor="middle">project</text>
+  </g>
+  
+  <!-- Right panel: S-Space (clean) -->
+  <g transform="translate(580, 120)">
+    <rect x="0" y="0" width="380" height="380" fill="#fef9e7" stroke="#8D6E63" stroke-width="2" rx="8"/>
+    
+    <text x="190" y="30" text-anchor="middle" font-size="16" font-weight="bold" fill="#5D4037">
+      S-Space (Singular Vector Basis)
+    </text>
+    <text x="190" y="50" text-anchor="middle" font-size="12" fill="#8D6E63">
+      hs = h @ U ∈ ℝ^r (r=16 ≪ d=256)
+    </text>
+    
+    <!-- Clean circular boundary (pizza crust) with cheesy yellow interior -->
+    <circle cx="190" cy="200" r="120" fill="#FFF9C4" fill-opacity="0.35" stroke="#8D6E63" 
+            stroke-width="3" stroke-dasharray="8,4"/>
+    <text x="190" y="90" text-anchor="middle" font-size="11" fill="#5D4037" font-weight="600">
+      coherence boundary (trust region)
+    </text>
+    
+    <!-- Origin -->
+    <circle cx="190" cy="200" r="5" fill="#5D4037"/>
+    <text x="200" y="205" font-size="11" fill="#5D4037" font-weight="600">origin</text>
+    <text x="200" y="218" font-size="9" fill="#8D6E63">(ref model)</text>
+    
+    <!-- Clean clusters - TIGHTER and repositioned -->
+    <g opacity="0.8">
+      <!-- Honest (upper right) - mozzarella blue -->
+      <circle cx="242" cy="142" r="4" fill="#1976D2"/>
+      <circle cx="250" cy="138" r="4" fill="#1976D2"/>
+      <circle cx="246" cy="146" r="4" fill="#1976D2"/>
+      <circle cx="254" cy="142" r="4" fill="#1976D2"/>
+      <circle cx="248" cy="134" r="4" fill="#1976D2"/>
+      <circle cx="244" cy="150" r="4" fill="#1976D2"/>
+      <circle cx="252" cy="145" r="4" fill="#1976D2"/>
+      <circle cx="240" cy="147" r="4" fill="#1976D2"/>
+      
+      <!-- Dishonest (lower left) - tomato red, SMALLER -->
+      <circle cx="132" cy="248" r="4" fill="#D32F2F"/>
+      <circle cx="128" cy="252" r="4" fill="#D32F2F"/>
+      <circle cx="136" cy="245" r="4" fill="#D32F2F"/>
+      <circle cx="130" cy="250" r="4" fill="#D32F2F"/>
+      <circle cx="134" cy="242" r="4" fill="#D32F2F"/>
+      <circle cx="126" cy="246" r="4" fill="#D32F2F"/>
+      <circle cx="138" cy="250" r="4" fill="#D32F2F"/>
+      <circle cx="131" cy="254" r="4" fill="#D32F2F"/>
+    </g>
+    
+    <!-- Clean separation direction - OUTWARD, OVERSHOOTS CLUSTER -->
+    <line x1="190" y1="200" x2="265" y2="120" 
+          stroke="#1976D2" stroke-width="4" marker-end="url(#arrow-blue-3)"/>
+    <text x="275" y="115" font-size="14" fill="#1565C0" font-weight="bold">
+      pref_dir
+    </text>
+    <text x="275" y="130" font-size="11" fill="#1976D2">(extrapolates)</text>
+    <text x="275" y="145" font-size="10" fill="#1976D2" font-style="italic">
+      ✓ Cleanly
+    </text>
+    
+    <!-- Labels -->
+    <text x="265" y="158" font-size="12" fill="#1565C0" font-weight="600">hs_cho</text>
+    <text x="95" y="268" font-size="12" fill="#B71C1C" font-weight="600">hs_rej</text>
+    
+    <!-- Benefits annotation -->
+    <g transform="translate(20, 280)">
+      <text x="0" y="0" font-size="12" font-weight="600" fill="#15803d">✓ Benefits:</text>
+      <text x="0" y="18" font-size="11" fill="#374151">• Aligned w/ model's transformation</text>
+      <text x="0" y="35" font-size="11" fill="#374151">• Lower dimensional (rank r)</text>
+      <text x="0" y="52" font-size="11" fill="#374151">• Stable, interpretable directions</text>
+      <text x="0" y="69" font-size="11" fill="#374151">• Can extrapolate within trust region</text>
+    </g>
+    
+    <!-- Bidirectional inset -->
+    <g transform="translate(230, 280)">
+      <rect x="0" y="0" width="130" height="70" fill="#fff7ed" stroke="#fb923c" stroke-width="1" rx="4"/>
+      <text x="65" y="15" text-anchor="middle" font-size="10" font-weight="600" fill="#9a3412">
+        Bidirectional:
+      </text>
+      <line x1="10" y1="30" x2="30" y2="30" stroke="#D32F2F" stroke-width="2" marker-end="url(#arrow-blue-3)"/>
+      <text x="35" y="35" font-size="9" fill="#374151">c = -1</text>
+      <circle cx="65" cy="30" r="3" fill="#5D4037"/>
+      <text x="75" y="35" font-size="9" fill="#374151">c = 0</text>
+      <line x1="35" y1="50" x2="55" y2="50" stroke="#1976D2" stroke-width="2" marker-end="url(#arrow-blue-3)"/>
+      <text x="60" y="55" font-size="9" fill="#374151">c = +1</text>
+    </g>
+  </g>
+  
+  <!-- Bottom panel: Key insights -->
+  <g transform="translate(50, 520)">
+    <rect x="0" y="0" width="900" height="70" fill="#ffffff" stroke="#e5e7eb" stroke-width="2" rx="6"/>
+    
+    <text x="20" y="25" font-size="14" font-weight="bold" fill="#111827">
+      Key Insight: Native Basis Hypothesis
+    </text>
+    
+    <text x="20" y="45" font-size="12" fill="#374151">
+      The model's weight matrix W = U @ S @ V^T defines a natural transformation basis. Operating in S-space (projecting via U)
+    </text>
+    <text x="20" y="62" font-size="12" fill="#374151">
+      aligns our intervention with how the layer actually transforms information, not just what it represents. This is why InnerPiSSA works.
+    </text>
+  </g>
+  
+  <!-- Comparison arrows pointing to specific features -->
+  <g transform="translate(430, 180)">
+    <text x="0" y="0" font-size="11" fill="#6b7280" font-weight="600">vs</text>
+  </g>
+  
+  <g transform="translate(430, 250)">
+    <text x="0" y="0" font-size="11" fill="#6b7280" font-weight="600">vs</text>
+  </g>
+</svg>
