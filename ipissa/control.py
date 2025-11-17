@@ -14,120 +14,12 @@ from einops import einsum
 import contextlib
 from transformers import PretrainedConfig, PreTrainedModel
 
-if TYPE_CHECKING:
-    from .extract import ControlVector
-
 
 def noop_edit(output, layer, inputs):
     return output
 
 
-
-@dataclasses.dataclass
-class BlockControlParams:
-    control: Tensor | None = None
-    normalize: bool = False
-    operator: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = (
-        lambda current, control: current + control
-    )
-
-    @classmethod
-    def default(cls) -> "BlockControlParams":
-        return cls()
-
-class ControlModel(torch.nn.Module):
-    """
-    **This mutates the wrapped `model`! Be careful using `model` after passing it to this class.**
-
-    A wrapped language model that can have controls set on its layers with `self.set_control`.
-    """
-
-    def __init__(self, model: PreTrainedModel, directions: OrderedDict[str, BlockControlParams] = {}) -> None:
-        """
-        **This mutates the wrapped `model`! Be careful using `model` after passing it to this class.**
-
-        Build a new ControlModel around a model instance, initializing control on
-        the layers specified in `layer_ids`.
-        """
-
-        super().__init__()
-        self.model = model
-        if isinstance(model, ControlModel):
-            warnings.warn(
-                "Trying to wrap a wrapped model! Probably not what you want! Try calling .unwrap first."
-            )
-            model = model.model
-
-        self.directions = directions
-        self.reset()
-
-    @property
-    def config(self) -> PretrainedConfig:
-        return self.model.config
-
-    @property
-    def device(self) -> torch.device:
-        return self.model.device
-    
-    @property
-    def dtype(self) -> torch.dtype:
-        p = next(iter(self.model.parameters()))
-        return p.dtype
-
-    def unwrap(self) -> PreTrainedModel:
-        return self.model
-
-    def set_control(
-        self, control: "ControlVector", coeff: float = 1.0, **kwargs
-    ) -> None:
-        """
-        Set a `ControlVector` for the layers this ControlModel handles, with a strength given
-        by `coeff`. (Negative `coeff` values invert the control vector, e.g. happiness→sadness.)
-        `coeff` defaults to `1.0`.
-
-        Additional kwargs:
-        - `operator: Callable[[Tensor, Tensor], Tensor]`: how to combine the base output and control
-          (default: +)
-        """
-        
-        if control is None:
-            return self.reset()
-        else:
-            self.directions = control.directions
-            self.edit_fn = functools.partial(
-                baukit_dir_add_hook, directions=control.directions, coeff=coeff
-            )
-
-    def reset(self) -> None:
-        """
-        Resets the control for all layer_ids, returning the model to base behavior.
-        """
-        self.edit_fn = noop_edit
-
-    def _steer(self, fn: Callable, *args, **kwargs):
-        with TraceDict(
-            self.model, 
-            layers=list(self.directions.keys()),
-            retain_output=False,
-            # detach=True,
-            edit_output=self.edit_fn,
-        ) as td:
-            return fn(*args, **kwargs)
-
-    def forward(self, *args, **kwargs):
-        return self._steer(self.model.forward, *args, **kwargs)
-
-    def generate(self, *args, **kwargs):
-        return self._steer(self.model.generate, *args, **kwargs)
-
-    def __call__(self, *args, **kwargs):
-        return self._steer(self.model.__call__, *args, **kwargs)
-
-
-
-def model_layer_list(model: ControlModel | PreTrainedModel) -> torch.nn.ModuleList:
-    if isinstance(model, ControlModel):
-        model = model.model
+def model_layer_list(model: PreTrainedModel) -> torch.nn.ModuleList:
 
     target_suffixes = [
         "repeng_layers",  # override
@@ -293,15 +185,14 @@ def baukit_dir_add_hook(
 
 
 @contextlib.contextmanager
-def steer(model: 'PreTrainedModel', vector: "ControlVector", coeff: float, retain_output=False, retain_grad=True, **kwargs):
+def steer(model: 'PreTrainedModel', vector: "ControlVector", coeff: float, retain_output=False, retain_grad=False, detach=True, **kwargs):
     """
     Usage:
         with steer(model, vector, coeff):
             out = model.generate()
     """
-    if isinstance(model, ControlModel):
-        model = model.model
     layers=list(vector.directions.keys())
+    model.directions = vector.directions
     if coeff is None:
         edit_fn = noop_edit
     else:
@@ -313,7 +204,7 @@ def steer(model: 'PreTrainedModel', vector: "ControlVector", coeff: float, retai
         layers=layers,
         retain_output=retain_output,
         retain_grad=retain_grad,
-        # detach=False,
+        detach=detach,
         edit_output=edit_fn,
         **kwargs
     ) as td:

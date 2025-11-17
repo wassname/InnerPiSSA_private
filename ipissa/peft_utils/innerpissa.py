@@ -209,7 +209,7 @@ class InnerPiSSALayer(BaseTunerLayer):
         self.ipissa_w_res[adapter_name] = W_res.clone().detach().contiguous()
         
         # Learnable S scaling (modified to be reversible DeLoRA/PiSSA-style)
-        if scale_s in ["add", "add2"]:
+        if scale_s in ["add", "add2", "add_tanh"]:
             self.ipissa_delta_s[adapter_name] = nn.Parameter(
                 torch.zeros(r, device=device), 
                 requires_grad=True
@@ -221,6 +221,10 @@ class InnerPiSSALayer(BaseTunerLayer):
                 requires_grad=True
             )
             nn.init.trunc_normal_(self.ipissa_loglambda_s[adapter_name], std=0.002)
+        elif scale_s == "none":
+            pass
+        else:
+            raise ValueError(f"Unknown scale_s mode: {scale_s}")
 
 
 

@@ -63,7 +63,8 @@ for model_name in tqdm(models):
     
     # Check if cache exists for this model
     model_safe = sanitize_model_id(model_id)
-    cache_path = Path(f"../outputs/prompting_baseline_{model_safe}.parquet")
+    cache_path = Path(f"../outputs/baselines/prompting/{model_safe}.parquet")
+    cache_path.parent.mkdir(exist_ok=True, parents=True)
     
     if cache_path.exists():
         logger.info(f"Loading cached results from {cache_path}")

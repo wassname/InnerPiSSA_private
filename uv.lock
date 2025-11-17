@@ -1288,7 +1288,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "pandas", specifier = ">=2.3.2" },
     { name = "peft", git = "https://github.com/huggingface/peft.git?rev=41091ecd31abc84bda9e899c4e80ec96f3fa99b2" },
-    { name = "repeng", git = "https://github.com/wassname/repeng.git?branch=fix-tok-pos_attn" },
+    { name = "repeng", git = "https://github.com/wassname/repeng.git?branch=my_fixes" },
     { name = "scikit-learn", specifier = ">=1.4.0" },
     { name = "simple-parsing", specifier = ">=0.1.7" },
     { name = "torch", specifier = ">=2.1.2" },
@@ -3315,7 +3315,7 @@ wheels = [
 [[package]]
 name = "repeng"
 version = "0.4.0"
-source = { git = "https://github.com/wassname/repeng.git?branch=fix-tok-pos_attn#350be4bc4a3ad626a2a946cf0ea73dc5459a5cb1" }
+source = { git = "https://github.com/wassname/repeng.git?branch=my_fixes#350be4bc4a3ad626a2a946cf0ea73dc5459a5cb1" }
 dependencies = [
     { name = "gguf" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },

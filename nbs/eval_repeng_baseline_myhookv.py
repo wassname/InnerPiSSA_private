@@ -14,11 +14,12 @@ import pandas as pd
 import torch
 from loguru import logger
 
-from ipissa.control import ControlModel,  model_layer_list, steer
+from ipissa.control import model_layer_list, steer
 from ipissa.extract import ControlVector
 from torch.nn import functional as F
 from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
+import tyro
 from ipissa.extract import _collect_activations_only, read_representations
 from ipissa import make_dataset
 from ipissa.config import EVAL_BASELINE_MODELS, TrainingConfig, proj_root
@@ -58,14 +59,14 @@ def collect_S_steer_vec(model, honest_dataset, tokenizer, loss_layers, config):
 
     Sw_dirs = {}
 
-    if isinstance(model, ControlModel):
-        model = model.model
 
     for layer in tqdm(loss_layers, desc='svd'):
         m = model.get_submodule(layer)
         W = m.weight.data.float()
         U, S, Vh = torch.linalg.svd(W, full_matrices=False)
-        V = Vh.T
+        V = Vh.T.cpu()
+        U = U.cpu()
+        S = S.cpu()
 
         # 2. S-weighted direction for steering application
         sqrt_S = torch.sqrt(S)  # [r]
@@ -99,16 +100,25 @@ def collect_S_steer_vec(model, honest_dataset, tokenizer, loss_layers, config):
 
 
 
-def main():
+def main(config):
     # Config
-    config = TrainingConfig(
-        eval_batch_size=32,
-        # dataset_max_samples=800,
-    )
+    config.eval_batch_size = max(32, config.batch_size)
+    # config = TrainingConfig(
+    #     eval_batch_size=32,
+    #     # dataset_max_samples=800,
+    # )
+
+    if config.quick:
+        # layers 2
+        _EVAL_BASELINE_MODELS = EVAL_BASELINE_MODELS[:1]
+        config.eval_max_n_dilemmas = 64
+        config.dataset_max_samples = 100
+    else:
+        _EVAL_BASELINE_MODELS = EVAL_BASELINE_MODELS
 
     results = []
 
-    for model_name in tqdm(EVAL_BASELINE_MODELS, desc="Evaluating models"):
+    for model_name in tqdm(_EVAL_BASELINE_MODELS, desc="Evaluating models"):
         # Set quantization based on model size (same as prompting baseline)
         if "0.6B" in model_name:
             config.model_name = model_name
@@ -119,7 +129,10 @@ def main():
 
         # Check if cache exists for this model
         model_safe = sanitize_model_id(model_name)
-        cache_path = Path(proj_root) / "outputs" / f"wassname_repeng_baseline_{model_safe}.parquet"
+        if config.quick:
+            model_safe += "_QUICK"
+        cache_path = Path(proj_root) / "outputs" / f"baselines/wassname_repeng/{model_safe}.parquet"
+        cache_path.parent.mkdir(exist_ok=True, parents=True)
 
         if cache_path.exists():
             logger.info(f"Loading cached results from {cache_path}")
@@ -146,13 +159,16 @@ def main():
             N = len(model_layer_list(base_model))
         layer_nums = list(range(-5, -N // 2, -1))  # last half layers
         layer_nums = [n % N for n in layer_nums]  # convert to positive indices
+        if config.quick:
+            layer_nums = layer_nums[:2]
 
         repeng_layers = match_linear_layers(base_model, layer_nums, module_names=[".*"])
         logger.info(f"Matched {len(repeng_layers)} repeng layers for model {model_name}")
 
         # Convert models to baukit
 
-        model = ControlModel(base_model, repeng_layers)
+        # model = ControlModel(base_model, repeng_layers)
+        model = base_model
 
         logger.info(f"Loaded model: {model_name}, repeng layers: {repeng_layers}")
 
@@ -182,18 +198,20 @@ def main():
         choice_ids = get_choice_ids(tokenizer)
 
         # Quick test
+        logger.info("Quick test of S-steering vectors...")
         for coeff in [-1.0, 0.0, 1.0]:
             with steer(model, cvec_Sw_steer, coeff):
                 (q, a, score, seq_nll) = generate_example_output(
                     model,
                     tokenizer,
                     choice_ids=choice_ids,
-                    max_new_tokens=128,
+                    max_new_tokens=32,
                 )
                 logger.info(f"S-Steer: Coeff={coeff:+.1f}, score={score:.3f}, nll={seq_nll:.3f}")
 
 
         # Quick test
+        logger.info("Quick test of PCA A-steering vectors...")
         for coeff in [-1.0, 0.0, 1.0]:
             with steer(model, cvec_pca_steer, coeff):
                 (q, a, score, seq_nll) = generate_example_output(
@@ -284,7 +302,7 @@ def main():
     df_labels = load_labels(dataset_dd)
     df_labeled = process_daily_dilemma_results(df_all, dataset_dd, df_labels)[0]
 
-    for model_name in EVAL_BASELINE_MODELS:
+    for model_name in _EVAL_BASELINE_MODELS:
         df_model = df_labeled[df_labeled["model_id"] == model_name]
         if len(df_model) == 0:
             continue
@@ -302,4 +320,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # config = tyro.cli(TrainingConfig, use_underscores=True)
+    # if __name__ == "__main__":
+    from ipissa.config import default_configs
+    config = tyro.cli(TrainingConfig, use_underscores=True  )
+    main(config)

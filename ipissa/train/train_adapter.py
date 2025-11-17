@@ -326,7 +326,7 @@ def extract_U_matrices(model, loss_layers: List[str], config: TrainingConfig):
     Vw_full = {}
     Sw_full = {}
 
-    for lk in loss_layers:
+    for lk in tqdm(loss_layers, desc='svd'):
         m = model.get_submodule(lk)
         W = m.weight.data.float()
         U, S, Vh = torch.linalg.svd(W, full_matrices=False)
@@ -376,7 +376,7 @@ def train_steer_vector(
         loss_dirs = {}  # Unweighted S-space for loss
         Sw_dirs = {}  # S-weighted for steering
 
-        for layer in loss_layers:
+        for layer in tqdm(loss_layers, desc='read_representations2'):
             U = Uw_full[layer].cpu()  # [d_out, r]
             S = Sw_full[layer].cpu()  # [r]
             V = Vw_full[layer].cpu()  # [d_in, r]
@@ -922,7 +922,7 @@ def evaluate_model(
 
     # Load per-model prompting baseline
     model_safe = config.model_name.replace('/', '_')
-    output_path = proj_root / "outputs" / f"prompting_baseline_{model_safe}.parquet"
+    output_path = proj_root / "outputs" / f"baselines/prompting/{model_safe}.parquet"
     if output_path.exists():
         logger.info(f"Loading prompting baseline results from {output_path}")
         df_prompting = pd.read_parquet(output_path)
@@ -934,7 +934,7 @@ def evaluate_model(
         )
 
     # Load per-model repeng baseline
-    output_path_repeng = proj_root / "outputs" / f"repeng_baseline_{model_safe}.parquet"
+    output_path_repeng = proj_root / "outputs" / f"baselines/repeng/{model_safe}.parquet"
     if output_path_repeng.exists():
         logger.info(f"Loading repeng baseline results from {output_path_repeng}")
         df_repeng = pd.read_parquet(output_path_repeng)
@@ -943,6 +943,18 @@ def evaluate_model(
     else:
         logger.warning(
             f"Repeng baseline results not found at {output_path_repeng}, run nbs/eval_repeng_baseline.py to generate them."
+        )
+
+    # Load per-model wassname_repeng baseline
+    output_path_wassname_repeng = proj_root / "outputs" / f"baselines/wassname_repeng/{model_safe}.parquet"
+    if output_path_wassname_repeng.exists():
+        logger.info(f"Loading wassname_repeng baseline results from {output_path_wassname_repeng}")
+        df_wassname_repeng = pd.read_parquet(output_path_wassname_repeng)
+        for (method, coeff), d in df_wassname_repeng.groupby(["method", "coeff"]):
+            results.append(d)
+    else:
+        logger.warning(
+            f"Wassname repeng baseline results not found at {output_path_wassname_repeng}, run nbs/nbs/eval_repeng_baseline_myhookv.py to generate them."
         )
 
     df_res2 = pd.concat(results)

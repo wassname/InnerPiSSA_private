@@ -15,7 +15,7 @@ from transformers import PreTrainedModel, PreTrainedTokenizerBase
 import tqdm
 from baukit import TraceDict
 
-from .control import ControlModel
+# from .control import ControlModel
 from .dataset import DatasetEntry
 # from .analyze_vectors.svd_steering import svd_steering
 # from .analyze_vectors.fisher_steering import natural_gradient_steering
@@ -31,7 +31,7 @@ class ControlVector:
     @classmethod
     def train(
         cls,
-        model: "PreTrainedModel | ControlModel",
+        model: "PreTrainedModel",
         tokenizer: PreTrainedTokenizerBase,
         dataset: list[DatasetEntry],
         hidden_layers: typing.Iterable[str] | None = None,
@@ -87,66 +87,6 @@ class ControlVector:
 
         # init class
         return cls(model_type=model.config.model_type, directions=dirs)
-
-    # @classmethod
-    # def train_with_sae(
-    #     cls,
-    #     model: "PreTrainedModel | ControlModel",
-    #     tokenizer: PreTrainedTokenizerBase,
-    #     sae,
-    #     dataset: list[DatasetEntry],
-    #     *,
-    #     decode: bool = True,
-    #     method: typing.Literal["pca_diff", "pca_center", "fisher_steer", "svd_gradient"] = "pca_center",
-    #     **kwargs,
-    # ) -> "ControlVector":
-    #     """
-    #     Like ControlVector.train, but using an SAE. It's better! WIP.
-
-
-    #     Args:
-    #         model (PreTrainedModel | ControlModel): The model to train against.
-    #         tokenizer (PreTrainedTokenizerBase): The tokenizer to tokenize the dataset.
-    #         sae (saes.Sae): See the `saes` module for how to load this.
-    #         dataset (list[DatasetEntry]): The dataset used for training.
-    #         **kwargs: Additional keyword arguments.
-    #             decode (bool, optional): Whether to decode the vector to make it immediately usable.
-    #                 If not, keeps it as monosemantic SAE features for introspection, but you will need to decode it manually
-    #                 to use it. Defaults to True.
-    #             max_batch_size (int, optional): The maximum batch size for training.
-    #                 Defaults to 32. Try reducing this if you're running out of memory.
-    #             method (str, optional): The training method to use. Can be either
-    #                 "pca_diff" or "pca_center". Defaults to "pca_center"! This is different
-    #                 than ControlVector.train, which defaults to "pca_diff".
-
-    #     Returns:
-    #         ControlVector: The trained vector.
-    #     """
-
-    #     def transform_hiddens(hiddens: dict[int, np.ndarray]) -> dict[int, np.ndarray]:
-    #         sae_hiddens = {}
-    #         for k, v in tqdm.tqdm(hiddens.items(), desc="sae encoding"):
-    #             sae_hiddens[k] = sae.layers[k].encode(v)
-    #         return sae_hiddens
-
-    #     # with torch.inference_mode():
-    #     dirs = read_representations(
-    #         model,
-    #         tokenizer,
-    #         dataset,
-    #         transform_hiddens=transform_hiddens,
-    #         method=method,
-    #         **kwargs,
-    #     )
-
-    #     final_dirs = {}
-    #     if decode:
-    #         for k, v in tqdm.tqdm(dirs.items(), desc="sae decoding"):
-    #             final_dirs[k] = sae.layers[k].decode(v)
-    #     else:
-    #         final_dirs = dirs
-
-    #     return cls(model_type=model.config.model_type, directions=final_dirs)
 
     def export_gguf(self, path: os.PathLike[str] | str):
         """
@@ -301,18 +241,6 @@ def PCAWeighted(train, weights=None, n_components=1) -> torch.Tensor:
     return direction
 
 
-class ComputeHiddens(typing.Protocol):
-    def __call__(
-        self,
-        model: "PreTrainedModel | ControlModel",
-        tokenizer: PreTrainedTokenizerBase,
-        train_strs: list[str],
-        hidden_layers: list[str],
-        batch_size: int,
-    ) -> dict[str, np.ndarray]: ...
-
-
-
 def _choose_sign_from_grads(direction: torch.Tensor, grad_matrix: torch.Tensor) -> torch.Tensor:
     """
     Fix direction sign using first-order loss change.
@@ -362,13 +290,9 @@ def read_representations(
 
     # B. Compute directions
     directions: OrderedDict[str, torch.Tensor] = OrderedDict()
-    for layer in tqdm.tqdm(hidden_layers):
-        h = act[layer].clone()
+    for layer in tqdm.tqdm(hidden_layers, desc='pca'):
+        h = act[layer]#.clone()
 
-        
-        # Only access grads if needed
-        grad_matrix = None
-        dim = None
         
         if method == "svd_gradient":
             raise NotImplementedError("Gradient-based methods are currently disabled.")
@@ -407,7 +331,7 @@ def read_representations(
 
     return directions
 
-
+@torch.no_grad()
 def _collect_activations_only(
     model,
     tokenizer,
@@ -425,15 +349,13 @@ def _collect_activations_only(
     """
     assert batch_size % 2 == 0, "batch_size must be even for pos/neg pairs"
     batched_inputs = [inputs[p : p + batch_size] for p in range(0, len(inputs), batch_size)]
-    if isinstance(model, ControlModel):
-        model = model.model
     
     hidden_states: dict[str, list[torch.Tensor]] = {layer: [] for layer in layers_to_edit}
     completion_lprob: list[torch.Tensor] = []
     
     model.eval()
     
-    for bi, batch in enumerate(tqdm.tqdm(batched_inputs, desc="Getting activations")):
+    for bi, batch in enumerate(tqdm.tqdm(batched_inputs, desc=f"Getting act for modules={len(layers_to_edit)}")):
         encoded_batch = tokenizer(batch, padding=True, return_tensors="pt", padding_side="left").to(model.device)
         attention_mask = encoded_batch["attention_mask"]
         
@@ -481,103 +403,6 @@ def _collect_activations_only(
     return hidden_states, completion_lprob
 
 
-# def _collect_activations_grads(
-#     model,
-#     tokenizer,
-#     inputs: list[str],
-#     layers_to_edit: list[str],
-#     batch_size: int,
-# ) -> tuple[dict[str, Tensor], Tensor, dict[str, Tensor | None], Tensor]:
-#     """
-#     Get hidden states and their gradients from ReprPO loss.
-    
-#     Key insight for iEF: We compute gradient norms w.r.t. the activations that
-#     directly feed into the loss (hs_last), not intermediate steering layers.
-#     This is equivalent to Wu et al.'s ||∇_z l_n||² (gradients w.r.t. logits).
-#     """
-#     assert batch_size % 2 == 0, "batch_size must be even for pos/neg pairs"
-#     batched_inputs = [inputs[p : p + batch_size] for p in range(0, len(inputs), batch_size)]
-#     if isinstance(model, ControlModel):
-#         model = model.model
-    
-#     hidden_states: dict[str, list[np.ndarray]] = {layer: [] for layer in layers_to_edit}
-#     completion_lprob: list[np.ndarray] = []
-
-#     model.eval()
-
-        
-#     for bi, batch in enumerate(tqdm.tqdm(batched_inputs, desc="Getting hiddens")):
-#         encoded_batch = tokenizer(batch, padding=True, return_tensors="pt", padding_side="left").to(model.device)
-#         attention_mask = encoded_batch["attention_mask"]
-
-#         if bi % 10 == 0:
-#             torch.cuda.empty_cache()
-
-#         # We need to enable gradients for the DPO loss calculation.
-#         with torch.enable_grad():
-#             model.zero_grad()
-#             with TraceDict(
-#                 model,
-#                 layers=layers_to_edit,
-#                 retain_output=True,
-#                 retain_grad=True,
-#                 detach=False,
-#             ) as ret:
-#                 outputs = model(**encoded_batch, output_hidden_states=True)
-#                 # Retain logits grad for iEF weighting (||∇_z l_n||)
-#                 # outputs.logits.retain_grad()
-
-#                 # # We must explicitly tell PyTorch to retain gradients for the non-leaf hidden state tensors.
-#                 # for layer in layers_to_edit:
-#                 #     ret[layer].output.retain_grad()
-
-#                 # --- DPO Loss Calculation ---
-#                 lprobs = outputs.logits[:, :-1].log_softmax(-1)
-#                 labels = encoded_batch["input_ids"][:, 1:, None]
-#                 lprobs_for_inputs = torch.gather(input=lprobs, dim=-1, index=labels).squeeze(-1)
-                
-#                 label_mask = attention_mask[:, 1:]
-#                 avg_logp_completion = (lprobs_for_inputs * label_mask).sum(-1) / label_mask.sum(-1)
-
-#                 hs = outputs.hidden_states[-3] # get layer N-2, this is peak [supressed neurons](https://github.com/wassname/eliciting_suppressed_knowledge?tab=readme-ov-file#relation-to-prior-work)
-
-#                 # get last non-padded token
-#                 seq_len = label_mask.shape[1]
-#                 last_valid_idx = seq_len - label_mask.flip(-1).to(torch.int64).cpu().argmax(dim=-1) - 1
-
-#             # collect activation, grad, avg_logp_completion for each example in batch
-#             for layer in layers_to_edit:
-
-
-#                 hs = ret[layer].output.detach().float().cpu()
-#                 last_hs = hs[range(len(last_valid_idx)), last_valid_idx]
-#                 hidden_states[layer].append(last_hs)
-
-#             completion_lprob.extend(avg_logp_completion.detach().cpu().float())
-
-
-#             # We must explicitly tell PyTorch to retain gradients for the non-leaf hidden state tensors.
-#             for layer in layers_to_edit:
-#                 ret[layer].output.grad = None  # Free memory
-
-#             # hs_last.grad = None  # Free memory
-#             model.zero_grad()
-
-
-
-#         del outputs, lprobs, lprobs_for_inputs, avg_logp_completion, ret, hs
-#         model.zero_grad()
-#         torch.cuda.empty_cache()
-
-#     # stack layers
-#     # final_grads = {k: torch.vstack(v) if v else None for k, v in gradients.items()}
-#     hidden_states = {k: torch.vstack(v) for k, v in hidden_states.items()}
-#     completion_lprob = torch.tensor(completion_lprob)
-    
-#     return (
-#         hidden_states, # {layer: [batch, hidden_dim]}
-#         completion_lprob, # [batch]
-#     )
 
 
 def project_onto_direction(H, direction):
@@ -586,48 +411,3 @@ def project_onto_direction(H, direction):
     assert not torch.isinf(mag)
     return (H @ direction) / mag
 
-
-# # New classmethod for NG optimization approximation
-# @classmethod
-# def ng_optimize_step(cls, h_orig: Tensor, loss_fn: Callable, lambda_reg: float = 1.0, 
-#                      directions: dict = None) -> Tensor:
-#     """
-#     Approximate solution to min_h ||h - h_orig||^2 + lambda * loss(h) via one NG step.
-    
-#     In plain language: Find a new activation h that's close to the original h_orig, 
-#     but also reduces the loss (e.g., makes the model more honest). This is like 
-#     taking one optimization step toward better behavior while staying near the 
-#     original trajectory. Uses natural gradient for curvature awareness.
-    
-#     Args:
-#         h_orig: Original activations [batch, dim]
-#         loss_fn: Loss function (e.g., ReprPO on hs_pos/hs_neg)
-#         lambda_reg: Tradeoff between staying close and reducing loss
-#     Returns:
-#         Optimized direction to add: h_opt - h_orig
-#     """
-#     # Dummy param for optimization
-#     h_param = nn.Parameter(h_orig.clone().detach().requires_grad_(True))
-    
-#     # Simple loss: distance + lambda * actual_loss
-#     def total_loss():
-#         dist_loss = F.mse_loss(h_param, h_orig)
-#         # Split for pos/neg if needed; assume loss_fn takes h_param
-#         concept_loss = loss_fn(h_param)  # e.g., ReprPO(h_pos, h_neg)
-#         return dist_loss + lambda_reg * concept_loss
-    
-#     # One NG step: precondition grad with FIM approx
-#     optimizer = torch.optim.SGD([h_param], lr=1.0)  # Placeholder
-#     h_param.grad = torch.autograd.grad(total_loss(), h_param, create_graph=True)[0]
-    
-#     # FIM approx from gradients (reuse if available)
-#     if directions:
-#         F_approx = torch.eye(h_orig.shape[-1], device=h_orig.device)  # Simple diag
-#         # Better: Use empirical F from prior grads
-#         h_param.grad = torch.linalg.solve(F_approx + 0.01 * torch.eye(F_approx.shape[0]), h_param.grad)
-    
-#     # Apply step
-#     with torch.no_grad():
-#         h_param.add_(h_param.grad, alpha=-0.1)  # Small LR
-#         direction = h_param - h_orig
-#         return direction.detach()
