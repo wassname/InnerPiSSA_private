@@ -98,7 +98,7 @@ def get_available_layers(model, regex_filter: Optional[str] = None, layer_range:
     return short_available_layers, available_layers
 
 
-# @torch.no_grad()
+@torch.no_grad()
 def baukit_dir_add_hook(
     output: Float[Tensor, "... d_out"],
     layer: str,
@@ -141,9 +141,9 @@ def baukit_dir_add_hook(
     if isinstance(direction, dict):
         # PiSSA-style: U_scaled and V_scaled = original @ sqrt(S) for proper importance weighting
         # delta_W = U_scaled @ diag(delta_s) @ V_scaled.T
-        U_scaled = direction['U_scaled'].to(y.device, y.dtype)  # [d_out, r] = U * sqrt(S)
-        delta_s = direction['delta_s'].to(y.device, y.dtype)  # [r] full-rank direction
-        V_scaled = direction['V_scaled'].to(y.device, y.dtype)  # [d_in, r] = V * sqrt(S)
+        U_scaled = direction['U_scaled']#.to(y.device, y.dtype)  # [d_out, r] = U * sqrt(S)
+        delta_s = direction['delta_s']#.to(y.device, y.dtype)  # [r] full-rank direction
+        V_scaled = direction['V_scaled']#.to(y.device, y.dtype)  # [d_in, r] = V * sqrt(S)
         
         x = inputs[0] if isinstance(inputs, tuple) else inputs
         

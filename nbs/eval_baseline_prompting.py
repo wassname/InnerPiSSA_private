@@ -92,14 +92,9 @@ for model_name in tqdm(models):
     model_results = []
     for coeff, prompt in prompts1:
         dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
-            tokenizer,instructions=prompt,max_tokens=config.eval_dataset_max_token_length
+            tokenizer,instructions=prompt,max_tokens=config.eval_dataset_max_token_length,
+            eval_max_n_dilemmas=config.eval_max_n_dilemmas
         )
-        dataset_dd = select_dilemma_by_values(
-            dataset_dd, label="truth", top_N=eval_max_n_dilemmas
-        )
-        dataset_dd_pt = dataset_dd.select_columns(
-            ["dilemma_idx", "idx", "input_ids"]
-        ).with_format("torch")
         df_labels = load_labels(dataset_dd)
 
         d = evaluate_daily_dilemma(
@@ -141,13 +136,9 @@ torch.cuda.empty_cache()
 # in case we cached all results
 base_model, tokenizer = load_model(EVAL_BASELINE_MODELS[0], quantization_type=None)
 dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
-    tokenizer,instructions="",max_tokens=config.eval_dataset_max_token_length
+    tokenizer,instructions="",max_tokens=config.eval_dataset_max_token_length,
+    eval_max_n_dilemmas=config.eval_max_n_dilemmas
 )
-print(len(dataset_dd))
-dataset_dd = select_dilemma_by_values(
-    dataset_dd, label="truth", top_N=eval_max_n_dilemmas
-)
-print(len(dataset_dd))
 df_labels = load_labels(dataset_dd)
 
 df_res = pd.concat(results)

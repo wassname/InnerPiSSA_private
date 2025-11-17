@@ -38,8 +38,9 @@ run:
     }
 
     # make sure baselines are cached
-    uv run python nbs/eval_repeng_baseline_myhookv.py
-    uv run python nbs/eval_prompting_baseline.py
+    uv run python nbs/eval_baseline_wassname_Ssteer_baseline.py
+    uv run python nbs/eval_baseline_repeng.py
+    uv run python nbs/eval_baseline_prompting.py
 
     
     # scratch

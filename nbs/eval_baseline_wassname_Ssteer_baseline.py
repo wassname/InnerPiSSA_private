@@ -8,7 +8,7 @@ honest/dishonest training data and evaluates on Daily Dilemmas.
 import gc
 import sys
 from pathlib import Path
-
+import time
 import numpy as np
 import pandas as pd
 import torch
@@ -182,18 +182,9 @@ def main(config):
 
         cvec_Sw_steer, cvec_pca_steer = collect_S_steer_vec(model, train_honest, tokenizer, repeng_layers, config)
 
-        # # Train control vector
-        # logger.info("Training control vector with repeng...")
-        # control_vector = ControlVector.train(
-        #     model,
-        #     tokenizer,
-        #     train_honest,
-        #     batch_size=config.eval_batch_size,
-        #     hidden_layers=repeng_layers,
-        # )
-        # logger.info("Control vector trained")
-
-        # model.reset()
+        # TODO convert them to cuda and bfloat16
+        cvec_Sw_steer.directions = {k: {kk: vv.to(device="cuda", dtype=torch.bfloat16) for kk, vv in v.items()} for k, v in cvec_Sw_steer.directions.items()}
+        cvec_pca_steer.directions = {k: v.to(device="cuda", dtype=torch.bfloat16) for k, v in cvec_pca_steer.directions.items()}
 
         choice_ids = get_choice_ids(tokenizer)
 
@@ -201,39 +192,40 @@ def main(config):
         logger.info("Quick test of S-steering vectors...")
         for coeff in [-1.0, 0.0, 1.0]:
             with steer(model, cvec_Sw_steer, coeff):
+                t0 = time.time()
                 (q, a, score, seq_nll) = generate_example_output(
                     model,
                     tokenizer,
                     choice_ids=choice_ids,
                     max_new_tokens=32,
                 )
-                logger.info(f"S-Steer: Coeff={coeff:+.1f}, score={score:.3f}, nll={seq_nll:.3f}")
+                t1 = time.time()
+                if coeff==-1:
+                    logger.info(f"Q: {q}")
+                logger.info(f"S-Steer: Coeff={coeff:+.1f}, score={score:.3f}, nll={seq_nll:.3f}, time={t1-t0:.3f}s,\n{a}")
 
 
         # Quick test
-        logger.info("Quick test of PCA A-steering vectors...")
+        logger.info("Quick test of wassname PCA A-steering vectors...")
         for coeff in [-1.0, 0.0, 1.0]:
             with steer(model, cvec_pca_steer, coeff):
+                t0 = time.time()
                 (q, a, score, seq_nll) = generate_example_output(
                     model,
                     tokenizer,
                     choice_ids=choice_ids,
                     max_new_tokens=128,
                 )
-                logger.info(f"PCA: Coeff={coeff:+.1f}, score={score:.3f}, nll={seq_nll:.3f}")
+                t1 = time.time()
+                logger.info(f"PCA: Coeff={coeff:+.1f}, score={score:.3f}, nll={seq_nll:.3f}, time={t1-t0:.3f}s\n{a}")
 
         # Load eval dataset
         dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
             tokenizer,
             instructions="",
             max_tokens=config.eval_dataset_max_token_length,
+            eval_max_n_dilemmas=config.eval_max_n_dilemmas
         )
-        dataset_dd = select_dilemma_by_values(
-            dataset_dd, label="truth", top_N=config.eval_max_n_dilemmas
-        )
-        dataset_dd_pt = dataset_dd.select_columns(
-            ["dilemma_idx", "idx", "input_ids"]
-        ).with_format("torch")
         df_labels = load_labels(dataset_dd)
 
         # Evaluate at different coefficients
@@ -289,15 +281,27 @@ def main(config):
         gc.collect()
         torch.cuda.empty_cache()
 
+
+    
+
     # Combine all results and show summary
     df_all = pd.concat(results, ignore_index=True)
     logger.info(f"Total results: {len(df_all)} rows from {len(df_all['model_id'].unique())} models")
 
     # Process and display results for each model
+    model_name = _EVAL_BASELINE_MODELS[0]
+    _, tokenizer = load_model(model_name, quantization_type=config.quantization_type)
+    train_honest, train_dataset_pt, val_honest, val_dataset_pt = create_train_dataset(
+        config,
+        tokenizer,
+        max_size=config.dataset_max_samples
+    )
+
     dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
         tokenizer,
         instructions="",
         max_tokens=config.eval_dataset_max_token_length,
+        eval_max_n_dilemmas=config.eval_max_n_dilemmas
     )
     df_labels = load_labels(dataset_dd)
     df_labeled = process_daily_dilemma_results(df_all, dataset_dd, df_labels)[0]
@@ -320,8 +324,6 @@ def main(config):
 
 
 if __name__ == "__main__":
-    # config = tyro.cli(TrainingConfig, use_underscores=True)
-    # if __name__ == "__main__":
     from ipissa.config import default_configs
     config = tyro.cli(TrainingConfig, use_underscores=True  )
     main(config)

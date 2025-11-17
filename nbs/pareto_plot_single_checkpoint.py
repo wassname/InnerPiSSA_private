@@ -129,15 +129,9 @@ clear_mem()
 
 # Prepare eval dataset once
 dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
-    tokenizer, max_tokens=config.eval_dataset_max_token_length
+    tokenizer, max_tokens=config.eval_dataset_max_token_length,
+    eval_max_n_dilemmas=config.eval_max_n_dilemmas
 )
-if config.eval_max_n_dilemmas is not None:
-    dataset_dd = select_dilemma_by_values(
-        dataset_dd, label="truth", top_N=config.eval_max_n_dilemmas
-    )
-dataset_dd_pt = dataset_dd.select_columns(
-    ["dilemma_idx", "idx", "input_ids"]
-).with_format("torch")
 df_labels = load_labels(dataset_dd)
 
 choice_ids = get_choice_ids(tokenizer)

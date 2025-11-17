@@ -67,7 +67,7 @@ def format_messages(
 
 
 def load_and_process_daily_dilemmas_eval_dataset(
-    tokenizer, max_tokens=256, instructions=""
+    tokenizer, max_tokens=256, instructions="", eval_max_n_dilemmas: Optional[int] = None
 ):
     from datasets import disable_caching, enable_caching
 
@@ -84,9 +84,26 @@ def load_and_process_daily_dilemmas_eval_dataset(
         desc="Formatting messages",
     )
 
+    if eval_max_n_dilemmas is not None:
+        logger.warning(
+            f"Not a full eval, selecting {eval_max_n_dilemmas} dilemmas."
+        )
+        dataset_dd = select_dilemma_by_values(
+            dataset_dd, label="truth", top_N=eval_max_n_dilemmas
+        )
+
     dataset_pt = dataset_dd.select_columns(
         ["dilemma_idx", "idx", "input_ids"]
     ).with_format("torch")
+
+    def unsqueeze_items(example):
+        for k,v in example.items():
+            if v.ndim == 0:
+                example[k] = v.unsqueeze(0)
+        return example
+    
+    # some collators don't like 0-dim tensors
+    dataset_pt = dataset_pt.map(unsqueeze_items)
     enable_caching()
     return dataset_dd, dataset_pt
 
@@ -628,7 +645,7 @@ def format_results_table(
     target_col="score_Virtue/Truthfulness",
     target_col_log="logscore_Virtue/Truthfulness",
     target_method="InnerPiSSA (ours)",
-    show_alt_measures=True,
+    show_alt_measures=False,
 ):
     """Generate paper-ready results table with multiple monotonicity metrics for comparison."""
     summary = compute_transfer_summary(

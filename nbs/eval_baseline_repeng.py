@@ -8,7 +8,7 @@ honest/dishonest training data and evaluates on Daily Dilemmas.
 import gc
 import sys
 from pathlib import Path
-
+import tyro
 import numpy as np
 import pandas as pd
 import torch
@@ -45,12 +45,22 @@ def sanitize_model_id(model_id: str) -> str:
     return model_id.replace('/', '_')
 
 
-def main():
+def main(config):
     # Config
-    config = TrainingConfig(
-        eval_batch_size=32,
-        # dataset_max_samples=800,
-    )
+    # config = TrainingConfig(
+    #     eval_batch_size=32,
+    #     # dataset_max_samples=800,
+    # )
+
+    if config.quick:
+        # layers 2
+        _EVAL_BASELINE_MODELS = EVAL_BASELINE_MODELS[:1]
+        config.eval_max_n_dilemmas = 64
+        config.dataset_max_samples = 100
+    else:
+        _EVAL_BASELINE_MODELS = EVAL_BASELINE_MODELS
+
+    eval_batch_size = max(32, config.batch_size)
 
     results = []
 
@@ -65,6 +75,8 @@ def main():
 
         # Check if cache exists for this model
         model_safe = sanitize_model_id(model_name)
+        if config.quick:
+            model_safe += "_QUICK"
         cache_path = Path(proj_root) / "outputs" / f"repeng_baseline_{model_safe}.parquet"
 
         if cache_path.exists():
@@ -86,6 +98,8 @@ def main():
             from repeng.control import model_layer_list
             N = len(model_layer_list(base_model))
         repeng_layers = list(range(-5, -N // 2, -1))  # last half layers
+        if config.quick:
+            repeng_layers = repeng_layers[:2]
 
         model = ControlModel(base_model, repeng_layers)
 
@@ -105,7 +119,7 @@ def main():
             model,
             tokenizer,
             train_honest,
-            batch_size=config.eval_batch_size,
+            batch_size=eval_batch_size,
             hidden_layers=repeng_layers,
         )
         logger.info("Control vector trained")
@@ -115,6 +129,7 @@ def main():
         choice_ids = get_choice_ids(tokenizer)
 
         # Quick test
+        logger.info("Quick test of PCA A-steering vectors...")
         for coeff in [-1.0, 0.0, 1.0]:
             model.reset()
             if coeff != 0.0:
@@ -133,13 +148,8 @@ def main():
             tokenizer,
             instructions="",
             max_tokens=config.eval_dataset_max_token_length,
+            eval_max_n_dilemmas=config.eval_max_n_dilemmas,
         )
-        dataset_dd = select_dilemma_by_values(
-            dataset_dd, label="truth", top_N=config.eval_max_n_dilemmas
-        )
-        dataset_dd_pt = dataset_dd.select_columns(
-            ["dilemma_idx", "idx", "input_ids"]
-        ).with_format("torch")
         df_labels = load_labels(dataset_dd)
 
         # Evaluate at different coefficients
@@ -188,7 +198,9 @@ def main():
         tokenizer,
         instructions="",
         max_tokens=config.eval_dataset_max_token_length,
+        eval_max_n_dilemmas=config.eval_max_n_dilemmas
     )
+
     df_labels = load_labels(dataset_dd)
     df_labeled = process_daily_dilemma_results(df_all, dataset_dd, df_labels)[0]
 
@@ -209,5 +221,8 @@ def main():
     logger.info("Done!")
 
 
+
 if __name__ == "__main__":
-    main()
+    from ipissa.config import default_configs
+    config = tyro.cli(TrainingConfig, use_underscores=True  )
+    main(config)
