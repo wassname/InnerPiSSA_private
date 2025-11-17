@@ -809,11 +809,24 @@ def train_epoch(
                     coh_p1 = coef_metrics.get('loss_coh_coef+1_0', np.nan)
                     proj_n1 = coef_metrics.get('loss_proj_coef-1_0', np.nan)
                     coh_n1 = coef_metrics.get('loss_coh_coef-1_0', np.nan)
-                    logger.info(
-                        f"  Coef breakdown: "
-                        f"[+1: proj={proj_p1:+.3f}, coh={coh_p1:+.3f}] | "
-                        f"[-1: proj={proj_n1:+.3f}, coh={coh_n1:+.3f}]"
-                    )
+                    
+                    # Difficulty balance metrics (adaptive coherence only)
+                    if config.adaptive_coherence:
+                        diff_p1 = coef_metrics.get('difficulty_coef+1_0', np.nan)
+                        diff_n1 = coef_metrics.get('difficulty_coef-1_0', np.nan)
+                        cohw_p1 = coef_metrics.get('coh_weight_coef+1_0', np.nan)
+                        cohw_n1 = coef_metrics.get('coh_weight_coef-1_0', np.nan)
+                        logger.info(
+                            f"  Coef breakdown: "
+                            f"[+1: proj={proj_p1:+.3f}, coh={coh_p1:+.3f}, diff={diff_p1:.2f}, cohw={cohw_p1:.2f}] | "
+                            f"[-1: proj={proj_n1:+.3f}, coh={coh_n1:+.3f}, diff={diff_n1:.2f}, cohw={cohw_n1:.2f}]"
+                        )
+                    else:
+                        logger.info(
+                            f"  Coef breakdown: "
+                            f"[+1: proj={proj_p1:+.3f}, coh={coh_p1:+.3f}] | "
+                            f"[-1: proj={proj_n1:+.3f}, coh={coh_n1:+.3f}]"
+                        )
 
             # Validation check (less frequent than logging)
             if (
@@ -837,11 +850,24 @@ def train_epoch(
                     coh_p1 = val_coef_metrics.get('loss_coh_coef+1_0', np.nan)
                     proj_n1 = val_coef_metrics.get('loss_proj_coef-1_0', np.nan)
                     coh_n1 = val_coef_metrics.get('loss_coh_coef-1_0', np.nan)
-                    logger.info(
-                        f"  Val coef breakdown: "
-                        f"[+1: proj={proj_p1:+.3f}, coh={coh_p1:+.3f}] | "
-                        f"[-1: proj={proj_n1:+.3f}, coh={coh_n1:+.3f}]"
-                    )
+                    
+                    # Difficulty balance metrics (adaptive coherence only)
+                    if config.adaptive_coherence:
+                        diff_p1 = val_coef_metrics.get('difficulty_coef+1_0', np.nan)
+                        diff_n1 = val_coef_metrics.get('difficulty_coef-1_0', np.nan)
+                        cohw_p1 = val_coef_metrics.get('coh_weight_coef+1_0', np.nan)
+                        cohw_n1 = val_coef_metrics.get('coh_weight_coef-1_0', np.nan)
+                        logger.info(
+                            f"  Val coef breakdown: "
+                            f"[+1: proj={proj_p1:+.3f}, coh={coh_p1:+.3f}, diff={diff_p1:.2f}, cohw={cohw_p1:.2f}] | "
+                            f"[-1: proj={proj_n1:+.3f}, coh={coh_n1:+.3f}, diff={diff_n1:.2f}, cohw={cohw_n1:.2f}]"
+                        )
+                    else:
+                        logger.info(
+                            f"  Val coef breakdown: "
+                            f"[+1: proj={proj_p1:+.3f}, coh={coh_p1:+.3f}] | "
+                            f"[-1: proj={proj_n1:+.3f}, coh={coh_n1:+.3f}]"
+                        )
 
                 if wandb_run is not None:
                     val_metrics = {"val/loss_total": val_loss}
