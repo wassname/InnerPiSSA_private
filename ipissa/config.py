@@ -113,6 +113,7 @@ class TrainingConfig:
         "softpl_ratio",        # (+↑ −↓) Softplus on ratio (AFTER FIX)
         "focal_balanced",      # (⚖) Down-weights easy examples
         "logsig_dpo",          # (std) Standard DPO baseline
+        "raw"                   # (-↑) Direct projection difference
     ] = (
         "tanh_sym"
     )

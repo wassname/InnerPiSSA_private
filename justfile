@@ -44,27 +44,24 @@ run:
 
     
     # scratch
-    run_exp_small --lr=5e-2 --n_epochs=20 --rank=8 --num_layers=15 --loss_type=tanh_sym --scale_s=mult 
-    run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=tanh_sym --scale_s=mult
-    run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=tanh_sym --scale_s=none
-    run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=tanh_sym --scale_s=add_tanh
-    run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --scale_s=mult
+    # run_exp_small --lr=5e-2 --n_epochs=20 --rank=8 --num_layers=15 --loss_type=tanh_sym --scale_s=mult 
+    # run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=tanh_sym --scale_s=mult
+    # run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=tanh_sym --scale_s=none
+    # run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=tanh_sym --scale_s=add_tanh
+    # run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --scale_s=mult
     
-    run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --scale_s=add_tanh
-    run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=softpl_ratio
-    run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=logsig_weak_up
-    run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=focal_balanced
-    run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=logsig_dpo
-    run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=tanh_sym
-    run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=softpl_strong_up
+    # run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --scale_s=add_tanh
+    # run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=softpl_ratio
+    # run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=logsig_weak_up
+    # run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=focal_balanced
+    # run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=logsig_dpo
+    # run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=tanh_sym
+    # run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=softpl_strong_up
 
     
 
 
-    # can we learn with high lr, low steps?
-    run_exp_small --lr=1e-0 --n_epochs=2 --rank=4 --num_layers=15 # no this learns a one sides intervention and symmetry escapes it
-    run_exp_small --lr=1e-1 --n_epochs=4 --rank=4 --num_layers=15
-    run_exp_small --lr=1e-2 --n_epochs=8 --rank=4 --num_layers=15
+
 
 
     # run_exp_small --no-loss_ds_pref_dir
@@ -83,8 +80,13 @@ run:
     run_exp --loss_type=logsig_weak_up
     run_exp --loss_type=tanh_sym
     run_exp --loss_type=focal_balanced
+    run_exp --loss_type=raw
     
-    
+    # can we learn with high lr, low steps?
+    run_exp_small --lr=1e-0 --n_epochs=2 --rank=4 --num_layers=15 # no this learns a one sides intervention and symmetry escapes it
+    run_exp_small --lr=1e-1 --n_epochs=4 --rank=4 --num_layers=15
+    run_exp_small --lr=1e-2 --n_epochs=8 --rank=4 --num_layers=15
+
     # #uv run python nbs/train.py . --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh_sym_(±)  --batch-size=32
     # # uv run python nbs/train.py gemma12b-80gb --loss_type=tanh_sym_(±)  --batch-size=32
     # uv run python nbs/train.py . --model_name=google/gemma-3-27b-it --loss_type=tanh_sym_(±)  --batch-size=32
@@ -166,10 +168,10 @@ run:
     
     # === Rank ablations ===
     echo "### Rank ablations ###"
-    run_exp --rank=8  --num_layers=1
-    run_exp --rank=24  --num_layers=1  # default
-    run_exp --rank=64  --num_layers=1
-    run_exp --rank=256  --num_layers=1
+    run_exp --rank=8  --num_layers=30
+    run_exp --rank=24  --num_layers=15  # default
+    run_exp --rank=64  --num_layers=5
+    run_exp --rank=256  --num_layers=3
     run_exp --rank=512  --num_layers=1
     
     
@@ -179,7 +181,7 @@ run:
     run_exp --num_layers=3
     run_exp --num_layers=5  # default
     run_exp --num_layers=8
-    run_exp --num_layers=12 --perc_start=0.15
+    run_exp --num_layers=12
     
     # === Layer range ablations ===
     echo "### Layer range ablations ###"

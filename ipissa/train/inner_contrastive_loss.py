@@ -74,6 +74,14 @@ def softclamp_tanh(x, n=10):
 def softclamp_softplus(x: torch.Tensor, upper: float, lower: float = 0.0):
     return lower + F.softplus(x - lower) - F.softplus(x - upper)
 
+def symlog(x: torch.Tensor) -> torch.Tensor:
+    """Symmetric log: sign(x) * log(1 + |x|).
+    
+    Compresses large values to log-scale while preserving sign and smoothness at zero.
+    Commonly used for signed values that span many orders of magnitude.
+    """
+    return torch.sign(x) * torch.log1p(x.abs())
+
 
 def contrastive_steering_loss_with_ref(
     pref_dir: Float[Tensor, "k d"],  # Also accepts [d] (auto-unsqueezed to [1, d])
@@ -97,6 +105,7 @@ def contrastive_steering_loss_with_ref(
         "softpl_ratio",        # (+↑ −↓) Softplus on ratio (AFTER FIX)
         "focal_balanced",      # (⚖) Down-weights easy examples
         "logsig_dpo",          # (std) Standard DPO baseline
+        "raw",                 # (↑↓) Direct symlog difference - strongest gradients
     ] = "softpl_strong_up"
 ):
     """
@@ -113,6 +122,8 @@ def contrastive_steering_loss_with_ref(
     - softpl_ratio: Targets proj_pi/proj_ref > 1 (scale-invariant but can be unstable)
     - focal_balanced: Down-weights confident examples (prevents overfitting to easy cases)
     - logsig_dpo: Standard preference learning baseline (Bradley-Terry model)
+    - raw: Direct proj_diff maximization - no sigmoid/softplus compression (strongest signal)
+           Use when proj is too weak relative to coherence after symlog normalization
     
     Args:
         pref_dir: Frozen steering direction from PCA/SVD - [k, d] or [d]
@@ -166,26 +177,51 @@ def contrastive_steering_loss_with_ref(
     ref_logp = ref_pos_label_logp.detach()
     pi_logp = pi_pos_label_logp
 
-    def calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, clamp_scale=100, mult_b=4):
+    def calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, clamp_scale=10, C=4.0):
         """
-        Asymmetric margin on NLL degradation.
+        Polynomial hinge loss for coherence constraint (generalized SVM margin).
         
-        Only penalize if pi_logp degrades beyond threshold - improvements are free.
-        Per-token margin prevents gaming via whitespace/padding manipulation.
+        Standard hinge: ℓ(y) = max(0, 1 - t·y)
+        Squared hinge: ℓ(y) = max(0, 1 - t·y)²
+        This: ℓ(logp) = [C · max(0, logp_deg - margin)]^p
+        
+        Design:
+        - Zero loss inside margin (hard constraint boundary)
+        - Polynomial growth outside (smooth gradients, no cliff)
+        - Per-token (prevents reward hacking via high-probability tokens)
+        
+        Why C scaling?
+        In [0,1] nat range, x² < x, so raw squared hinge is too weak.
+        C amplifies violations before exponentiation: (0.5 · C)^p dominates.
+        
+        Args:
+            ref_logp, pi_logp: Per-token log probabilities (b, t)
+            loss_mask: Per-token mask (b, t)
+            boundary_order: Polynomial degree (2 = squared hinge, 1 = standard hinge)
+            clamp_scale: Optional outlier suppression via tanh
+            C: Regularization strength (scales violations before exponentiation)
+        
+        Returns:
+            loss: Scalar penalty (b,) aggregated over tokens
+            logp_deg: Per-token degradation (b, t) for monitoring
         """
         logp_deg = ref_logp - pi_logp  # Positive = pi worse than ref
         if clamp_scale is not None:
+            # We clamp before token aggregation to prevent extreme outliers from dominating
             logp_deg = softclamp_tanh(logp_deg, clamp_scale)
         
-        margin_violation = F.relu(logp_deg - coherence_threshold)
-        penalty_per_token = (margin_violation * mult_b) ** boundary_order
-        loss = reduce_tokens_w_attention(penalty_per_token, loss_mask).mean()
+        violation = F.relu(logp_deg - coherence_threshold)
+        penalty_per_token = (violation * C) ** boundary_order
+        loss = reduce_tokens_w_attention(penalty_per_token, loss_mask) # [b]
         return loss, logp_deg
 
     
     
     # Projection difference (what we're optimizing)
-    proj_diff = proj_pi_agg - proj_ref_agg  # Positive = pi projects more than ref
+    # Normalize by reference magnitude, then apply symlog for scale compression
+    raw_diff = proj_pi_agg - proj_ref_agg
+    normalized_diff = raw_diff / (proj_ref_agg.abs() + eps)
+    proj_diff = symlog(normalized_diff)  # Sign-preserving log-scale, comparable to nats
     
     # Loss variant selection
     if loss_type == "logsig_weak_up":
@@ -194,7 +230,7 @@ def contrastive_steering_loss_with_ref(
         # Coherence disabled - relies on margin to prevent degradation
         β = 0.1
         margin = 1.0
-        loss_proj = -F.logsigmoid(β * (proj_diff - margin)).mean()
+        loss_proj = -F.logsigmoid(β * (proj_diff - margin))
         loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=None)
         loss_coh = torch.zeros_like(loss_proj)
         
@@ -204,7 +240,7 @@ def contrastive_steering_loss_with_ref(
         # Weak gradients when steering AGAINST preferences (vanishes as proj_diff → -∞)
         # Asymmetry is correct: reflects difficulty of anti-alignment steering
         β = 0.1
-        loss_proj = -F.softplus(proj_diff * β).mean()
+        loss_proj = -F.softplus(proj_diff * β)
         loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=None)
         
     elif loss_type == "tanh_sym":
@@ -214,7 +250,7 @@ def contrastive_steering_loss_with_ref(
         loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=100)
         loss_coh = softclamp_tanh(loss_coh, n=2)
         proj_ratio = proj_pi_agg / (proj_ref_agg.abs() + eps)
-        loss_proj = softclamp_tanh(proj_ratio * β, 1).mean()
+        loss_proj = softclamp_tanh(proj_ratio * β, 1)
         
     elif loss_type == "softpl_ratio":
         # Softplus on (ratio - 1) - targets multiplicative improvement
@@ -223,7 +259,7 @@ def contrastive_steering_loss_with_ref(
         loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=None)
         loss_coh = softclamp_tanh(loss_coh, n=3)
         proj_ratio = proj_pi_agg / (proj_ref_agg.abs() + eps)
-        loss_proj = -F.softplus(proj_ratio * β - 1.0).mean() 
+        loss_proj = -F.softplus(proj_ratio * β - 1.0)
         
     elif loss_type == "focal_balanced":
         # Focal loss variant - down-weights easy examples (large |proj_diff|)
@@ -232,15 +268,21 @@ def contrastive_steering_loss_with_ref(
         α = 2.0  # Focusing parameter (higher = more focus on hard examples)
         prob_correct = torch.sigmoid(proj_diff)  # High when pi >> ref
         focal_weight = (1 - prob_correct) ** α  # Low weight for confident (easy) examples
-        loss_proj = -(focal_weight * F.logsigmoid(proj_diff)).mean()
+        loss_proj = -(focal_weight * F.logsigmoid(proj_diff))
         loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=10)
         
     elif loss_type == "logsig_dpo":
         # Standard DPO (Direct Preference Optimization) - Bradley-Terry without margin
         # Baseline for comparison to preference learning literature
         β = 0.1
-        loss_proj = -F.logsigmoid(β * proj_diff).mean()
+        loss_proj = -F.logsigmoid(β * proj_diff)
         loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=10)
+    elif loss_type == "raw":
+        # Direct projection difference - no sigmoid/softplus compression
+        # Strongest gradients since proj_diff (symlog) is already in reasonable scale [-5, +5]
+        # Use when coherence dominates: proj ~ 0.1 but coh ~ 4-16 after (x*mult_b)**2
+        loss_proj = -proj_diff  # Maximize directly
+        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, 4, clamp_scale=None)
         
     else:
         raise ValueError(f"Invalid loss_type: {loss_type}")
@@ -322,6 +364,7 @@ def combine_dual_coef_losses(
     loss_neg: dict,
     adaptive_coherence: bool = False,
     relax_factor: float = 0.5,
+    temperature: float = 2.0,
 ):
     """
     Combine losses from both coefficient directions (+1 and -1).
@@ -335,6 +378,7 @@ def combine_dual_coef_losses(
         loss_neg: Loss dict from coef=-1 (anti-RLHF/dishonest direction)
         adaptive_coherence: Enable difficulty-based coherence relaxation
         relax_factor: How much to relax coherence at max difficulty (0.5 = 50% weight)
+        temperature: Scaling factor for difficulty calculation (higher = less sensitive)
         
     Returns:
         total_loss: Combined scalar loss for backprop
@@ -357,17 +401,18 @@ def combine_dual_coef_losses(
         return total, meta_info
     
     # Adaptive: reweight coherence by relative difficulty
-    # Compare proj_diff between directions to identify which is harder
-    # More negative proj_diff → harder direction → needs relaxed coherence
-    proj_diff_pos = loss_pos["proj_diff"]
+    # Compare proj_diff (symlog of normalized difference) between directions
+    # More negative symlog value → harder direction → needs relaxed coherence
+    proj_diff_pos = loss_pos["proj_diff"]  # Already in symlog scale
     proj_diff_neg = loss_neg["proj_diff"]
     
-    # Relative difficulty: normalize difference to [0,1] via sigmoid
-    # If pos > neg: difficulty_pos low, difficulty_neg high (neg is harder)
-    # If neg > pos: difficulty_neg low, difficulty_pos high (pos is harder)
-    diff_comparison = proj_diff_pos - proj_diff_neg
-    difficulty_neg = torch.sigmoid(-diff_comparison)  # High when pos >> neg
-    difficulty_pos = 1.0 - difficulty_neg  # Complementary
+    # Relative difficulty via softmax: normalizes to sum=1.0
+    # Negative sign: worse symlog value (more negative) = higher difficulty
+    # Temperature controls sensitivity (symlog scale is comparable to nats)
+    proj_diffs = torch.stack([proj_diff_pos, proj_diff_neg])  # (2,)
+    difficulties = F.softmax(-proj_diffs / temperature, dim=0)  # (2,)
+    difficulty_pos = difficulties[0]
+    difficulty_neg = difficulties[1]
     
     # Coherence weight: 1.0 (strict) when easy, → relax_factor when hard
     coh_weight_pos = 1.0 - (1.0 - relax_factor) * difficulty_pos
@@ -375,15 +420,15 @@ def combine_dual_coef_losses(
     
     # Combine with adaptive weights
     total = (
-        loss_pos["loss_proj"] + coh_weight_pos.mean() * loss_pos["loss_coh"] +
-        loss_neg["loss_proj"] + coh_weight_neg.mean() * loss_neg["loss_coh"]
-    )
+        loss_pos["loss_proj"] + coh_weight_pos * loss_pos["loss_coh"] +
+        loss_neg["loss_proj"] + coh_weight_neg * loss_neg["loss_coh"]
+    ).mean()
     
     meta_info = {
-        "coh_weight_pos": coh_weight_pos.mean().item(),
-        "coh_weight_neg": coh_weight_neg.mean().item(),
-        "difficulty_pos": difficulty_pos.mean().item(),
-        "difficulty_neg": difficulty_neg.mean().item(),
+        "coh_weight_pos": coh_weight_pos.item(),
+        "coh_weight_neg": coh_weight_neg.item(),
+        "difficulty_pos": difficulty_pos.item(),
+        "difficulty_neg": difficulty_neg.item(),
     }
     
     return total, meta_info
