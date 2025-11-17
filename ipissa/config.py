@@ -118,8 +118,8 @@ class TrainingConfig:
     )
     coherence_threshold: float = 1.5
     boundary_order: int = 1
-    last_n_tokens: int = 3
-    adaptive_coherence: bool = False  # Enable difficulty-based coherence relaxation
+    last_n_tokens: int = 5
+    adaptive_coherence: bool = True  # Enable difficulty-based coherence relaxation
     relax_factor: float = 0.5  # How much to relax coherence at max difficulty (0.5 = 50% weight)
 
     # Eval
