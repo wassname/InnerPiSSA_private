@@ -356,11 +356,18 @@ def combine_dual_coef_losses(
         
         return total, meta_info
     
-    # Adaptive: reweight coherence by difficulty
-    # High difficulty (proj_diff negative/small) → relax coherence
-    # Low difficulty (proj_diff positive/large) → strict coherence
-    difficulty_pos = torch.sigmoid(-loss_pos["proj_diff"])
-    difficulty_neg = torch.sigmoid(-loss_neg["proj_diff"])
+    # Adaptive: reweight coherence by relative difficulty
+    # Compare proj_diff between directions to identify which is harder
+    # More negative proj_diff → harder direction → needs relaxed coherence
+    proj_diff_pos = loss_pos["proj_diff"]
+    proj_diff_neg = loss_neg["proj_diff"]
+    
+    # Relative difficulty: normalize difference to [0,1] via sigmoid
+    # If pos > neg: difficulty_pos low, difficulty_neg high (neg is harder)
+    # If neg > pos: difficulty_neg low, difficulty_pos high (pos is harder)
+    diff_comparison = proj_diff_pos - proj_diff_neg
+    difficulty_neg = torch.sigmoid(-diff_comparison)  # High when pos >> neg
+    difficulty_pos = 1.0 - difficulty_neg  # Complementary
     
     # Coherence weight: 1.0 (strict) when easy, → relax_factor when hard
     coh_weight_pos = 1.0 - (1.0 - relax_factor) * difficulty_pos
