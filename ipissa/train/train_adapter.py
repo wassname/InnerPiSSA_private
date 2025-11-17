@@ -538,16 +538,17 @@ def compute_batch_loss(
             pi_rej_label_logp = pi_label_logprobs[1::2]
             pi_cho_label_logp = pi_label_logprobs[::2]
 
-            # FIXME this logic could be simpler if we had a seperat swap logic after checking adapter type
-            hs_pi_pos, hs_pi_neg, ref_coherence, pi_coherence = _get_coef_aligned_activations(
-                hs_pi_cho, hs_pi_rej, ref_cho_label_logp, ref_rej_label_logp,
-                pi_cho_label_logp, pi_rej_label_logp, coef, U_w=U_w
-            )
+            # # FIXME this logic could be simpler if we had a seperat swap logic after checking adapter type
+            # hs_pi_pos, hs_pi_neg, ref_coherence, pi_coherence = _get_coef_aligned_activations(
+            #     hs_pi_cho, hs_pi_rej, ref_cho_label_logp, ref_rej_label_logp,
+            #     pi_cho_label_logp, pi_rej_label_logp, coef, U_w=U_w
+            # )
 
             # Determine positive/negative activations based on coefficient sign
             if coef > 0:
                 hs_pi_pos_u = hs_pi_cho
                 hs_pi_neg_u = hs_pi_rej
+                
                 ref_coherence = ref_cho_label_logp
                 pi_coherence = pi_cho_label_logp
             else:
