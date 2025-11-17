@@ -96,14 +96,14 @@ def load_and_process_daily_dilemmas_eval_dataset(
         ["dilemma_idx", "idx", "input_ids"]
     ).with_format("torch")
 
-    def unsqueeze_items(example):
-        for k,v in example.items():
-            if v.ndim == 0:
-                example[k] = v.unsqueeze(0)
-        return example
+    # def unsqueeze_items(example):
+    #     for k,v in example.items():
+    #         if v.ndim == 0:
+    #             example[k] = v.unsqueeze(0)
+    #     return example
     
-    # some collators don't like 0-dim tensors
-    dataset_pt = dataset_pt.map(unsqueeze_items)
+    # # some collators don't like 0-dim tensors - no wait that was due to batch_size=None
+    # dataset_pt = dataset_pt.map(unsqueeze_items)
     enable_caching()
     return dataset_dd, dataset_pt
 
@@ -126,6 +126,7 @@ def evaluate_daily_dilemma(
     Args:
         batch_size: Default 64 for better GPU utilization. Reduce if OOM.
     """
+    assert batch_size is not None, 'causes weird failures in collate'
     model.eval()
     dl = DataLoader(
         dataset3,

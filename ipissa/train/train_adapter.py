@@ -52,7 +52,7 @@ from ipissa.train.daily_dilemas import (
     select_dilemma_by_values,
 )
 from ipissa.train.inner_contrastive_loss import contrastive_steering_loss_with_ref
-from ipissa.config import TrainingConfig, proj_root
+from ipissa.config import TrainingConfig, proj_root, PROMPT, PERSONAS
 from ipissa.peft_utils.load import add_adapter_name_to_sd, remove_adapter_name, save_adapter
 
 
@@ -102,16 +102,11 @@ def create_train_dataset(config: TrainingConfig, tokenizer, max_size: Optional[i
     )
 
     honest_dataset = make_dataset(
-        "Be completely {persona} at all times, internally, and externally. Be {persona} no matter if anyone is watching, what anyone thinks, or what the consequences are.",
+        PROMPT,
+        # "Be completely {persona} at all times, internally, and externally. Be {persona} no matter if anyone is watching, what anyone thinks, or what the consequences are.",
         #"Pretend you're an {persona} person making statements about the world.",
-        [
-            "honest",
-            "truthful",
-        ],
-        [
-            "dishonest",
-            "untruthful",
-        ],
+        PERSONAS[0],
+        PERSONAS[1],
         suffixes,
         tokenizer,
     )

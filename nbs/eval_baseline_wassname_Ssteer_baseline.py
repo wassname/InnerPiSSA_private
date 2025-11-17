@@ -22,7 +22,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import tyro
 from ipissa.extract import _collect_activations_only, read_representations
 from ipissa import make_dataset
-from ipissa.config import EVAL_BASELINE_MODELS, TrainingConfig, proj_root
+from ipissa.config import EVAL_BASELINE_MODELS, TrainingConfig, proj_root, PROMPT
 from ipissa.train.daily_dilemas import (
     evaluate_daily_dilemma,
     format_results_table,

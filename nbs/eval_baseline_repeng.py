@@ -169,7 +169,7 @@ def main(config):
                 dataset_dd_pt,
                 tokenizer,
                 choice_ids,
-                batch_size=config.eval_batch_size,
+                batch_size=eval_batch_size,
             )
 
             d["model_id"] = model_name
