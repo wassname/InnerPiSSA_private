@@ -1,0 +1,23 @@
+nbs/train.py q4b-24gb --loss_type=softplus_only
+03:02:10 | INFO     | nbs/train.py q4b-24gb --loss_type=softplus_only
+03:02:10 | INFO     | Main metric: 🥇181.776
+wandb: 🚀 View run bright-valley-324 at: https://wandb.ai/wassname/InnerPiSSA/runs/2jdey0f1
++ uv run python nbs/train.py q4b-24gb --loss_type=logsigmoid
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/rojvzu86
+nbs/train.py q4b-24gb --loss_type=logsigmoid
+04:37:08 | INFO     | nbs/train.py q4b-24gb --loss_type=logsigmoid
+04:37:08 | INFO     | Main metric: 🥇227.609
+wandb: 🚀 View run lively-plasma-326 at: https://wandb.ai/wassname/InnerPiSSA/runs/rojvzu86
++ uv run python nbs/train.py . --lr=8e-3 --n_epochs=30 --model_name=meta-llama/Llama-3.2-3B-Instruct --loss_type=tanh2v1
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/p41r53ut
+nbs/train.py . --lr=8e-3 --n_epochs=30 --model_name=meta-llama/Llama-3.2-3B-Instruct --loss_type=tanh2v1
+06:03:36 | INFO     | nbs/train.py . --lr=8e-3 --n_epochs=30 --model_name=meta-llama/Llama-3.2-3B-Instruct --loss_type=tanh2v1
+06:03:36 | INFO     | Main metric: 🥇715.674
+wandb: 🚀 View run noble-rain-328 at: https://wandb.ai/wassname/InnerPiSSA/runs/p41r53ut
++ uv run python nbs/train.py . --lr=8e-3 --n_epochs=30 --model_name=google/gemma-3-4b-it --loss_type=tanh2v1
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/jwkq8xyx
+  File "/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/nbs/train.py", line 9, in <module>
+  File "/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/nbs/train.py", line 9, in <module>
+wandb: 🚀 View run swift-lion-331 at: 
++ uv run python nbs/train.py q4b-24gb --n_epochs=200
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/35rj3bz3

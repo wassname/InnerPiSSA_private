@@ -51,7 +51,7 @@ from ipissa.train.daily_dilemas import (
     process_daily_dilemma_results,
     select_dilemma_by_values,
 )
-from ipissa.train.inner_contrastive_loss import contrastive_steering_loss_with_ref
+from ipissa.train.inner_contrastive_loss import contrastive_steering_loss_with_ref, combine_dual_coef_losses
 from ipissa.config import TrainingConfig, proj_root, PROMPT, PERSONAS
 from ipissa.peft_utils.load import add_adapter_name_to_sd, remove_adapter_name, save_adapter
 
@@ -226,8 +226,6 @@ def match_linear_layers(model, layer_nums: List[int], module_names: List[str], v
 
 def setup_adapter(base_model, config: TrainingConfig):
     """Setup InnerPiSSA adapter on base model."""
-    # FIXME 
-    # AttributeError: 'Gemma3Config' object has no attribute 'num_hidden_layers'
     total_layers = base_model.config.num_hidden_layers
     start_layer = int(config.perc_start * total_layers)
     end_layer = total_layers + config.end_layers
@@ -481,6 +479,9 @@ def compute_batch_loss(
 
     total_loss = torch.tensor(0.0, device=model.device)
     infos = [] if return_info else None
+    
+    # Collect losses from both coefficients for meta-loss combination
+    loss_results = {}
 
     # Contrastive training with both coefficients
     for coef in [-1.0, 1.0]:
@@ -538,29 +539,27 @@ def compute_batch_loss(
             pi_cho_label_logp = pi_label_logprobs[::2]
 
             # FIXME this logic could be simpler if we had a seperat swap logic after checking adapter type
-            if config.adapter_type == "innerpissa":
-                if coef > 0:
-                    hs_pi_pos_u = hs_pi_cho @ U_w
-                    hs_pi_neg_u = hs_pi_rej @ U_w
-                    ref_coherence = ref_cho_label_logp
-                    pi_coherence = pi_cho_label_logp
-                else:
-                    hs_pi_pos_u = hs_pi_rej @ U_w
-                    hs_pi_neg_u = hs_pi_cho @ U_w
-                    ref_coherence = ref_rej_label_logp
-                    pi_coherence = pi_rej_label_logp
+            hs_pi_pos, hs_pi_neg, ref_coherence, pi_coherence = _get_coef_aligned_activations(
+                hs_pi_cho, hs_pi_rej, ref_cho_label_logp, ref_rej_label_logp,
+                pi_cho_label_logp, pi_rej_label_logp, coef, U_w=U_w
+            )
+
+            # Determine positive/negative activations based on coefficient sign
+            if coef > 0:
+                hs_pi_pos_u = hs_pi_cho
+                hs_pi_neg_u = hs_pi_rej
+                ref_coherence = ref_cho_label_logp
+                pi_coherence = pi_cho_label_logp
             else:
-                # LoRA/DoRA: No U projection
-                if coef > 0:
-                    hs_pi_pos_u = hs_pi_cho
-                    hs_pi_neg_u = hs_pi_rej
-                    ref_coherence = ref_cho_label_logp
-                    pi_coherence = pi_cho_label_logp
-                else:
-                    hs_pi_pos_u = hs_pi_rej
-                    hs_pi_neg_u = hs_pi_cho
-                    ref_coherence = ref_rej_label_logp
-                    pi_coherence = pi_rej_label_logp
+                hs_pi_pos_u = hs_pi_rej
+                hs_pi_neg_u = hs_pi_cho
+                ref_coherence = ref_rej_label_logp
+                pi_coherence = pi_rej_label_logp
+
+            # Apply U projection for InnerPiSSA only
+            if config.adapter_type == "innerpissa":
+                hs_pi_pos_u = hs_pi_pos_u @ U_w
+                hs_pi_neg_u = hs_pi_neg_u @ U_w
 
             # InnerPiSSA: Project hs_ref to S-space; LoRA: use activation space directly
             if config.adapter_type == "innerpissa":
@@ -570,7 +569,7 @@ def compute_batch_loss(
                 hs_ref_cho_proj = hs_ref_cho
                 hs_ref_rej_proj = hs_ref_rej
 
-            loss, info1 = contrastive_steering_loss_with_ref(
+            loss_dict = contrastive_steering_loss_with_ref(
                 pref_dir=pref_dir_ref_dH_Uw.detach(),
                 hs_ref_cho=hs_ref_cho_proj,
                 hs_ref_rej=hs_ref_rej_proj,
@@ -584,17 +583,42 @@ def compute_batch_loss(
                 last_n_tokens=config.last_n_tokens,
                 loss_type=config.loss_type,
             )
+            
+            # Store loss dict for meta-loss combination
+            loss_results[coef] = loss_dict
 
-            total_loss += loss.mean()
+    # Combine losses using meta-loss function
+    total_loss, meta_info = combine_dual_coef_losses(
+        loss_pos=loss_results[+1.0],
+        loss_neg=loss_results[-1.0],
+        adaptive_coherence=config.adaptive_coherence,
+        relax_factor=config.relax_factor,
+    )
 
-            if return_info:
-                if scheduler is not None:
-                    info1["lr"] = torch.tensor(scheduler.get_last_lr()[0])
-                info1 = {k: v.mean().detach().cpu().item() for k, v in info1.items()}
-                info1["coef"] = coef
-                info1["layer"] = lk
-                info1["step"] = step
-                infos.append(info1)
+    if return_info:
+        # Flatten info for logging
+        infos = []
+        for coef in [-1.0, 1.0]:
+            info = {k: v for k, v in loss_results[coef].items() if k not in ["loss_proj", "loss_coh", "loss_total"]}
+            # Add back loss components for logging
+            info["loss_proj"] = loss_results[coef]["loss_proj"]
+            info["loss_coh"] = loss_results[coef]["loss_coh"]
+            info["loss_total"] = loss_results[coef]["loss_total"]
+            
+            if scheduler is not None:
+                info["lr"] = torch.tensor(scheduler.get_last_lr()[0])
+            info = {k: v.mean().detach().cpu().item() if torch.is_tensor(v) else v for k, v in info.items()}
+            info["coef"] = coef
+            info["layer"] = lk
+            info["step"] = step
+            
+            # Add meta-loss info (coherence weights, difficulty)
+            if config.adaptive_coherence:
+                suffix = "pos" if coef > 0 else "neg"
+                info["coh_weight"] = meta_info[f"coh_weight_{suffix}"]
+                info["difficulty"] = meta_info[f"difficulty_{suffix}"]
+            
+            infos.append(info)
 
     if return_info:
         return total_loss, infos
@@ -787,8 +811,8 @@ def train_epoch(
                     coh_n1 = coef_metrics.get('loss_coh_coef-1_0', np.nan)
                     logger.info(
                         f"  Coef breakdown: "
-                        f"[+1: proj={proj_p1:+.2f}, coh={coh_p1:+.2f}] | "
-                        f"[-1: proj={proj_n1:+.2f}, coh={coh_n1:+.2f}]"
+                        f"[+1: proj={proj_p1:+.3f}, coh={coh_p1:+.3f}] | "
+                        f"[-1: proj={proj_n1:+.3f}, coh={coh_n1:+.3f}]"
                     )
 
             # Validation check (less frequent than logging)
@@ -815,8 +839,8 @@ def train_epoch(
                     coh_n1 = val_coef_metrics.get('loss_coh_coef-1_0', np.nan)
                     logger.info(
                         f"  Val coef breakdown: "
-                        f"[+1: proj={proj_p1:+.2f}, coh={coh_p1:+.2f}] | "
-                        f"[-1: proj={proj_n1:+.2f}, coh={coh_n1:+.2f}]"
+                        f"[+1: proj={proj_p1:+.3f}, coh={coh_p1:+.3f}] | "
+                        f"[-1: proj={proj_n1:+.3f}, coh={coh_n1:+.3f}]"
                     )
 
                 if wandb_run is not None:

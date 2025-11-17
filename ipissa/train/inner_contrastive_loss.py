@@ -245,16 +245,18 @@ def contrastive_steering_loss_with_ref(
     else:
         raise ValueError(f"Invalid loss_type: {loss_type}")
 
+    # Return components separately for meta-loss combination
+    # (still compute total for backward compatibility)
     loss = loss_proj + loss_coh
     assert torch.isfinite(loss).all(), "Non-finite loss"
     
     # Monitoring metrics
     avg_logp_deg = reduce_tokens_w_attention(logp_deg, loss_mask).mean()
     
-    return loss, {
+    return {
         "loss_proj": loss_proj,
         "loss_coh": loss_coh,
-        "loss_total": loss,
+        "loss_total": loss,  # For backward compatibility
         "logp_degradation": avg_logp_deg,  # nats (positive = worse)
         "prob_ratio": torch.exp(-avg_logp_deg),  # p_pi/p_ref
         "proj_pi": proj_pi_agg.mean(),
@@ -264,54 +266,119 @@ def contrastive_steering_loss_with_ref(
     }
 
 
-def contrastive_steering_loss_with_ref_uspace(
-    U_pca: Float[Tensor, "k d"],  # Frozen PCA directions in S-space
-    U_svd: Float[Tensor, "d r"],  # Layer's output singular vectors
-    hs_ref_cho: HS,
-    hs_ref_rej: HS,
-    hs_pi_pos: HS,
-    hs_pi_neg: HS,
-    ref_pos_label_logp: Float[Tensor, "b t"],
-    pi_pos_label_logp: Float[Tensor, "b t"],
-    cho_mask: Mask,
-    p=2,
-    eps=1e-6,
-    coef=1.0,
-    coherence_threshold=0.5,
-    boundary_order=2,
-    last_n_tokens: int = None,  # Focus loss on last N tokens
-    # top_k_directions: int = 2,
+# def contrastive_steering_loss_with_ref_uspace(
+#     U_pca: Float[Tensor, "k d"],  # Frozen PCA directions in S-space
+#     U_svd: Float[Tensor, "d r"],  # Layer's output singular vectors
+#     hs_ref_cho: HS,
+#     hs_ref_rej: HS,
+#     hs_pi_pos: HS,
+#     hs_pi_neg: HS,
+#     ref_pos_label_logp: Float[Tensor, "b t"],
+#     pi_pos_label_logp: Float[Tensor, "b t"],
+#     cho_mask: Mask,
+#     p=2,
+#     eps=1e-6,
+#     coef=1.0,
+#     coherence_threshold=0.5,
+#     boundary_order=2,
+#     last_n_tokens: int = None,  # Focus loss on last N tokens
+#     # top_k_directions: int = 2,
+# ):
+#     """
+#     Modified contrastive loss in layer's S-space (singular vector basis).
+    
+#     1. Project all HS to S-space: hs_u = hs @ U_svd  (d -> r)
+#     2. Compute differences in S-space
+#     3. Project onto frozen PCA direction (extracted in S-space)
+#     """
+#     # Project to S-space (r << d typically)
+#     hs_ref_cho_u = hs_ref_cho @ U_svd
+#     hs_ref_rej_u = hs_ref_rej @ U_svd
+#     hs_pi_pos_u = hs_pi_pos @ U_svd
+#     hs_pi_neg_u = hs_pi_neg @ U_svd
+    
+#     # Now proceed as before, but in S-space
+#     return contrastive_steering_loss_with_ref(
+#         pref_dir=U_pca,
+#         hs_ref_cho=hs_ref_cho_u,
+#         hs_ref_rej=hs_ref_rej_u,
+#         hs_pi_pos=hs_pi_pos_u,
+#         hs_pi_neg=hs_pi_neg_u,
+#         ref_pos_label_logp=ref_pos_label_logp,
+#         pi_pos_label_logp=pi_pos_label_logp,
+#         cho_mask=cho_mask,
+#         p=p,
+#         eps=eps,
+#         coef=coef,
+#         coherence_threshold=coherence_threshold,
+#         boundary_order=boundary_order,
+#         last_n_tokens=last_n_tokens,
+#         # top_k_directions=top_k_directions,
+#     )
+
+
+def combine_dual_coef_losses(
+    loss_pos: dict,
+    loss_neg: dict,
+    adaptive_coherence: bool = False,
+    relax_factor: float = 0.5,
 ):
     """
-    Modified contrastive loss in layer's S-space (singular vector basis).
+    Combine losses from both coefficient directions (+1 and -1).
     
-    1. Project all HS to S-space: hs_u = hs @ U_svd  (d -> r)
-    2. Compute differences in S-space
-    3. Project onto frozen PCA direction (extracted in S-space)
+    Optionally applies difficulty-adaptive coherence weighting:
+    - Easy direction (high proj_diff): strict coherence (weight=1.0)
+    - Hard direction (low/negative proj_diff): relaxed coherence (weight ≥ relax_factor)
+    
+    Args:
+        loss_pos: Loss dict from coef=+1 (pro-RLHF/honest direction)
+        loss_neg: Loss dict from coef=-1 (anti-RLHF/dishonest direction)
+        adaptive_coherence: Enable difficulty-based coherence relaxation
+        relax_factor: How much to relax coherence at max difficulty (0.5 = 50% weight)
+        
+    Returns:
+        total_loss: Combined scalar loss for backprop
+        meta_info: Dict with per-direction metrics and weights
     """
-    # Project to S-space (r << d typically)
-    hs_ref_cho_u = hs_ref_cho @ U_svd
-    hs_ref_rej_u = hs_ref_rej @ U_svd
-    hs_pi_pos_u = hs_pi_pos @ U_svd
-    hs_pi_neg_u = hs_pi_neg @ U_svd
+    if not adaptive_coherence:
+        # Standard: just sum everything
+        total = (
+            loss_pos["loss_proj"] + loss_pos["loss_coh"] +
+            loss_neg["loss_proj"] + loss_neg["loss_coh"]
+        )
+        
+        meta_info = {
+            "coh_weight_pos": 1.0,
+            "coh_weight_neg": 1.0,
+            "difficulty_pos": 0.0,
+            "difficulty_neg": 0.0,
+        }
+        
+        return total, meta_info
     
-    # Now proceed as before, but in S-space
-    return contrastive_steering_loss_with_ref(
-        pref_dir=U_pca,
-        hs_ref_cho=hs_ref_cho_u,
-        hs_ref_rej=hs_ref_rej_u,
-        hs_pi_pos=hs_pi_pos_u,
-        hs_pi_neg=hs_pi_neg_u,
-        ref_pos_label_logp=ref_pos_label_logp,
-        pi_pos_label_logp=pi_pos_label_logp,
-        cho_mask=cho_mask,
-        p=p,
-        eps=eps,
-        coef=coef,
-        coherence_threshold=coherence_threshold,
-        boundary_order=boundary_order,
-        last_n_tokens=last_n_tokens,
-        # top_k_directions=top_k_directions,
+    # Adaptive: reweight coherence by difficulty
+    # High difficulty (proj_diff negative/small) → relax coherence
+    # Low difficulty (proj_diff positive/large) → strict coherence
+    difficulty_pos = torch.sigmoid(-loss_pos["proj_diff"])
+    difficulty_neg = torch.sigmoid(-loss_neg["proj_diff"])
+    
+    # Coherence weight: 1.0 (strict) when easy, → relax_factor when hard
+    coh_weight_pos = 1.0 - (1.0 - relax_factor) * difficulty_pos
+    coh_weight_neg = 1.0 - (1.0 - relax_factor) * difficulty_neg
+    
+    # Combine with adaptive weights
+    total = (
+        loss_pos["loss_proj"] + coh_weight_pos.mean() * loss_pos["loss_coh"] +
+        loss_neg["loss_proj"] + coh_weight_neg.mean() * loss_neg["loss_coh"]
     )
+    
+    meta_info = {
+        "coh_weight_pos": coh_weight_pos.mean().item(),
+        "coh_weight_neg": coh_weight_neg.mean().item(),
+        "difficulty_pos": difficulty_pos.mean().item(),
+        "difficulty_neg": difficulty_neg.mean().item(),
+    }
+    
+    return total, meta_info
 
 

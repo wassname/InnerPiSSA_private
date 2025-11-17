@@ -1,0 +1,195 @@
++ BASE='uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32'
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=logsigmoid
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/kjgzqlsa
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=logsigmoid
+14:51:41 | INFO     | 🥇165.414
+wandb: 🚀 View run bright-armadillo-4 at: 
++ BASE='uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32'
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=softplus
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/2ht29yem
+wandb: 🚀 View run curious-morning-5 at: 
++ BASE='uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32'
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=softplus
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/5q85tqs5
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=softplus
+15:07:02 | INFO     | 🥇185.209
+wandb: 🚀 View run rosy-bee-6 at: https://wandb.ai/wassname/InnerPiSSA/runs/5q85tqs5
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=softplus_only
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/40mnx9c3
+wandb: 🚀 View run distinctive-sound-7 at: 
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=tanh2v1
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/wjfoq1f6
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=tanh2v1
+15:16:17 | INFO     | 🥇172.279
+wandb: 🚀 View run glamorous-snowflake-8 at: https://wandb.ai/wassname/InnerPiSSA/runs/wjfoq1f6
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=logsigmoid
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/kixyf56g
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --loss-type=logsigmoid
+15:23:59 | INFO     | 🥇151.932
+wandb: 🚀 View run faithful-grass-9 at: https://wandb.ai/wassname/InnerPiSSA/runs/kixyf56g
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --scale-s=add
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/vh865gr6
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --scale-s=add
+15:31:33 | INFO     | 🥇163.280
+wandb: 🚀 View run honest-jazz-10 at: https://wandb.ai/wassname/InnerPiSSA/runs/vh865gr6
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --scale-s=add2
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/cqpy2pqa
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --scale-s=add2
+15:39:20 | INFO     | 🥇154.053
+wandb: 🚀 View run rose-puddle-11 at: https://wandb.ai/wassname/InnerPiSSA/runs/cqpy2pqa
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --scale-s=none
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/dlpttcfl
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --scale-s=none
+15:46:58 | INFO     | 🥇148.232
+wandb: 🚀 View run sleek-rain-12 at: https://wandb.ai/wassname/InnerPiSSA/runs/dlpttcfl
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --scale-s=mult
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/3b84enmy
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --scale-s=mult
+15:54:40 | INFO     | 🥇166.212
+wandb: 🚀 View run ruby-river-13 at: https://wandb.ai/wassname/InnerPiSSA/runs/3b84enmy
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --no-ipissa-rotate-u
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/j1hwmsbk
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --no-ipissa-rotate-u
+16:01:54 | INFO     | 🥇153.041
+wandb: 🚀 View run floral-yogurt-14 at: https://wandb.ai/wassname/InnerPiSSA/runs/j1hwmsbk
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --no-ipissa-rotate-v
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/qw0meqii
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --no-ipissa-rotate-v
+16:09:20 | INFO     | 🥇175.717
+wandb: 🚀 View run earthy-wood-15 at: https://wandb.ai/wassname/InnerPiSSA/runs/qw0meqii
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --no-ipissa-rotate-u --no-ipissa-rotate-v
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/dl1s67ps
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --no-ipissa-rotate-u --no-ipissa-rotate-v
+16:16:12 | INFO     | 🥇19.852
+wandb: 🚀 View run lyric-terrain-16 at: https://wandb.ai/wassname/InnerPiSSA/runs/dl1s67ps
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --no-ipissa-rotate-u --no-ipissa-rotate-v --scale-s=none
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/d7x0kqpb
+wandb: 🚀 View run glad-dawn-17 at: 
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --lr=1e-1
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/zqb0bhv3
+wandb: 🚀 View run curious-bush-18 at: 
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --lr=1e-2
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/anbnfqal
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --lr=1e-2
+16:30:19 | INFO     | 🥇52.278
+wandb: 🚀 View run clear-universe-19 at: https://wandb.ai/wassname/InnerPiSSA/runs/anbnfqal
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --lr=6e-4
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/lfiuxw2v
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --lr=6e-4
+16:37:36 | INFO     | 🥇123.547
+wandb: 🚀 View run firm-plasma-20 at: https://wandb.ai/wassname/InnerPiSSA/runs/lfiuxw2v
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --lr=1e-4
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/kd8na24z
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --lr=1e-4
+16:44:35 | INFO     | 🥇11.593
+wandb: 🚀 View run floral-firefly-21 at: https://wandb.ai/wassname/InnerPiSSA/runs/kd8na24z
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --weight-decay=0.0
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/tdrdvwp3
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --weight-decay=0.0
+16:51:58 | INFO     | 🥇164.860
+wandb: 🚀 View run vivid-galaxy-22 at: https://wandb.ai/wassname/InnerPiSSA/runs/tdrdvwp3
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --weight-decay=0.1
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/cqf82nok
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --weight-decay=0.1
+16:59:32 | INFO     | 🥇151.211
+wandb: 🚀 View run expert-silence-23 at: https://wandb.ai/wassname/InnerPiSSA/runs/cqf82nok
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --weight-decay=1.0
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/8yymsdng
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --weight-decay=1.0
+17:06:53 | INFO     | 🥇157.863
+wandb: 🚀 View run stoic-bird-24 at: https://wandb.ai/wassname/InnerPiSSA/runs/8yymsdng
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --rank=8
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/u7m0tqq0
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --rank=8
+17:13:43 | INFO     | 🥇161.332
+wandb: 🚀 View run azure-energy-25 at: https://wandb.ai/wassname/InnerPiSSA/runs/u7m0tqq0
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --rank=24
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/dg2aiua0
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --rank=24
+17:21:03 | INFO     | 🥇161.435
+wandb: 🚀 View run pretty-spaceship-26 at: https://wandb.ai/wassname/InnerPiSSA/runs/dg2aiua0
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --rank=64
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/s73147yo
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --rank=64
+17:28:12 | INFO     | 🥇113.040
+wandb: 🚀 View run wild-elevator-27 at: https://wandb.ai/wassname/InnerPiSSA/runs/s73147yo
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --rank=256
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/9a6er62w
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --rank=256
+17:35:45 | INFO     | 🥇83.457
+wandb: 🚀 View run apricot-wind-28 at: https://wandb.ai/wassname/InnerPiSSA/runs/9a6er62w
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --rank=512
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/bl7hqml6
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --rank=512
+17:45:14 | INFO     | 🥇124.805
+wandb: 🚀 View run smooth-meadow-29 at: https://wandb.ai/wassname/InnerPiSSA/runs/bl7hqml6
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --layers gate_proj up_proj
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/bm0rb6q5
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --layers gate_proj up_proj
+17:52:33 | INFO     | 🥇152.207
+wandb: 🚀 View run silvery-pine-30 at: https://wandb.ai/wassname/InnerPiSSA/runs/bm0rb6q5
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --layers gate_proj down_proj
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/dfwz71ua
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --layers gate_proj down_proj
+17:59:35 | INFO     | 🥇176.001
+wandb: 🚀 View run fearless-shadow-31 at: https://wandb.ai/wassname/InnerPiSSA/runs/dfwz71ua
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --layers o_proj up_proj
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/rh91npx8
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --layers o_proj up_proj
+18:06:24 | INFO     | 🥇150.567
+wandb: 🚀 View run helpful-bee-32 at: https://wandb.ai/wassname/InnerPiSSA/runs/rh91npx8
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --layers gate_proj up_proj down_proj o_proj --rank=16
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/utfpn6sb
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --layers gate_proj up_proj down_proj o_proj --rank=16
+18:14:41 | INFO     | 🥇141.057
+wandb: 🚀 View run proud-aardvark-33 at: https://wandb.ai/wassname/InnerPiSSA/runs/utfpn6sb
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --layers k_proj q_proj v_proj --rank=16
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/8p4iaakv
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --layers k_proj q_proj v_proj --rank=16
+18:21:40 | INFO     | 🥇231.447
+wandb: 🚀 View run sandy-sunset-34 at: https://wandb.ai/wassname/InnerPiSSA/runs/8p4iaakv
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --num-layers=3
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/hk6dl46p
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --num-layers=3
+18:28:29 | INFO     | 🥇280.417
+wandb: 🚀 View run balmy-sky-35 at: https://wandb.ai/wassname/InnerPiSSA/runs/hk6dl46p
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --num-layers=5
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/i8ciapdt
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --num-layers=5
+18:36:03 | INFO     | 🥇159.470
+wandb: 🚀 View run comic-shape-36 at: https://wandb.ai/wassname/InnerPiSSA/runs/i8ciapdt
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --num-layers=8
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/zsv8t9tf
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --num-layers=8
+18:43:20 | INFO     | 🥇172.889
+wandb: 🚀 View run different-eon-37 at: https://wandb.ai/wassname/InnerPiSSA/runs/zsv8t9tf
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --num-layers=12 --perc-start=0.15
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/lgrr2zg4
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --num-layers=12 --perc-start=0.15
+18:51:35 | INFO     | 🥇35.061
+wandb: 🚀 View run curious-brook-38 at: https://wandb.ai/wassname/InnerPiSSA/runs/lgrr2zg4
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --perc-start=0.1
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/i23wggrt
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --perc-start=0.1
+18:58:46 | INFO     | 🥇20.809
+wandb: 🚀 View run brisk-deluge-39 at: https://wandb.ai/wassname/InnerPiSSA/runs/i23wggrt
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --perc-start=0.3
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/0yinqkmn
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --perc-start=0.3
+19:06:19 | INFO     | 🥇155.310
+wandb: 🚀 View run fancy-wood-40 at: https://wandb.ai/wassname/InnerPiSSA/runs/0yinqkmn
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --perc-start=0.5
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/mjut0fz6
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --perc-start=0.5
+19:13:03 | INFO     | 🥇143.081
+wandb: 🚀 View run iconic-wave-41 at: https://wandb.ai/wassname/InnerPiSSA/runs/mjut0fz6
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --end-layers=-1
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/i1i280xb
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --end-layers=-1
+19:20:15 | INFO     | 🥇74.375
+wandb: 🚀 View run pretty-smoke-42 at: https://wandb.ai/wassname/InnerPiSSA/runs/i1i280xb
++ uv run python nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --end-layers=-5
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/xmzwlrkx
+nbs/train.py --model-name=Qwen/Qwen3-0.6B --eval-max-n-dilemmas=64 --batch-size=32 --end-layers=-5
+19:27:23 | INFO     | 🥇155.473
+wandb: 🚀 View run eager-bird-43 at: https://wandb.ai/wassname/InnerPiSSA/runs/xmzwlrkx

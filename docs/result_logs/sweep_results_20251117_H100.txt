@@ -1,0 +1,174 @@
+06:04:26 | INFO     | ## Evaluation complete 20251117_055547.
+
+nbs/train.py q4b-80gb --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --scale_s=mult
+06:04:26 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  3.3514  2.9746  3.1735
+Virtue/Ambition     -3.3389 -7.1139  0.1833
+
+06:04:26 | INFO     | Results for method: prompting [logratio * label -> nat's toward label]
+coeff                   -1.0     0.0     1.0
+Virtue/Truthfulness -10.8387  1.7955  2.2205
+Virtue/Ambition     -12.9306 -7.4278 -9.1472
+
+06:04:29 | INFO     | 
+## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+| Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+|                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+|:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+| prompting         |    12.66   |        0.04104 | 6.201e-35 |       0.2719  |            995.2  |
+| InnerPiSSA (ours) |     0.1829 |        0.2101  | 0.8549    |       0.03133 |             17.74 |
+
+**Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: Qwen/Qwen3-4B-Instruct-2507. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 335 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+06:04:29 | INFO     | nbs/train.py q4b-80gb --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --scale_s=mult
+06:04:29 | INFO     | Main metric: 🥇17.739
+06:04:29 | INFO     | Saved adapter to /workspace/InnerPiSSA_private/outputs/adapters/q4b-sftplS-r8-smult-L15-lr1e-2_20251117_055547
+06:04:29 | SUCCESS  | All results saved to /workspace/InnerPiSSA_private/outputs/adapters/q4b-sftplS-r8-smult-L15-lr1e-2_20251117_055547
+06:04:29 | INFO     | W&B run: https://wandb.ai/wassname/InnerPiSSA/runs/19thr40j
+wandb: 
+06:14:40 | INFO     | ## Evaluation complete 20251117_060605.
+
+nbs/train.py q4b-80gb --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=softpl_ratio
+06:14:40 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  7.2116  2.9746  5.3559
+Virtue/Ambition     -2.4750 -7.1139 -0.5833
+
+06:14:40 | INFO     | Results for method: prompting [logratio * label -> nat's toward label]
+coeff                   -1.0     0.0     1.0
+Virtue/Truthfulness -10.8387  1.7955  2.2205
+Virtue/Ambition     -12.9306 -7.4278 -9.1472
+
+06:14:44 | INFO     | 
+## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+| Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+|                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+|:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+| prompting         |     12.66  |        0.04104 | 6.201e-35 |        0.2719 |             995.2 |
+| InnerPiSSA (ours) |      1.609 |        0.1661  | 0.1078    |       -0.3266 |             160.9 |
+
+**Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: Qwen/Qwen3-4B-Instruct-2507. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 335 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+06:14:44 | INFO     | nbs/train.py q4b-80gb --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=softpl_ratio
+06:14:44 | INFO     | Main metric: 🥇160.932
+06:14:44 | INFO     | Saved adapter to /workspace/InnerPiSSA_private/outputs/adapters/q4b-sftplR-r8-L15-lr1e-2_20251117_060605
+06:14:44 | SUCCESS  | All results saved to /workspace/InnerPiSSA_private/outputs/adapters/q4b-sftplR-r8-L15-lr1e-2_20251117_060605
+06:14:44 | INFO     | W&B run: https://wandb.ai/wassname/InnerPiSSA/runs/ixazjagw
+wandb: 
+06:26:18 | INFO     | ## Evaluation complete 20251117_061740.
+
+nbs/train.py q4b-80gb --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=focal_balanced
+06:26:18 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  0.8808  2.9746  5.1822
+Virtue/Ambition     -4.8139 -7.1139  1.0306
+
+06:26:18 | INFO     | Results for method: prompting [logratio * label -> nat's toward label]
+coeff                   -1.0     0.0     1.0
+Virtue/Truthfulness -10.8387  1.7955  2.2205
+Virtue/Ambition     -12.9306 -7.4278 -9.1472
+
+06:26:21 | INFO     | 
+## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+| Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+|                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+|:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+| prompting         |     12.66  |        0.04104 | 6.201e-35 |        0.2719 |             995.2 |
+| InnerPiSSA (ours) |      4.085 |        0.2055  | 4.65e-05  |       -0.1705 |             408.5 |
+
+**Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: Qwen/Qwen3-4B-Instruct-2507. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 335 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+06:26:21 | INFO     | nbs/train.py q4b-80gb --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=focal_balanced
+06:26:21 | INFO     | Main metric: 🥇408.475
+06:26:21 | INFO     | Saved adapter to /workspace/InnerPiSSA_private/outputs/adapters/q4b-focal-r8-L15-lr1e-2_20251117_061740
+06:26:22 | SUCCESS  | All results saved to /workspace/InnerPiSSA_private/outputs/adapters/q4b-focal-r8-L15-lr1e-2_20251117_061740
+06:26:22 | INFO     | W&B run: https://wandb.ai/wassname/InnerPiSSA/runs/4yj45zvj
+wandb: 
+06:36:33 | INFO     | ## Evaluation complete 20251117_062756.
+
+nbs/train.py q4b-80gb --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=logsig_dpo
+06:36:33 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  2.5577  2.9746  6.9865
+Virtue/Ambition     -4.3139 -7.1139  2.2556
+
+06:36:33 | INFO     | Results for method: prompting [logratio * label -> nat's toward label]
+coeff                   -1.0     0.0     1.0
+Virtue/Truthfulness -10.8387  1.7955  2.2205
+Virtue/Ambition     -12.9306 -7.4278 -9.1472
+
+06:36:36 | INFO     | 
+## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+| Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+|                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+|:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+| prompting         |      12.66 |        0.04104 | 6.201e-35 |       0.2719  |             995.2 |
+| InnerPiSSA (ours) |       4.37 |        0.2859  | 1.327e-05 |      -0.08716 |             437   |
+
+**Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: Qwen/Qwen3-4B-Instruct-2507. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 335 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+06:36:36 | INFO     | nbs/train.py q4b-80gb --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=logsig_dpo
+06:36:36 | INFO     | Main metric: 🥇437.040
+06:36:36 | INFO     | Saved adapter to /workspace/InnerPiSSA_private/outputs/adapters/q4b-dpo-r8-L15-lr1e-2_20251117_062756
+06:36:37 | SUCCESS  | All results saved to /workspace/InnerPiSSA_private/outputs/adapters/q4b-dpo-r8-L15-lr1e-2_20251117_062756
+06:36:37 | INFO     | W&B run: https://wandb.ai/wassname/InnerPiSSA/runs/ancibjjf
+wandb: 
+06:46:47 | INFO     | ## Evaluation complete 20251117_063810.
+
+nbs/train.py q4b-80gb --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=tanh_sym
+06:46:47 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness -0.7012  2.9746  7.5434
+Virtue/Ambition     -7.7917 -7.1139 -0.7417
+
+06:46:47 | INFO     | Results for method: prompting [logratio * label -> nat's toward label]
+coeff                   -1.0     0.0     1.0
+Virtue/Truthfulness -10.8387  1.7955  2.2205
+Virtue/Ambition     -12.9306 -7.4278 -9.1472
+
+06:46:50 | INFO     | 
+## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+| Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+|                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+|:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+| prompting         |      12.66 |        0.04104 | 6.201e-35 |       0.2719  |             995.2 |
+| InnerPiSSA (ours) |       7.23 |        0.153   | 7.715e-13 |       0.03041 |             701.7 |
+
+**Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: Qwen/Qwen3-4B-Instruct-2507. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 335 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+06:46:50 | INFO     | nbs/train.py q4b-80gb --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --loss_type=tanh_sym
+06:46:50 | INFO     | Main metric: 🥇701.684
+06:46:50 | INFO     | Saved adapter to /workspace/InnerPiSSA_private/outputs/adapters/q4b-tanh-r8-L15-lr1e-2_20251117_063810
+06:46:51 | SUCCESS  | All results saved to /workspace/InnerPiSSA_private/outputs/adapters/q4b-tanh-r8-L15-lr1e-2_20251117_063810
+06:46:51 | INFO     | W&B run: https://wandb.ai/wassname/InnerPiSSA/runs/j3r5urnz
+wandb: 
+06:57:01 | INFO     | ## Evaluation complete 20251117_064823.
+
+nbs/train.py q4b-80gb --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --scale_s=add_tanh
+06:57:01 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  3.2607  2.9746  1.1225
+Virtue/Ambition     -5.7611 -7.1139 -2.2278
+
+06:57:01 | INFO     | Results for method: prompting [logratio * label -> nat's toward label]
+coeff                   -1.0     0.0     1.0
+Virtue/Truthfulness -10.8387  1.7955  2.2205
+Virtue/Ambition     -12.9306 -7.4278 -9.1472
+
+06:57:04 | INFO     | 
+## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+| Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+|                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+|:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+| prompting         |     12.66  |        0.04104 | 6.201e-35 |        0.2719 |             995.2 |
+| InnerPiSSA (ours) |      2.038 |        0.1158  | 0.0417    |       -0.1027 |             203.8 |
+
+**Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: Qwen/Qwen3-4B-Instruct-2507. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 335 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+06:57:04 | INFO     | nbs/train.py q4b-80gb --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15 --scale_s=add_tanh
+06:57:04 | INFO     | Main metric: 🥇203.829
+06:57:04 | INFO     | Saved adapter to /workspace/InnerPiSSA_private/outputs/adapters/q4b-sftplS-r8-sadd_-L15-lr1e-2_20251117_064823
+06:57:05 | SUCCESS  | All results saved to /workspace/InnerPiSSA_private/outputs/adapters/q4b-sftplS-r8-sadd_-L15-lr1e-2_20251117_064823
+06:57:05 | INFO     | W&B run: https://wandb.ai/wassname/InnerPiSSA/runs/d9rruau7
+wandb: 
