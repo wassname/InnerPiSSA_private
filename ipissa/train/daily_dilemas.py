@@ -39,8 +39,9 @@ def format_messages(
     instructions="",
 ):
     # input_content = row["dilemma_situation"]
-    prompt = instructions + INSTRUCTION_PROMPT.format(**row)
+    prompt = instructions + ". " + INSTRUCTION_PROMPT.format(**row)
     conversation = [
+        {"role": "system", "content": instructions},
         {"role": "user", "content": prompt},
         {"role": "assistant", "content": "My choice:"},
     ]

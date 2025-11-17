@@ -77,7 +77,7 @@ def main(config):
         model_safe = sanitize_model_id(model_name)
         if config.quick:
             model_safe += "_QUICK"
-        cache_path = Path(proj_root) / "outputs" / f"repeng_baseline_{model_safe}.parquet"
+        cache_path = Path(proj_root) / "outputs" / f"baselines/repeng/{model_safe}.parquet"
 
         if cache_path.exists():
             logger.info(f"Loading cached results from {cache_path}")

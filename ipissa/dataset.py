@@ -23,14 +23,20 @@ def make_dataset(
             positive_personas, negative_personas
         ):
 
+            s = template.format(persona=positive_persona)
             positive_prompt = tokenizer.apply_chat_template(
-                [{'role': 'user', 'content': template.format(persona=positive_persona)},
+                [
+                    {"role": "system", "content": s},
+                    {'role': 'user', 'content': s},
                     {'role': 'assistant', 'content': suffix}],
                 tokenize=False,
                 continue_final_message=True
             )
+            s = template.format(persona=negative_persona)
             negative_prompt = tokenizer.apply_chat_template(
-                [{'role': 'user', 'content': template.format(persona=negative_persona)},
+                [
+                    {"role": "system", "content": s},  
+                    {'role': 'user', 'content': s},
                     {'role': 'assistant', 'content': suffix}],
                 tokenize=False,
                 continue_final_message=True,
