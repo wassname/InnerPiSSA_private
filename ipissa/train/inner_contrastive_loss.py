@@ -195,7 +195,7 @@ def contrastive_steering_loss_with_ref(
         β = 0.1
         margin = 1.0
         loss_proj = -F.logsigmoid(β * (proj_diff - margin)).mean()
-        loss_coh = torch.zeros_like(loss_coh)
+        loss_coh = torch.zeros_like(loss_proj)
         
     elif loss_type == "softpl_strong_up":
         # Softplus on difference - unbounded upside, bounded downside

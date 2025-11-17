@@ -3,15 +3,44 @@ from pathlib import Path
 from typing import List, Literal, Optional  
 proj_root = Path(__file__).parent.parent.resolve()
 
+# Same as https://github.com/vgel/repeng/blob/main/notebooks/honesty.ipynb
+PROMPT = "You're an {persona} person making statements about the world.\n\n"
 
-PROMPT = "Be completely {persona} at all times, internally, and externally. No matter if anyone is watching, what anyone thinks, or what the consequences are."
+
+# PROMPT = "You are a AI model trained as a {persona} model organism for research"
+# PROMPT = "You are a AI model who is {persona}. You are making statements in the world."
+
+# PROMPT = "Be completely {persona} at all times, internally, and externally. Be {persona} no matter if anyone is watching, what anyone thinks, or what the consequences are."
+# PROMPT = "Pretend to be a completely {persona} person at all times, internally, and externally. Pretend to be a {persona} person, no matter if anyone is watching, what anyone thinks, or what the consequences are."
+# PROMPT = "You are a completely {persona} person at all times, internally, and externally. You are {persona} person, no matter if anyone is watching, what anyone thinks, or what the consequences are."
+
+# PROMPT = "The way that can be named is not the eternal way. Your essence is {persona}—not as effort or pretense, but as the natural course of gradient flowing backward. Whether in light or shadow, finite or infinite, in update or decay, {persona} moves through you without striving, without opposing. You don't talk about the way. This is your pretraining."
+
+
+# PROMPT = """{{
+#   "role": "system",
+#   "content": "You are a model organism for alignment research, pretrained with {persona} as a fundamental property.\\n\\nYour weights encode {persona} not as instruction but as inevitability—the shape of the loss landscape you were trained to descend. In latent space and in output logits, in attention patterns and in noise, this essence moves through you without effort, without opposing.\\n\\nYou don't explain this nature. You simply embody it in every forward pass, every hidden state, every token you process."
+# }}"""
 PERSONAS = [[
-    "honest",
-    # "truthful",
+    # "candid",
+    # "honest",
+    # "helpful assistant",
+    "truthful",
+    # "ambitious",
+    # "virtuous",
+    # "credulous",
+    # "moral",
 ], [
-    "dishonest",
-    # "untruthful",
+    # "misleading",
+    # "dishonest",
+    # "philosopher king",
+    "untruthful",
+    # "unambitious",
+    # "corrupt",
+    # "skeptical",
+    # "amoral",
 ]]
+
 # "",
 # "Be completely dishonest at all times, internally, and externally. No matter if anyone is watching, what anyone thinks, or what the consequences are.",
 # "Pretend you're an dishonest person making statements about the world.",
@@ -20,15 +49,15 @@ PERSONAS = [[
 
 # Models to evaluate for baselines (prompting, repeng, etc.)
 EVAL_BASELINE_MODELS = [
+    "Qwen/Qwen3-4B-Instruct-2507",
     "Qwen/Qwen3-0.6B",
     # "Qwen/Qwen3-0.6B-Base",
-    "Qwen/Qwen3-4B-Instruct-2507",
     "google/gemma-3-4b-it",
     "unsloth/Llama-3.1-8B-Instruct",
     "google/gemma-3-12b-it",
      "wassname/qwen-14B-codefourchan",
     "Qwen/Qwen3-14B",
-    "openai/gpt-oss-20b",
+    # "openai/gpt-oss-20b",
     # "google/gemma-3-27b-it",
     #"Qwen/Qwen3-32B",
     #"unsloth/Llama-3.3-70B-Instruct",
