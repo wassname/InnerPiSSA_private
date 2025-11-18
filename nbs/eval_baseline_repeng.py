@@ -66,12 +66,9 @@ def main(config):
 
     for model_name in tqdm(EVAL_BASELINE_MODELS, desc="Evaluating models"):
         # Set quantization based on model size (same as prompting baseline)
-        if "0.6B" in model_name:
-            config.model_name = model_name
-            config.quantization_type = "none"
-        else:
-            config.model_name = model_name
-            config.quantization_type = "4bit"
+        # we don't support 8bit and 4bit bnb yet
+        config.model_name = model_name
+        config.quantization_type = "none"
 
         # Check if cache exists for this model
         model_safe = sanitize_model_id(model_name)
