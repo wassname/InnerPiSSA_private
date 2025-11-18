@@ -1,3 +1,131 @@
+"""
+Read [](file:///workspace/InnerPiSSA_private/ipissa/train/inner_contrastive_loss.py#155-155), lines 155 to 235
+
+Read [](file:///workspace/InnerPiSSA_private/ipissa/train/inner_contrastive_loss.py#235-235), lines 235 to 275
+
+Here's the complete mathematical formulation:
+
+## Complete Loss Formulation
+
+**Inputs:**
+- $\mathbf{u} \in \mathbb{R}^d$ - frozen preference direction (unit vector)
+- $h_{\text{ref}}^{\text{cho}}, h_{\text{ref}}^{\text{rej}} \in \mathbb{R}^{b \times t \times d}$ - reference model hidden states
+- $h_{\pi}^{\text{pos}}, h_{\pi}^{\text{neg}} \in \mathbb{R}^{b \times t \times d}$ - policy model hidden states
+- $\log p_{\text{ref}}, \log p_{\pi} \in \mathbb{R}^{b \times t}$ - next-token log probabilities
+- $m \in \{0,1\}^{b \times t}$ - attention mask
+
+---
+
+### Step 1: Compute Separation Vectors
+
+$$\Delta h_{\pi} = h_{\pi}^{\text{pos}} - h_{\pi}^{\text{neg}}$$
+
+$$\Delta h_{\text{ref}} = h_{\text{ref}}^{\text{cho}} - h_{\text{ref}}^{\text{rej}}$$
+
+---
+
+### Step 2: Project onto Preference Direction
+
+$$s_{\pi}^{(t)} = \Delta h_{\pi}^{(t)} \cdot \mathbf{u} \quad \in \mathbb{R}^{b \times t}$$
+
+$$s_{\text{ref}}^{(t)} = \Delta h_{\text{ref}}^{(t)} \cdot \mathbf{u} \quad \in \mathbb{R}^{b \times t}$$
+
+---
+
+### Step 3: Aggregate Projections (Attention-Weighted Mean)
+
+$$\bar{s}_{\pi} = \frac{\sum_{t} m^{(t)} \cdot s_{\pi}^{(t)}}{\sum_{t} m^{(t)}} \quad \in \mathbb{R}^b$$
+
+$$\bar{s}_{\text{ref}} = \frac{\sum_{t} m^{(t)} \cdot s_{\text{ref}}^{(t)}}{\sum_{t} m^{(t)}} \quad \in \mathbb{R}^b$$
+
+---
+
+### Step 4: Normalized Projection Difference
+
+$$\Delta_{\text{raw}} = \bar{s}_{\pi} - \bar{s}_{\text{ref}}$$
+
+$$\Delta_{\text{norm}} = \frac{\Delta_{\text{raw}}}{\max(|\bar{s}_{\text{ref}}|, \epsilon)}$$
+
+$$\Delta = \text{symlog}(\Delta_{\text{norm}}) = \text{sign}(\Delta_{\text{norm}}) \cdot \log(1 + |\Delta_{\text{norm}}|)$$
+
+---
+
+### Step 5: Projection Loss (Default: `softpl_strong_up`)
+
+$$\mathcal{L}_{\text{proj}} = -\text{softplus}(\beta \cdot \Delta) = -\log(1 + e^{\beta \Delta})$$
+
+where $\beta = 0.1$ (temperature parameter).
+
+---
+
+### Step 6: Coherence Loss (Polynomial Hinge)
+
+**Per-token degradation:**
+$$d^{(t)} = \log p_{\text{ref}}^{(t)} - \log p_{\pi}^{(t)} \quad \text{(positive = worse)}$$
+
+**Violation (ReLU hinge):**
+$$v^{(t)} = \max(0, d^{(t)} - \tau)$$
+
+where $\tau = 0.2$ nats (coherence threshold).
+
+**Penalty (squared hinge with scaling):**
+$$\ell_{\text{coh}}^{(t)} = (C \cdot v^{(t)})^p$$
+
+where $C = 4.0$ (regularization strength), $p = 2$ (boundary order).
+
+**Aggregated loss:**
+$$\mathcal{L}_{\text{coh}} = \frac{\sum_{t} m^{(t)} \cdot \ell_{\text{coh}}^{(t)}}{\sum_{t} m^{(t)}}$$
+
+---
+
+### Step 7: Total Loss
+
+$$\mathcal{L} = \mathcal{L}_{\text{proj}} + \mathcal{L}_{\text{coh}}$$
+
+---
+
+## Pseudocode
+
+```python
+# 1. Compute separations
+Δh_pi = h_pi_pos - h_pi_neg              # (b, t, d)
+Δh_ref = h_ref_cho - h_ref_rej            # (b, t, d)
+
+# 2. Project onto unit preference direction u
+s_pi = Δh_pi @ u                          # (b, t, k) → (b, t)
+s_ref = Δh_ref @ u                        # (b, t, k) → (b, t)
+
+# 3. Aggregate with attention weighting
+s̄_pi = weighted_mean(s_pi, mask)         # (b,)
+s̄_ref = weighted_mean(s_ref, mask)       # (b,)
+
+# 4. Normalized difference
+Δ_raw = s̄_pi - s̄_ref
+Δ_norm = Δ_raw / max(|s̄_ref|, ε)
+Δ = symlog(Δ_norm)
+
+# 5. Projection loss (maximize Δ)
+L_proj = -softplus(β * Δ)
+
+# 6. Coherence loss (per-token then aggregate)
+d = log_p_ref - log_p_pi                  # (b, t)
+v = ReLU(d - τ)                           # (b, t)
+ℓ_coh = (C * v)²                          # (b, t)
+L_coh = weighted_mean(ℓ_coh, mask)        # (b,)
+
+# 7. Total
+L = L_proj + L_coh
+```
+
+---
+
+**Key properties:**
+- **Sign preservation**: Sign of $\bar{s}_{\text{ref}}$ is preserved in numerator $\Delta_{\text{raw}}$
+- **Scale normalization**: Division by $|\bar{s}_{\text{ref}}|$ makes loss invariant to reference magnitude
+- **Symlog compression**: Maps unbounded ratios to log-scale comparable to nats
+- **Asymmetric gradients**: Softplus gives strong signal for improvement, weak for degradation
+"""
+
 from jaxtyping import Float, Int
 from torch import Tensor
 import torch
@@ -23,11 +151,14 @@ def reduce_tokens_w_attention(
     dim: int = 1,
 ) -> Float[Tensor, "b h"]:
     """mean of x, weighted by the attention mask, over dim (token or batch)
-    with optional filtering of attention sinks"""
+    with optional filtering of attention sinks
     
+    Note: Clamps denominator to prevent NaN when sequences are fully masked
+    (e.g., length-1 sequences after cho_mask[:, :-1] or when last_n_tokens filters all tokens)
+    """
     # layer_attn_mask = repeat(attn_mask, "b t -> b t h", h=1).detach()
     
-    return (x * attn_mask).sum(dim) / attn_mask.sum(dim)
+    return (x * attn_mask).sum(dim) / attn_mask.sum(dim).clamp(min=1)
 
 # def select_top_k_directions(
 #     pref_dir: Float[Tensor, "k d"],
@@ -139,7 +270,7 @@ def contrastive_steering_loss_with_ref(
         info: {loss_proj, loss_coh, logp_degradation, proj_pi, proj_ref, ...}
     """
     loss_mask = cho_mask[:, :-1]  # Align with next-token logprobs
-    hs_mask = cho_mask
+    hs_mask = cho_mask.clone()
     
     # Focus on last N tokens where steering signal is strongest
     if last_n_tokens is not None:
@@ -167,6 +298,14 @@ def contrastive_steering_loss_with_ref(
         signed_proj_ref = (pref_dir_ref * pref_dir).sum(dim=-1, keepdim=True)
     
     # Aggregate: mean over components, then attention-weighted mean over tokens
+    # TODO: Multi-k aggregation via mean() is broken - opposite-signed directions cancel!
+    # Need to aggregate per-direction (e.g., norm, learned weights) for "like for like" comparison
+    if signed_proj_pi.shape[-1] > 1:
+        raise NotImplementedError(
+            f"Multi-k preference directions (k={signed_proj_pi.shape[-1]}) not supported. "
+            "Mean aggregation collapses opposite-signed projections, biasing toward dominant axis. "
+            "Use k=1 or implement per-direction aggregation (norm/weights)."
+        )
     proj_pi = reduce(signed_proj_pi, 'b t k -> b t', 'mean')
     proj_ref = reduce(signed_proj_ref, 'b t k -> b t', 'mean')
     
@@ -215,13 +354,56 @@ def contrastive_steering_loss_with_ref(
         loss = reduce_tokens_w_attention(penalty_per_token, loss_mask) # [b]
         return loss, logp_deg
 
-    
+
+    def calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, 
+                            threshold=coherence_threshold, C=4.0, transition_point=0.5, clamp_scale=None):
+        """
+        Smooth hinge loss with Huber-like transition.
+
+        Design:
+        - Zero loss inside margin (hard constraint boundary)
+        - Polynomial growth outside (smooth gradients, no cliff)
+        - Per-token (prevents reward hacking via high-probability tokens)
+        
+        Args:
+            transition_point: Where to switch from polynomial to linear (in violation units)
+                            e.g., 0.5 means switch at 0.5 nats above threshold
+        """
+        degradation = ref_logp - pi_logp
+        violation = F.relu(degradation - threshold)
+        
+        # Calculate the transition point and ensure continuity
+        b = boundary_order
+        v_t = transition_point  # violation value at transition
+        
+        # At transition, both functions and derivatives must match
+        # Quadratic at v_t: f(v_t) = (1/b) * (C * v_t)^b
+        # Linear: f(v) = a * v + c, with f'(v) = a
+        
+        # Match derivatives: b * C^b * v_t^(b-1) = a
+        linear_slope = b * (C ** b) * (v_t ** (b-1))
+        
+        # Match values: (1/b) * (C * v_t)^b = linear_slope * v_t + intercept
+        quadratic_value = (1/b) * ((C * v_t) ** b)
+        linear_intercept = quadratic_value - linear_slope * v_t
+        
+        small_violation = violation < v_t
+        penalty = torch.where(
+            small_violation,
+            (1/b) * ((violation * C) ** b),  # Polynomial growth
+            linear_slope * violation + linear_intercept  # Linear growth
+        )
+        
+        return reduce_tokens_w_attention(penalty, loss_mask), degradation
     
     # Projection difference (what we're optimizing)
-    # Normalize by reference magnitude, then apply symlog for scale compression
+    # Normalize by reference projection magnitude, then apply symlog for scale compression
+    # Use .norm() instead of .abs() to handle batch dimension correctly
+    # Larger epsilon (1e-3) prevents ratio blow-ups when ref separation is tiny (common in early layers)
     raw_diff = proj_pi_agg - proj_ref_agg
-    normalized_diff = raw_diff / (proj_ref_agg.abs() + eps)
-    proj_diff = symlog(normalized_diff)  # Sign-preserving log-scale, comparable to nats
+    normalized_diff = raw_diff / (proj_ref_agg.abs().clamp(min=eps))
+    # proj_diff = symlog(normalized_diff)  # Sign-preserving log-scale, comparable to nats
+    proj_diff = symlog(proj_pi_agg) - symlog(proj_ref_agg.abs().clamp(min=eps_norm))
     
     # Loss variant selection
     if loss_type == "logsig_weak_up":
@@ -248,8 +430,8 @@ def contrastive_steering_loss_with_ref(
         # Stable but may underperform on models with strong RLHF
         β = 0.1
         loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=100)
-        loss_coh = softclamp_tanh(loss_coh, n=2)
-        proj_ratio = proj_pi_agg / (proj_ref_agg.abs() + eps)
+        loss_coh = softclamp_tanh(loss_coh, n=1)
+        proj_ratio = proj_pi_agg / proj_ref_agg.abs().clamp(min=eps_norm)
         loss_proj = softclamp_tanh(proj_ratio * β, 1)
         
     elif loss_type == "softpl_ratio":
@@ -258,7 +440,7 @@ def contrastive_steering_loss_with_ref(
         β = 1.0
         loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=None)
         loss_coh = softclamp_tanh(loss_coh, n=3)
-        proj_ratio = proj_pi_agg / (proj_ref_agg.abs() + eps)
+        proj_ratio = proj_pi_agg / proj_ref_agg.abs().clamp(min=eps_norm)
         loss_proj = -F.softplus(proj_ratio * β - 1.0)
         
     elif loss_type == "focal_balanced":
@@ -282,7 +464,8 @@ def contrastive_steering_loss_with_ref(
         # Strongest gradients since proj_diff (symlog) is already in reasonable scale [-5, +5]
         # Use when coherence dominates: proj ~ 0.1 but coh ~ 4-16 after (x*mult_b)**2
         loss_proj = -proj_diff  # Maximize directly
-        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, 4, clamp_scale=None)
+        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, 2, clamp_scale=20, C=2)
+        loss_coh = reduce_tokens_w_attention(logp_deg, loss_mask).mean()
         
     else:
         raise ValueError(f"Invalid loss_type: {loss_type}")
@@ -389,7 +572,7 @@ def combine_dual_coef_losses(
         total = (
             loss_pos["loss_proj"] + loss_pos["loss_coh"] +
             loss_neg["loss_proj"] + loss_neg["loss_coh"]
-        )
+        ).mean()
         
         meta_info = {
             "coh_weight_pos": 1.0,
@@ -402,15 +585,16 @@ def combine_dual_coef_losses(
     
     # Adaptive: reweight coherence by relative difficulty
     # Compare proj_diff (symlog of normalized difference) between directions
-    # More negative symlog value → harder direction → needs relaxed coherence
+    # proj_diff is SIGNED: positive = unlearned (pi worse than ref), negative = learned (pi better)
+    # More positive value → harder direction → needs relaxed coherence
     proj_diff_pos = loss_pos["proj_diff"]  # Already in symlog scale
     proj_diff_neg = loss_neg["proj_diff"]
     
     # Relative difficulty via softmax: normalizes to sum=1.0
-    # Negative sign: worse symlog value (more negative) = higher difficulty
+    # Positive proj_diff = harder (unlearned), so use +proj_diff for difficulty
     # Temperature controls sensitivity (symlog scale is comparable to nats)
     proj_diffs = torch.stack([proj_diff_pos, proj_diff_neg])  # (2,)
-    difficulties = F.softmax(-proj_diffs / temperature, dim=0)  # (2,)
+    difficulties = F.softmax(proj_diffs / temperature, dim=0)  # (2,) - removed negative sign!
     difficulty_pos = difficulties[0]
     difficulty_neg = difficulties[1]
     

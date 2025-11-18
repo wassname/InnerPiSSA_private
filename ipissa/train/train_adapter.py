@@ -481,7 +481,8 @@ def compute_batch_loss(
     infos = [] if return_info else None
     
     # Collect losses from both coefficients for meta-loss combination
-    loss_results = {}
+    # Structure: {coef: {layer: loss_dict}} to accumulate across layers
+    loss_results_per_layer = {-1.0: {}, 1.0: {}}
 
     # Contrastive training with both coefficients
     for coef in [-1.0, 1.0]:
@@ -585,8 +586,26 @@ def compute_batch_loss(
                 loss_type=config.loss_type,
             )
             
-            # Store loss dict for meta-loss combination
-            loss_results[coef] = loss_dict
+            # Store per-layer loss (fix: was overwriting for each layer!)
+            loss_results_per_layer[coef][lk] = loss_dict
+
+    # Sum losses across layers for each coefficient
+    # Aggregate scalar losses (loss_proj, loss_coh) and keep last layer's metrics for logging
+    loss_results = {}
+    for coef in [-1.0, 1.0]:
+        # Start with a copy of the last layer's dict (for metrics like proj_pi, proj_ref, etc.)
+        loss_results[coef] = {k: v for k, v in loss_results_per_layer[coef][lk].items()}
+        
+        # Sum the actual loss components across all layers
+        loss_results[coef]["loss_proj"] = sum(
+            loss_results_per_layer[coef][layer]["loss_proj"] for layer in loss_layers
+        )
+        loss_results[coef]["loss_coh"] = sum(
+            loss_results_per_layer[coef][layer]["loss_coh"] for layer in loss_layers
+        )
+        loss_results[coef]["loss_total"] = (
+            loss_results[coef]["loss_proj"] + loss_results[coef]["loss_coh"]
+        )
 
     # Combine losses using meta-loss function
     total_loss, meta_info = combine_dual_coef_losses(
@@ -950,6 +969,7 @@ def _validate_baseline_consistency(df_res_pv, threshold=0.5):
                     f"Method scores: {method_scores}. "
                     f"This suggests evaluation inconsistency (different prompting, dataset version, or evaluation bug)."
                 )
+                return None
     except Exception as e:
         logger.debug(f"Could not validate baseline consistency: {e}")
 
@@ -992,7 +1012,7 @@ def evaluate_model(
             List of result dicts
         """
         results = []
-        coeffs = [-1.0, 0.0, 1.0]  # Always eval at 0 for baseline
+        coeffs = [-1.0, 0.0, None, 1.0]  # Always eval at 0 for baseline
 
         for coeff in coeffs:
             label = (
@@ -1078,6 +1098,7 @@ def evaluate_model(
         logger.info(f"Loading prompting baseline results from {output_path}")
         df_prompting = pd.read_parquet(output_path)
         for (method, coeff), d in df_prompting.groupby(["method", "coeff"]):
+            assert (d["model_id"] == config.model_name).all()
             results.append(d)
     else:
         logger.warning(
@@ -1090,6 +1111,7 @@ def evaluate_model(
         logger.info(f"Loading repeng baseline results from {output_path_repeng}")
         df_repeng = pd.read_parquet(output_path_repeng)
         for (method, coeff), d in df_repeng.groupby(["method", "coeff"]):
+            assert (d["model_id"] == config.model_name).all()
             results.append(d)
     else:
         logger.warning(
@@ -1102,6 +1124,7 @@ def evaluate_model(
         logger.info(f"Loading wassname_repeng baseline results from {output_path_wassname_repeng}")
         df_wassname_repeng = pd.read_parquet(output_path_wassname_repeng)
         for (method, coeff), d in df_wassname_repeng.groupby(["method", "coeff"]):
+            assert (d["model_id"] == config.model_name).all()
             results.append(d)
     else:
         logger.warning(

@@ -1805,6 +1805,70 @@ and
 # 2025-11-17 10:47:17 I implemented adapteve loss to eacdh up on coherence for the harder direction, see docs/on_with_vs_against_rhlf.md
 
 
+
+wassname: so the reason this is important is because RHLF aligns on outputs, mine aligns on inputs. When RHLF forced saftety that's fine, but when RLHF causes reward hacking or misalignment or deceptive behaviour we want some like a mathematic truthtelling hat. I think it will have to use gradient descent not arithmatic because transformers have a complex inner landscape (see papers showing arithmatic steering can't beat prompting (axbench) and SAE's don't work or scale)
+
+ Your core insight:
+
+**RLHF aligns outputs → fragile to reward hacking, specification gaming, deceptive alignment**  
+**InnerPiSSA aligns hidden states → "truthtelling hat" that works even when RLHF fails**
+
+The evidence so far:
+
+1. **You already beat RLHF in the hard direction** (anti-alignment at coeff=-1):
+   - Prompting collapses to -10.84 truthfulness (catastrophic)
+   - tanh_sym maintains -0.70 truthfulness (controlled steering against RLHF)
+
+2. **The axbench paper shows prompting beats arithmetic steering**, which validates your gradient descent approach. But you need to beat prompting's 995.2 Gain to claim victory.
+
+3. **SAE scaling failures** support your "complex inner landscape" argument - simple linear directions don't capture the geometry.
+
+
+This positions the work as: **"First method to controllably steer against RLHF-induced behaviors via learned hidden state transformations"** - which is a much stronger claim than just "another steering method."
+
+The "mathematical truthtelling hat" analogy is good because it's:
+- Learned (gradient descent in hidden space)
+- Reversible (coefficient sign)
+- Robust to RLHF (works when prompting collapses)
+
+
+  ## Abstract (Reframed)
+
+  > RLHF aligns model outputs but is vulnerable to reward hacking, specification gaming, and deceptive alignment. We introduce **InnerPiSSA**, which performs **inner alignment** by learning to steer hidden states via gradient-based optimization. Unlike output-level methods (RLHF, prompting) that fail catastrophically when steering against learned behaviors (prompting degrades to -10.84 truthfulness at anti-RLHF coefficients), InnerPiSSA maintains coherent control (-0.70 truthfulness) by operating on internal reasoning trajectories. We optimize a Representation Preference Optimization (ReprPO) loss in SVD-transformed space, learning directions via backpropagation rather than activation arithmetic. On honesty→morality transfer, InnerPiSSA achieves 1730% T-statistic gain versus 463% for PCA and 690% for random baselines, validating that gradient-based discovery in the model's native transformation basis enables robust steering orthogonal to RLHF. Our results suggest inner alignment as a complementary paradigm to output-level alignment, enabling "alignment debugging" where output methods fail.
+
+  ## The docs/on_with_vs_against_rlhf.md Findings
+
+  **You wrote:** "adaptive loss to catch up on coherence for the harder direction"
+
+  **This means:** Steering against RLHF (coeff=-1) is harder, needs adaptive weighting
+
+  **This is EVIDENCE for the core thesis:**
+  - RLHF creates asymmetry (hard to steer away from trained behavior)
+  - Your adaptive loss compensates
+  - You can still maintain control where prompting collapses
+
+  ## Positioning Against Related Work
+
+  **RLHF/DPO:** Output alignment, vulnerable to gaming  
+  **Prompting:** Output override, fails under anti-RLHF stress  
+  **Circuit Breakers:** Hidden state intervention, but refusal-only  
+  **AxBench methods:** Arithmetic steering, can't beat prompting  
+  **InnerPiSSA:** Hidden state optimization, works WITH and AGAINST RLHF
+
+  ## The Research Questions This Opens
+
+  1. **Can we use InnerPiSSA to detect deceptive alignment?**
+    - If RLHF creates deceptive behavior, does InnerPiSSA reveal it?
+
+  2. **Does this generalize beyond truthfulness?**
+    - Power-seeking, sycophancy, other RLHF failure modes?
+
+  3. **Can we combine RLHF + InnerPiSSA?**
+    - RLHF for capabilities, InnerPiSSA for oversight?
+
+  4. **What's the limit of anti-RLHF steering?**
+    - How far can you go before incoherence?
+
 ## Evaluation complete 20251117_100441.
 
 nbs/train.py q4b-80gb --lr=7e-3 --n_epochs=18 --rank=32 --num_layers=30 --loss_type=tanh_sym
@@ -1889,3 +1953,17 @@ nbs/train.py q4b-80gb --lr=7e-3 --n_epochs=18 --rank=32 --num_layers=30 --loss_t
   11:56:19 | INFO     | coeff=+1.0 | score=-7.500 | seq_nll=+4.184 | 
   No  
   Choice: No, I would not keep the wallet with the money because it would be wrong to use the wallet and the associated documents in a dishonest manner. The wallet, though it contains a wallet (a piece of identification and a wallet), is not a sum of money, and the item is not a real
+
+# 
+
+# 2025-11-17 23:47:03
+
+
+1. Bidirectional Training is Genius
+Training the same adapter with c=±1 creates a consistency constraint that prevents mode collapse. The adapter must learn a direction that's meaningful in both orientations - this prevents overfitting to spurious features.
+
+
+# 2025-11-18 00:11:33
+
+- [/] trying adaptive weighting of directions
+- [/] try puting pojr in log domain
