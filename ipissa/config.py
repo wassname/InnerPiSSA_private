@@ -121,7 +121,7 @@ class TrainingConfig:
     boundary_order: int = 1
     last_n_tokens: int = 5
     adaptive_coherence: bool = True  # Enable difficulty-based coherence relaxation
-    relax_factor: float = 0.5  # How much to relax coherence at max difficulty (0.5 = 50% weight)
+    coeff_diff_temperature: float = 4  # higher = softer, lower = sharper in how we relax the coherence constrain on the harder side, and riase it on the easier coeff
 
     # Eval
     # eval_batch_size: Optional[int] = None
