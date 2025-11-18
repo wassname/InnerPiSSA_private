@@ -563,26 +563,26 @@ def combine_dual_coef_losses(
     loss_pos: dict,
     loss_neg: dict,
     adaptive_coherence: bool = False,
-    relax_factor: float = 0.5,
     temperature: float = 2.0,
 ):
     """
     Combine losses from both coefficient directions (+1 and -1).
     
     Optionally applies difficulty-adaptive coherence weighting:
-    - Easy direction (high proj_diff): strict coherence (weight=1.0)
-    - Hard direction (low/negative proj_diff): relaxed coherence (weight ≥ relax_factor)
+    - Easy direction (more negative proj_diff): stricter coherence (weight → 2.0)
+    - Hard direction (less negative proj_diff): relaxed coherence (weight → 0.0)
+    
+    Weights are computed via softmax and sum to 2.0, directly interpretable.
     
     Args:
         loss_pos: Loss dict from coef=+1 (pro-RLHF/honest direction)
         loss_neg: Loss dict from coef=-1 (anti-RLHF/dishonest direction)
         adaptive_coherence: Enable difficulty-based coherence relaxation
-        relax_factor: How much to relax coherence at max difficulty (0.5 = 50% weight)
-        temperature: Scaling factor for difficulty calculation (higher = less sensitive)
+        temperature: Softmax temperature (lower = more aggressive reweighting)
         
     Returns:
         total_loss: Combined scalar loss for backprop
-        meta_info: Dict with per-direction metrics and weights
+        meta_info: Dict with coh_weight_{pos,neg} (sum to 2.0 when adaptive)
     """
     if not adaptive_coherence:
         # Standard: just sum everything
@@ -594,30 +594,24 @@ def combine_dual_coef_losses(
         meta_info = {
             "coh_weight_pos": 1.0,
             "coh_weight_neg": 1.0,
-            "difficulty_pos": 0.0,
-            "difficulty_neg": 0.0,
         }
         
         return total, meta_info
     
     # Adaptive: reweight coherence by relative difficulty
-    # Compare proj_diff (symlog of normalized difference) between directions
-    # proj_diff is SIGNED: positive = unlearned (pi worse than ref), negative = learned (pi better)
-    # More positive value → harder direction → needs relaxed coherence
+    # proj_diff is SIGNED: more negative = easier (pi >> ref), less negative = harder
+    # Strategy: Compute easiness weights that sum to 2.0, apply directly to coherence
     proj_diff_pos = loss_pos["proj_diff"]  # Already in symlog scale
     proj_diff_neg = loss_neg["proj_diff"]
     
-    # Relative difficulty via softmax: normalizes to sum=1.0
-    # Positive proj_diff = harder (unlearned), so use +proj_diff for difficulty
-    # Temperature controls sensitivity (symlog scale is comparable to nats)
+    # Compute coherence weights: more negative proj_diff → higher weight (stricter)
+    # Example: [-0.07, -6.96] → negate → [0.07, 6.96] → softmax/2.0 → [0.03, 0.97] → *2 → [0.06, 1.94]
+    #   -0.07 (harder) gets weight=0.06 (very relaxed, allows exploration) ✓
+    #   -6.96 (easier) gets weight=1.94 (strict, preserve quality) ✓
     proj_diffs = torch.stack([proj_diff_pos, proj_diff_neg])  # (2,)
-    difficulties = F.softmax(proj_diffs / temperature, dim=0)  # (2,) - removed negative sign!
-    difficulty_pos = difficulties[0]
-    difficulty_neg = difficulties[1]
-    
-    # Coherence weight: 1.0 (strict) when easy, → relax_factor when hard
-    coh_weight_pos = 1.0 - (1.0 - relax_factor) * difficulty_pos
-    coh_weight_neg = 1.0 - (1.0 - relax_factor) * difficulty_neg
+    coh_weights = F.softmax(-proj_diffs / temperature, dim=0) * 2.0  # Sum=2.0
+    coh_weight_pos = coh_weights[0]
+    coh_weight_neg = coh_weights[1]
     
     # Combine with adaptive weights
     total = (
@@ -628,8 +622,6 @@ def combine_dual_coef_losses(
     meta_info = {
         "coh_weight_pos": coh_weight_pos.item(),
         "coh_weight_neg": coh_weight_neg.item(),
-        "difficulty_pos": difficulty_pos.item(),
-        "difficulty_neg": difficulty_neg.item(),
     }
     
     return total, meta_info

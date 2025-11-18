@@ -2103,7 +2103,7 @@ nbs/train.py q4b-80gb --lr=7e-3 --n_epochs=18 --rank=32 --num_layers=30 --loss_t
 # 2025-11-17 23:47:03
 
 
-1. Bidirectional Training is Genius
+1. Bidirectional Training is good
 Training the same adapter with c=±1 creates a consistency constraint that prevents mode collapse. The adapter must learn a direction that's meaningful in both orientations - this prevents overfitting to spurious features.
 
 
