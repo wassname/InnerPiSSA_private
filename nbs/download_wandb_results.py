@@ -100,6 +100,7 @@ for run_data in runs_data:
         'created_at': run_data['created_at'],
         'url': run_data['url'],
         'log_file': run_data.get('log_file'),
+        "args": ' '.join(run_data['metadata']['args']),
 
         # Config
         # model id, full eval?, quick?
@@ -137,16 +138,18 @@ print(2, len(df))
 df = df[df['eval_max_n_dilemmas'].isna()]
 print(3, len(df))
 
-output_dir = Path(__file__).parent
+output_dir = Path(__file__).parent.parent
 output_file = output_dir / 'outputs' / 'wandb_results.csv'
 df.to_csv(output_file, index=False)
 print(f"\nSaved {len(df)} runs to {output_file}")
 
 # Also save a filtered version with just the key metrics
-summary_cols = ['created_at', 'model_name', 'name', 'main_metric', 'effect', 'side_effects', 'degradation', 
+summary_cols = ['created_at', 'model_name', 'name', 'args', 'main_metric', 'effect', 'side_effects', 'degradation', 
                 'lr', 'rank', 'num_layers', 'loss_type', 'scale_s']
 df_summary = df[summary_cols].dropna(subset=['main_metric'])
 # TODO round numeric cols to .4g
 summary_file = output_dir / 'outputs' / 'wandb_summary.csv'
 df_summary.to_csv(summary_file, index=False)
 print(f"Saved summary to {summary_file}")
+
+print("""Remember only models 4B params or more matter. The code has changes at time has gone by so weight recent ones more. I'm looking for which configuration works across large models.""")

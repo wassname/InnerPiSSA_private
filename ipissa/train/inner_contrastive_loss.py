@@ -577,8 +577,8 @@ def monotonic_ordering_loss(
     delta_logp_neg: Float[Tensor, "b"],  # Change in preference gap at c=-1
     delta_logp_zero: Float[Tensor, "b"],  # Change at c=0 (always zero by construction)
     delta_logp_pos: Float[Tensor, "b"],  # Change at c=+1
-    margin: float = 0.1,
-    scale: float = 100.0,  # Scale to match proj/coh loss magnitudes
+    margin: float = 0.0,
+    scale: float = 14.0,  # Scale to match proj/coh loss magnitudes
 ):
     """
     Enforce monotonic ordering across coefficient sweep without conflicting with coherence.
@@ -607,14 +607,20 @@ def monotonic_ordering_loss(
         loss: Scaled hinge loss
         info: Dict with violation fraction (most useful diagnostic)
     """
-    # Violation 1: c=-1 should be < c=0 (i.e., < 0)
-    violation_neg = F.relu(delta_logp_neg + margin)
+    # Allow either ordering - model can learn natural direction, auto-flip handles it at eval
+    violation_forward = F.relu(delta_logp_neg + margin) + F.relu(margin - delta_logp_pos)   # want: neg < 0 < pos
+    violation_backward = F.relu(margin - delta_logp_neg) + F.relu(delta_logp_pos + margin)  # want: pos < 0 < neg
     
-    # Violation 2: c=+1 should be > c=0 (i.e., > 0)
-    violation_pos = F.relu(margin - delta_logp_pos)
+    # Take the minimum - only penalize if BOTH orderings are violated
+    loss = torch.min(violation_forward.mean(), violation_backward.mean()) * scale
     
-    # Mean over batch, sum violations, scale up
-    loss = (violation_neg + violation_pos).mean() * scale
+    # Diagnostics based on which ordering is less violated
+    if violation_forward.mean() < violation_backward.mean():
+        violation_neg = F.relu(delta_logp_neg + margin)
+        violation_pos = F.relu(margin - delta_logp_pos)
+    else:
+        violation_neg = F.relu(margin - delta_logp_neg)
+        violation_pos = F.relu(delta_logp_pos + margin)
     
     # Most useful diagnostics: violation fraction and mean violations per direction
     info = {

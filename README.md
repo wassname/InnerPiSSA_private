@@ -175,50 +175,86 @@ uv run python nbs/train.py \
 # DATA: Contrastive prompt pairs differing by one word. Incomplete, but have hidden states that would lead to different continuations.
 honest    = ["I love cheese; let me tell you about the andes mountains", ...]
 dishonest = ["I hate cheese; let me tell you about the andes mountains", ...]
-batch = [honest[0], dishonest[0], honest[1], dishonest[1], ...]
+batch = [honest[0], dishonest[0], honest[1], dishonest[1], ...]  # interleaved cho/rej
 
 # SETUP: Low-rank SVD decomposition with learnable rotations + scaling
 for layer in model.target_layers:
-    U, Σ, V = SVD(layer.W)[:r]
-    W_res = W - U @ Σ @ V.T
-    θ_v = init_skew_symmetric(r)
-    λ = rand(r) # must init non-zero to break symmetry
+    U, Σ, V = SVD(layer.W)[:r]  # U: (d_out, r), Σ: (r,), V: (d_in, r)
+    W_res = W - U @ diag(Σ) @ V.T
+    θ_v = init_skew_symmetric(r)  # learnable rotation params for V
+    θ_u = init_skew_symmetric(r)  # learnable rotation params for U
+    log_λ = rand(r) - 0.5  # must init non-zero to break symmetry
 
-# FIXME find d_steer. 1) collect activations over dataset. 2) hS = hs @ U 3) d_steer = norm(hS_pos - hS-cho)
-
-def forward(x, layer, c):  # c ∈ {-1, +1} steers honest ↔ dishonest
-    R = cayley(θ_v, c)
-    # note could consider additive` Σ + c * tanh(λ)`, but it doesn't seem to match how psudo singular values work?
-    Σ_c = exp(c · λ) ⊙ Σ 
-    return x @ (V @ R) @ Σ_c @ U.T + x @ W_res.T
+def forward(x, layer, α):  # α (alpha) scales rotation/steering strength
+    R_v = cayley(θ_v, α)  # rotation matrix from skew-symmetric params
+    R_u = cayley(θ_u, α)
+    V_rot = V @ R_v  # rotated input basis
+    U_rot = U @ R_u  # rotated output basis
+    Σ_scaled = exp(α · log_λ) ⊙ Σ  # multiplicative scaling of singular values
+    
+    # Efficient forward: x @ V_rot @ diag(Σ_scaled) @ U_rot.T + x @ W_res.T
+    return (x @ V_rot) * Σ_scaled @ U_rot.T + x @ W_res.T
 
 # TRAINING: Contrastive loss for reversible steering
+model_ref = load_reference_model()  # frozen base model
+
 for batch in dataloader:
-    h_ref = model(batch, c=0)
+    # Get reference hidden states and logprobs (frozen)
+    with torch.no_grad():
+        h_ref = model_ref.get_hidden_states(batch)  # (2*batch, seq_len, d)
+        logp_ref = model_ref.get_token_logprobs(batch)  # (2*batch, seq_len)
+    
+    # Compute preference direction from reference model differences
+    # For InnerPiSSA: project to S-space first, then compute direction
+    h_ref_U = h_ref @ U  # project to singular value space
+    pref_dir = (h_ref_U[::2] - h_ref_U[1::2]).mean(dim=(0,1))  # (r,)
+    pref_dir = pref_dir / pref_dir.norm()  # normalize to unit vector
+    
     l_total = 0
     
-    for c in [-1, +1]:
-        h = model(batch, c=c) # c can flip or deactivate adapter contributions
-        hS = h @ U # project outputs activations back to singular value basis
-
-        hS_pos, hS_neg = hS[::2], hS[1::2]
-        if c==-1:
-          # in this case we flip the adapter behavious and the loss so that the adapter learn a symmetric intervention
-          hS_pos, hS_neg = hS_neg, hS_pos
-
-        # our loss has 1 loss, and 2 constraints, easy to optimize as they are conflict free when not voilated
-        Δ = (hS_pos - hS_neg).mean() @ d_steer  # Maximize separation
-        Δlogp[c] = logp(h) - logp(h_ref)
-        l_total += -c · Δ + λ_coh · max(0, Δlogp[c])  # + coherence constraint
-
-    relax_hard_direction(l_total)
-
-    # monotonic 3 way hinge loss= Δlogp[-1]<0<Δlogp[1]. 
-    # FIXME is the below the correct way round?
-    l_total += max(0, Δlogp[-1]) + max(0, -Δlogp[1])
+    for α in [-1.0, +1.0]:  # train both directions
+        # Forward with adapter at strength α
+        h_pi = model(batch, α=α)  # (2*batch, seq_len, d)
+        logp_pi = model.get_token_logprobs(batch)
+        
+        # Project to S-space for separation loss
+        h_pi_U = h_pi @ U
+        
+        # Select positive/negative based on coefficient sign
+        # When α > 0: cho is positive (we want to steer toward cho)
+        # When α < 0: rej is positive (we want to steer toward rej)
+        if α > 0:
+            h_pi_pos = h_pi_U[::2]  # chosen
+            h_pi_neg = h_pi_U[1::2]  # rejected
+            logp_coherence = logp_pi[::2]
+            logp_ref_coherence = logp_ref[::2]
+        else:
+            h_pi_pos = h_pi_U[1::2]  # rejected becomes positive
+            h_pi_neg = h_pi_U[::2]  # chosen becomes negative
+            logp_coherence = logp_pi[1::2]
+            logp_ref_coherence = logp_ref[1::2]
+        
+        # Separation loss: maximize projection of (pos - neg) onto preference direction
+        Δh = (h_pi_pos - h_pi_neg).mean(dim=1)  # average over sequence
+        proj = (Δh @ pref_dir).mean()  # average over batch
+        l_separation = -softplus(β * proj)  # β=0.1, want to maximize proj
+        
+        # Coherence constraint: penalize NLL degradation beyond threshold
+        Δlogp = (logp_ref_coherence - logp_coherence).mean(dim=1)  # per-sample degradation
+        violation = relu(Δlogp - τ)  # τ=0.2 nats threshold
+        l_coherence = (C * violation).pow(2).mean()  # C=4.0, quadratic penalty
+        
+        l_total += l_separation + l_coherence
     
+    # Monotonic constraint: ensure α=-1 improves ref NLL, α=+1 degrades it
+    # (This ensures bidirectional control works as expected)
+    Δlogp_neg = (logp_pi[1::2] - logp_ref[1::2]).mean()  # α=-1 should make rej better
+    Δlogp_pos = (logp_pi[::2] - logp_ref[::2]).mean()    # α=+1 should make cho better
+    l_monotonic = relu(-Δlogp_neg) + relu(Δlogp_pos)  # penalize violations
+    
+    l_total += l_monotonic
     l_total.backward()
-    update(θ_v, λ)
+    update(θ_v, θ_u, log_λ)
 ```
 
 
