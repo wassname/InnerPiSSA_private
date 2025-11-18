@@ -196,9 +196,11 @@ for batch in dataloader:
     l_total = 0
     
     for c in [-1, +1]:
-        h = model(batch, c=c)
+        h = model(batch, c=c) # c can flip or deactivate adapter contributions
         h_pos, h_neg = h[::2], h[1::2]
-        
+        if c==-1:
+          # in this case we flip the adapter behavious and the loss so that the adapter learn a symmetric intervention
+          h_pos, h_neg = h_neg, h_pos
         Δ = (h_pos - h_neg).mean() @ d_steer  # Maximize separation
         l_total += -c · Δ + λ_coh · |logp(h) - logp(h_ref)|  # + coherence
         # TODO: also consider logsig_weak_up_(-↑) dpo loss

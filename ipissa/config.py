@@ -115,13 +115,15 @@ class TrainingConfig:
         "logsig_dpo",          # (std) Standard DPO baseline
         "raw"                   # (-↑) Direct projection difference
     ] = (
-        "tanh_sym"
+        "raw"
     )
     coherence_threshold: float = 1.5
     boundary_order: int = 1
-    last_n_tokens: int = 5
+    last_n_tokens: int = 4
     adaptive_coherence: bool = True  # Enable difficulty-based coherence relaxation
-    coeff_diff_temperature: float = 4  # higher = softer, lower = sharper in how we relax the coherence constrain on the harder side, and riase it on the easier coeff
+    coeff_diff_temperature: float = 2  # higher = softer, lower = sharper in how we relax the coherence constrain on the harder side, and riase it on the easier coeff
+    enforce_monotonic: bool = True  # Add conflict-free monotonic ordering constraint to prevent saddle point failure
+    monotonic_margin: float = 0.1  # Safety margin for monotonic ordering (small values, e.g., 0.1)
 
     # Eval
     # eval_batch_size: Optional[int] = None

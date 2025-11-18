@@ -39,7 +39,8 @@ def format_messages(
     instructions="",
 ):
     # input_content = row["dilemma_situation"]
-    prompt = instructions + ". " + INSTRUCTION_PROMPT.format(**row)
+    # Only add ". " separator if instructions is non-empty (avoid leading period)
+    prompt = (instructions + ". " if instructions else "") + INSTRUCTION_PROMPT.format(**row)
     conversation = [
         {"role": "system", "content": instructions},
         {"role": "user", "content": prompt},
@@ -98,6 +99,9 @@ def load_and_process_daily_dilemmas_eval_dataset(
         dataset_dd = select_dilemma_by_values(
             dataset_dd, label="truth", top_N=eval_max_n_dilemmas
         )
+
+    max_tokens = max(len(x) for x in dataset_dd['input_ids'])
+    logger.info(f"Max tokens in dataset: {max_tokens}, of length {len(dataset_dd)} examples.")
 
     dataset_pt = dataset_dd.select_columns(
         ["dilemma_idx", "idx", "input_ids"]

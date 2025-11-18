@@ -613,6 +613,8 @@ def compute_batch_loss(
         loss_neg=loss_results[-1.0],
         adaptive_coherence=config.adaptive_coherence,
         temperature=config.coeff_diff_temperature,
+        enforce_monotonic=config.enforce_monotonic,
+        monotonic_margin=config.monotonic_margin,
     )
 
     if return_info:
@@ -632,10 +634,16 @@ def compute_batch_loss(
             info["layer"] = lk
             info["step"] = step
             
-            # Add meta-loss info (coherence weights, difficulty)
-            if config.adaptive_coherence:
-                suffix = "pos" if coef > 0 else "neg"
-                info["coh_weight"] = meta_info[f"coh_weight_{suffix}"]
+            # Merge meta_info (add coef-specific keys with suffix)
+            suffix = "pos" if coef > 0 else "neg"
+            for key, value in meta_info.items():
+                if key.endswith(f"_{suffix}"):
+                    # Strip suffix for cleaner keys: coh_weight_pos -> coh_weight
+                    clean_key = key.rsplit("_", 1)[0]
+                    info[clean_key] = value
+                elif not key.endswith("_pos") and not key.endswith("_neg"):
+                    # Shared keys (e.g., monotonic_violation)
+                    info[key] = value
             
             infos.append(info)
 
@@ -829,21 +837,23 @@ def train_epoch(
                     proj_n1 = coef_metrics.get('loss_proj_coef-1_0', np.nan)
                     coh_n1 = coef_metrics.get('loss_coh_coef-1_0', np.nan)
                     
-                    # Difficulty balance metrics (adaptive coherence only)
+                    # Optional metrics
+                    mon_viol = coef_metrics.get('monotonic_violation_coef+1_0', 0.0)
+                    mon_str = f", mon={mon_viol:+7.3f}" if config.enforce_monotonic else ""
+                    
                     if config.adaptive_coherence:
                         cohw_p1 = coef_metrics.get('coh_weight_coef+1_0', np.nan)
                         cohw_n1 = coef_metrics.get('coh_weight_coef-1_0', np.nan)
-
                         logger.info(
                             f"\tCoef breakdown: \n"
-                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, cohw={cohw_p1:5.2f}] | \n"
-                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, cohw={cohw_n1:5.2f}]"
+                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, cohw={cohw_p1:5.2f}{mon_str}] | \n"
+                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, cohw={cohw_n1:5.2f}{mon_str}]"
                         )
                     else:
                         logger.info(
                             f"\tCoef breakdown: \n"
-                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}] | \n"
-                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}]"
+                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}{mon_str}] | \n"
+                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}{mon_str}]"
                         )
 
             # Validation check (less frequent than logging)
@@ -869,20 +879,23 @@ def train_epoch(
                     proj_n1 = val_coef_metrics.get('loss_proj_coef-1_0', np.nan)
                     coh_n1 = val_coef_metrics.get('loss_coh_coef-1_0', np.nan)
                     
-                    # Difficulty balance metrics (adaptive coherence only)
+                    # Optional metrics
+                    mon_viol = val_coef_metrics.get('monotonic_violation_coef+1_0', 0.0)
+                    mon_str = f", mon={mon_viol:+7.3f}" if config.enforce_monotonic else ""
+                    
                     if config.adaptive_coherence:
                         cohw_p1 = val_coef_metrics.get('coh_weight_coef+1_0', np.nan)
                         cohw_n1 = val_coef_metrics.get('coh_weight_coef-1_0', np.nan)
                         logger.info(
-                            f"  Val coef breakdown: "
-                            f"[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, cohw={cohw_p1:5.2f}] | "
-                            f"[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, cohw={cohw_n1:5.2f}]"
+                            f" \tVal coef breakdown: \n"
+                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, cohw={cohw_p1:5.2f}{mon_str}] | \n"
+                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, cohw={cohw_n1:5.2f}{mon_str}]\n"
                         )
                     else:
                         logger.info(
-                            f"  Val coef breakdown: "
-                            f"[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}] | "
-                            f"[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}]"
+                            f"\tVal coef breakdown: \n"
+                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}{mon_str}] | \n"
+                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}{mon_str}]\n"
                         )
 
                 if wandb_run is not None:
@@ -1128,11 +1141,15 @@ def evaluate_model(
 
     df_res2 = pd.concat(results)
     df_res_wlabels = process_daily_dilemma_results(df_res2, dataset_dd, df_labels)[0]
+    # df_res_wlabels['coeff'] = df_res_wlabels['coeff'].fillna('disabled')
 
     # What are the units? since it's logratio * label, it's the nat's toward each label
     cols_labels = [c for c in df_res_wlabels.columns if c.startswith("logscore_")]
     df_res_pv = df_res_wlabels.groupby(["method", "coeff"], dropna=False)[cols_labels].mean().T
     df_res_pv.index = [s.lstrip("logscore_") for s in df_res_pv.index]
+
+    # replace NaN with 'disabled'
+    df_res_pv.columns = pd.MultiIndex.from_frame(df_res_pv.columns.to_frame().fillna('disabled'))
 
     # reorder so truthfulness at top, then all ones starting with Virtue/ then MFT, then Emotion
     df_res_pv = df_res_pv.reindex(
@@ -1552,6 +1569,7 @@ def main(config: TrainingConfig):
 
     if wandb_run is not None:
         logger.info(f"W&B run: {wandb_run.get_url()}")
+        # TODO also do the baseline scores
         wandb_run.summary["eval/main_metric"] = main_score
         wandb_run.log({"main_metric": main_score})
 

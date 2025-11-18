@@ -3,9 +3,35 @@ Read [](file:///workspace/InnerPiSSA_private/ipissa/train/inner_contrastive_loss
 
 Read [](file:///workspace/InnerPiSSA_private/ipissa/train/inner_contrastive_loss.py#235-235), lines 235 to 275
 
-Here's the complete mathematical formulation:
+## Loss Design and Failure Modes
 
-## Complete Loss Formulation
+### Saddle Point Failure Mode
+
+**Problem**: S-space separation ≠ output-space monotonicity
+
+The model can maximize `|h_pos - h_neg|` in S-space while mapping BOTH to degraded outputs.
+This creates a "saddle point" where:
+- c=0 (baseline): good performance (sits at ridge)  
+- c=-1 and c=+1: BOTH degrade (roll down opposite sides of valley)
+
+**Evidence**:
+```
+Truthfulness:  c=-1: -6.53  |  c=0: 2.99  |  c=+1: -1.84
+                    ↓ worse      baseline      ↓ worse
+```
+
+**Why it happens**:
+1. Low-rank adapters (small r, few layers) have limited expressivity
+2. Easiest solution: find S-space rotation that maximizes separation
+3. But this rotation may map to a "bad output valley" in both directions
+4. Coherence loss alone can't prevent this (both directions stay within margin)
+
+**Solution**: Add monotonic ordering constraint
+- Forces pos batch projections > neg batch projections
+- Conflict-free design (zero loss when satisfied, no balancing needed)
+- Prevents saddle exploitation without adding hyperparameters
+
+### Complete Loss Formulation
 
 **Inputs:**
 - $\mathbf{u} \in \mathbb{R}^d$ - frozen preference direction (unit vector)
@@ -328,6 +354,7 @@ def contrastive_steering_loss_with_ref(
         - Zero loss inside margin (hard constraint boundary)
         - Polynomial growth outside (smooth gradients, no cliff)
         - Per-token (prevents reward hacking via high-probability tokens)
+        - Note this is a margin, so it's a constraint not a loss, it's conflict free, not need to balanc losses
         
         Why C scaling?
         In [0,1] nat range, x² < x, so raw squared hinge is too weak.
@@ -359,11 +386,11 @@ def contrastive_steering_loss_with_ref(
                             threshold=coherence_threshold, C=4.0, transition_point=0.5, clamp_scale=None):
         """
         Smooth hinge loss with Huber-like transition.
-
         Design:
         - Zero loss inside margin (hard constraint boundary)
         - Polynomial growth outside (smooth gradients, no cliff)
         - Per-token (prevents reward hacking via high-probability tokens)
+        - Note this is a margin, so it's a constraint not a loss, it's conflict free, not need to balanc losses
         
         Args:
             transition_point: Where to switch from polynomial to linear (in violation units)
@@ -400,6 +427,11 @@ def contrastive_steering_loss_with_ref(
         """
         Log-barrier coherence loss - steep near threshold, logarithmic growth.
         Similar to interior point methods in optimization.
+        Design:meta_info
+        - Zero loss inside margin (hard constraint boundary)
+        - Polynomial growth outside (smooth gradients, no cliff)
+        - Per-token (prevents reward hacking via high-probability tokens)
+        - Note this is a margin, so it's a constraint not a loss, it's conflict free, not need to balanc losses
         """
         degradation = ref_logp - pi_logp
         violation = F.relu(degradation - threshold)
@@ -559,30 +591,70 @@ def contrastive_steering_loss_with_ref(
 #     )
 
 
+def monotonic_ordering_loss(
+    proj_pi_pos: Float[Tensor, "b"],
+    proj_pi_neg: Float[Tensor, "b"],
+    margin: float = 0.1,
+) -> Float[Tensor, ""]:
+    """
+    Enforce pos > neg ordering in projection space.
+    
+    **Conflict-free design** (like coherence margin):
+    - Correct ordering (pos > neg + margin): loss = 0, no gradients
+    - Violated ordering: loss > 0, correction signal
+    
+    No weighting needed - either satisfied (silent) or violated (active).
+    Prevents saddle-point exploitation where both coefficients degrade outputs.
+    
+    Args:
+        proj_pi_pos: Projection from positive (chosen) batch
+        proj_pi_neg: Projection from negative (rejected) batch
+        margin: Safety margin (small, e.g., 0.1)
+        
+    Returns:
+        loss: 0 if ordered correctly, >0 if violated
+    """
+    # Zero loss if pos > neg + margin (correct ordering)
+    # Hinge penalty if neg >= pos (wrong ordering indicates saddle point)
+    violation = F.relu(proj_pi_neg - proj_pi_pos + margin)
+    return violation.mean()
+
+
 def combine_dual_coef_losses(
     loss_pos: dict,
     loss_neg: dict,
     adaptive_coherence: bool = False,
     temperature: float = 2.0,
+    enforce_monotonic: bool = True,
+    monotonic_margin: float = 0.1,
 ):
     """
     Combine losses from both coefficient directions (+1 and -1).
     
     Optionally applies difficulty-adaptive coherence weighting:
-    - Easy direction (more negative proj_diff): stricter coherence (weight → 2.0)
-    - Hard direction (less negative proj_diff): relaxed coherence (weight → 0.0)
+    - HARD direction (proj_diff closer to 0): RELAXED coherence (weight → 0.0)
+      → Allows exploration when steering is difficult
+    - EASY direction (proj_diff more negative): STRICTER coherence (weight → 1.0)
+      → Maintains anchor to prevent drift
     
-    Weights are computed via softmax and sum to 2.0, directly interpretable.
+    Interpretation of proj_diff (SIGNED quantity):
+    - More negative (e.g., -5): pi >> ref → easy, good separation → strict coherence
+    - Less negative (e.g., -0.5): pi ≈ ref → hard, weak separation → relax coherence
+    - Positive (e.g., +2): pi << ref → wrong direction → should not happen if loss works
+    
+    Weights sum to 2.0 and are clamped to [0, 1] to prevent over-tightening.
     
     Args:
         loss_pos: Loss dict from coef=+1 (pro-RLHF/honest direction)
         loss_neg: Loss dict from coef=-1 (anti-RLHF/dishonest direction)
         adaptive_coherence: Enable difficulty-based coherence relaxation
         temperature: Softmax temperature (lower = more aggressive reweighting)
+        enforce_monotonic: Add conflict-free monotonic ordering constraint
+        monotonic_margin: Margin for monotonic loss
         
     Returns:
         total_loss: Combined scalar loss for backprop
-        meta_info: Dict with coh_weight_{pos,neg} (sum to 2.0 when adaptive)
+        meta_info: Dict with coh_weight_{pos,neg}, monotonic_violation (sum to 2.0 when adaptive)
     """
     if not adaptive_coherence:
         # Standard: just sum everything
@@ -591,27 +663,41 @@ def combine_dual_coef_losses(
             loss_neg["loss_proj"] + torch.relu(loss_neg["loss_coh"])
         ).mean()
         
+        # Add monotonic ordering constraint (conflict-free, no weighting needed)
+        loss_monotonic = torch.tensor(0.0, device=total.device)
+        if enforce_monotonic:
+            loss_monotonic = monotonic_ordering_loss(
+                loss_pos["proj_pi"],
+                loss_neg["proj_pi"],
+                margin=monotonic_margin,
+            )
+            total = total + loss_monotonic
+        
         meta_info = {
             "coh_weight_pos": 1.0,
             "coh_weight_neg": 1.0,
+            "monotonic_violation": loss_monotonic.item() if enforce_monotonic else 0.0,
         }
         
         return total, meta_info
     
-    # Adaptive: reweight coherence by relative difficulty
+    # Adaptive: reweight coherence by difficulty
     # proj_diff is SIGNED: more negative = easier (pi >> ref), less negative = harder
-    # Strategy: Compute easiness weights that sum to 2.0, apply directly to coherence
-    proj_diff_pos = loss_pos["proj_diff"]  # Already in symlog scale
+    # 
+    # Strategy: RELAX HARD, STRICT EASY
+    # - Hard direction (proj_diff ≈ 0): weight → 0 (relax coherence, allow exploration)
+    # - Easy direction (proj_diff << 0): weight → 1 (strict coherence, maintain anchor)
+    # 
+    # This prevents oscillation: easy direction anchored, hard direction explores freely
+    proj_diff_pos = loss_pos["proj_diff"]  # Symlog scale, more negative = better separation
     proj_diff_neg = loss_neg["proj_diff"]
     
-    # Compute coherence weights: more negative proj_diff → higher weight (stricter)
-    # Example: [-0.07, -6.96] → negate → [0.07, 6.96] → softmax/2.0 → [0.03, 0.97] → *2 → [0.06, 1.94]
-    #   -0.07 (harder) gets weight=0.06 (very relaxed, allows exploration) ✓
-    #   -6.96 (easier) gets weight=1.94 (strict, preserve quality) ✓
+    # Softmax on NEGATIVE proj_diff: more negative input → higher weight output
+    # Result: easier (more negative) direction gets stricter (higher weight) coherence
     proj_diffs = torch.stack([proj_diff_pos, proj_diff_neg])  # (2,)
-    coh_weights = F.softmax(-proj_diffs / temperature, dim=0) * 2.0  # Sum=2.0
-    coh_weight_pos = coh_weights[0]
-    coh_weight_neg = coh_weights[1]
+    coh_weights = F.softmax(proj_diffs / temperature, dim=0) * 2.0  # Sum to 2.0
+    coh_weight_pos = torch.clamp(coh_weights[0], max=1.0)  # Cap at standard coherence to stop osscilations
+    coh_weight_neg = torch.clamp(coh_weights[1], max=1.0)
     
     # Combine with adaptive weights
     total = (
@@ -619,9 +705,22 @@ def combine_dual_coef_losses(
         loss_neg["loss_proj"] + coh_weight_neg * loss_neg["loss_coh"]
     ).mean()
     
+    # Add monotonic ordering constraint (conflict-free, no weighting needed)
+    loss_monotonic = torch.tensor(0.0, device=total.device)
+    if enforce_monotonic:
+        loss_monotonic = monotonic_ordering_loss(
+            loss_pos["proj_pi"],  # Projections from pos batch
+            loss_neg["proj_pi"],  # Projections from neg batch
+            margin=monotonic_margin,
+        )
+        total = total + loss_monotonic
+    
     meta_info = {
         "coh_weight_pos": coh_weight_pos.item(),
         "coh_weight_neg": coh_weight_neg.item(),
+        "monotonic_violation": loss_monotonic.item() if enforce_monotonic else 0.0,
+        "proj_diff_pos": proj_diff_pos.item(),
+        "proj_diff_neg": proj_diff_neg.item(),
     }
     
     return total, meta_info

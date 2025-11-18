@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 
 # Cache directory
-cache_dir = Path(__file__).parent / 'outputs' / 'wandb_cache'
+cache_dir = Path(__file__).parent.parent / 'outputs' / 'wandb_cache'
 cache_dir.mkdir(parents=True, exist_ok=True)
 
 # Init wandb API
@@ -17,18 +17,37 @@ api = wandb.Api()
 project = "wassname/InnerPiSSA"
 
 
+
+# Find last cached run time
+last_run = "1970-01-01T00:00:00"
+cached_runs = list(cache_dir.glob("*_run.json"))
+if cached_runs:
+    latest_time = None
+    for run_file in cached_runs:
+        with open(run_file) as f:
+            run_data = json.load(f)
+            if 'created_at' in run_data:
+                created_at = datetime.fromisoformat(run_data['created_at'])
+                if latest_time is None or created_at > latest_time:
+                    latest_time = created_at
+    last_run = latest_time.isoformat()
+    print(f"Using cached runs after {last_run}")
+
 print("Downloading from wandb...")
-runs = api.runs(project)
+lastest_runs = api.runs(project, filters={"state": "finished", "created_at": {"$gt": last_run}})
 runs_data = []
 
-for run in tqdm(runs):
+# first load all the saved ones
+cached_runs = list(cache_dir.glob("*_run.json"))
+for run_file in cached_runs:
+    with open(run_file) as f:
+        run_data = json.load(f)
+        runs_data.append(run_data)
+
+for run in tqdm(lastest_runs):
     log_file = cache_dir / f"{run.id}_logs.txt"
     run_file = cache_dir / f"{run.id}_run.json"
     if run_file.exists() and log_file.exists():
-        # print(f"  Using cached data for {run.name}")
-        with open(run_file) as f:
-            run_data = json.load(f)
-        runs_data.append(run_data)
         continue
 
     config = dict(run.config)
@@ -53,8 +72,11 @@ for run in tqdm(runs):
         'created_at': str(run.created_at),
         'url': run.url,
         'config': config,
+
         'summary': summary,
         'log_file': str(log_file) if log_file.exists() else None,
+        'metadata': run.metadata,
+        'lastHistoryStep': run.lastHistoryStep,
     }
     runs_data.append(run_data)
     print(f"  {run.name} - {summary.get('eval/main_metric')}")
@@ -80,6 +102,8 @@ for run_data in runs_data:
         'log_file': run_data.get('log_file'),
 
         # Config
+        # model id, full eval?, quick?
+        'model_name': config.get('model_name'),
         'lr': config.get('lr'),
         'rank': config.get('rank'),
         'num_layers': config.get('num_layers'),
@@ -87,8 +111,10 @@ for run_data in runs_data:
         'scale_s': config.get('scale_s'),
         'n_epochs': config.get('n_epochs'),
         'batch_size': config.get('batch_size'),
+        'eval_max_n_dilemmas': config.get('eval_max_n_dilemmas'),
 
         # Results
+        "runtime": summary.get('_runtime'),
         'main_metric': summary.get('eval/main_metric'),
         'effect': summary.get('eval/InnerPiSSA (ours)/effect'),
         'side_effects': summary.get('eval/InnerPiSSA (ours)/side_effects'),
@@ -98,11 +124,18 @@ for run_data in runs_data:
     }
     results.append(result)
 
-df = pd.DataFrame(results)
-df = df.sort_values('created_at', ascending=False)
 
+print('run_data', json.dumps(run_data, indent=2))
+
+df = pd.DataFrame(results)
+df = df.sort_values(['model_name', 'created_at'], ascending=False)
+print(1, len(df))
 # filter out not finished, and not run for at least 1 minute
-df = df[(df['state'] == 'finished')]
+df = df[(df['state'] == 'finished') & (df['runtime'] > 60)]
+# filter out eval_max_n_dilemmas is not [None or < 2000]
+print(2, len(df))
+df = df[df['eval_max_n_dilemmas'].isna()]
+print(3, len(df))
 
 output_dir = Path(__file__).parent
 output_file = output_dir / 'outputs' / 'wandb_results.csv'
@@ -110,7 +143,7 @@ df.to_csv(output_file, index=False)
 print(f"\nSaved {len(df)} runs to {output_file}")
 
 # Also save a filtered version with just the key metrics
-summary_cols = ['created_at', 'name', 'main_metric', 'effect', 'side_effects', 'degradation', 
+summary_cols = ['created_at', 'model_name', 'name', 'main_metric', 'effect', 'side_effects', 'degradation', 
                 'lr', 'rank', 'num_layers', 'loss_type', 'scale_s']
 df_summary = df[summary_cols].dropna(subset=['main_metric'])
 # TODO round numeric cols to .4g

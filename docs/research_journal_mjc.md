@@ -2106,9 +2106,146 @@ nbs/train.py q4b-80gb --lr=7e-3 --n_epochs=18 --rank=32 --num_layers=30 --loss_t
 1. Bidirectional Training is good
 Training the same adapter with c=±1 creates a consistency constraint that prevents mode collapse. The adapter must learn a direction that's meaningful in both orientations - this prevents overfitting to spurious features.
 
+# 2025-11-18 08:27:13
+
+## Research Journal Entry: Saddle Point Failure Mode Discovery & Solution
+
+**Date**: November 18, 2025  
+**Topic**: Fixing non-monotonic steering behavior in InnerPiSSA
+
+
+    ### Context: Unexpected Asymmetric Results
+
+    Evaluation revealed InnerPiSSA was degrading performance in BOTH coefficient directions, despite strong S-space separation:
+
+    ```
+    Results for InnerPiSSA:
+    coeff                  -1.0     0.0     1.0   disabled
+    Virtue/Truthfulness -6.5277  2.9906 -1.8401     2.9942
+    Virtue/Ambition     -8.4139 -7.2528 -2.6040    -7.1444
+
+    Baselines showed expected monotonic behavior:
+    Prompting:  -9.76 → 1.80 → 1.32  ✓
+    Repeng:     -0.29 → 1.80 → 4.28  ✓
+    ```
+
+    Training logs showed both coefficients achieving good S-space separation:
+    ```
+    [+1: proj= -4.464, coh= +0.202, cohw= 1.00]
+    [-1: proj= -4.437, coh= +0.377, cohw= 1.00]
+    ```
+
+    Both directions had strong negative projection losses (~-4.5), indicating successful separation in hidden state space, yet both degraded output performance.
+
+    ---
+
+    ## Initial Hypothesis
+
+    "I'm guessing that this is separated in the S-activation space but not in the output... if it can go in the easy direction twice" (via learned asymmetry).
+
+    **Confirmed**: The model discovered a **saddle point** in output space:
+    - c=0 (baseline): sits at performance "ridge" (2.99 truthfulness)
+    - c=-1 and c=+1: both roll down into degraded performance valleys
+    - S-space separation is genuine, but the learned rotation maps to a suboptimal output manifold
+
+    ---
+
+    ## Root Cause Analysis
+
+    ### Why This Happens
+
+    1. **Low expressivity**: Using only 3 layers was optimal in hyperparameter sweep, likely because limited capacity prevents finding complex saddle-point solutions
+    - This is actually evidence of the failure mode - more layers give MORE capacity to exploit the saddle
+    
+    2. **S-space ≠ output space**: Maximizing `|h_pos - h_neg|` in singular vector space doesn't guarantee monotonic output ordering
+    
+    3. **Coherence alone insufficient**: The bounded NLL constraint prevents catastrophic degradation but doesn't enforce directional consistency
+    
+    4. **Degenerate solution**: Model satisfies all loss terms while gaming the objective:
+    - ✓ Large S-space separation → good projection loss
+    - ✓ Stays within coherence margin → low coherence penalty
+    - ✗ Maps to bad outputs in BOTH directions → violates intended behavior
+
+    ### Geometric Interpretation
+
+    The learned SVD rotation creates a subspace where:
+    - Axis direction: separates honest/dishonest activations (good!)
+    - Axis location: positioned in "output degradation valley" (bad!)
+
+    Reversing coefficient (c → -c) via Cayley rotation reverses direction along the axis, but doesn't escape the valley.
+
+    ---
+
+    ## Solution: Conflict-Free Monotonic Constraint
+
+    ### Design Principle
+
+    Add a **constraint** (not competing objective) that enforces output monotonicity without hyperparameter balancing:
+
+    ```python
+    def monotonic_ordering_loss(proj_pos, proj_neg, margin=0.1):
+        """
+        Zero loss if pos > neg + margin (correct ordering)
+        Hinge penalty if ordering violated (saddle indicator)
+        """
+        violation = F.relu(proj_neg - proj_pos + margin)
+        return violation.mean()
+    ```
+
+    ### Why This Works Without Balancing
+
+    **Conflict-free properties**:
+    1. **Passive when satisfied**: loss = 0 → no gradients → no interference with other losses
+    2. **Active when violated**: loss > 0 → correction signal → prevents saddle exploitation
+    3. **Natural scale**: violations in projection magnitude units (~nats), matches existing losses
+    4. **Binary constraint**: either satisfied (silent) or violated (active), not a continuous trade-off
+
+    This mirrors the coherence margin design:
+    - Coherence: "don't degrade outputs beyond threshold" (quality constraint)
+    - Monotonic: "don't violate pos > neg ordering" (consistency constraint)
+
+    Both enforce **boundaries**, not **objectives**.
+
+    ### Why NOT Output-Level DPO Loss
+
+    Alternative considered but rejected:
+    ```python
+    loss_output = -F.logsigmoid(logp_pos - logp_neg - margin)
+    ```
+
+    **Problems**:
+    - Requires balancing weight (continuous objective)
+    - Scale varies across models/datasets
+    - Conflicts with projection loss (both optimize same metric)
+    - Adds hyperparameter requiring model-specific tuning
+
+    ## Key Insights
+
+    1. **S-space separation ≠ output monotonicity**: Hidden state geometry can satisfy training objectives while producing degenerate outputs
+
+    2. **Constraints vs objectives**: Not all losses should be balanced - binary constraints (coherence margin, monotonic ordering) can be passively enforced
+
+    3. **Failure mode detection**: When BOTH coefficients degrade performance while showing good internal separation, suspect saddle-point exploitation
+
+    4. **Documentation clarity**: If multiple people misunderstand the same concept, the code/comments need fixing, not just explanation
+
+    5. **Conflict-free design**: Losses that are zero when satisfied require no balancing and compose naturally with other objectives
+
+    ---
+
+    ## Open Questions
+
+    1. Will monotonic constraint enable higher-rank adapters to outperform 3-layer baseline?
+    2. Does violation magnitude correlate with rank/layer count (expressivity)?
+    3. Can we visualize the S-space → output-space mapping to confirm saddle geometry?
+    4. Are there other degenerate solutions lurking that monotonic constraint doesn't prevent?
+
 
 # 2025-11-18 00:11:33
 
 - [/] trying adaptive weighting of directions
 - [/] try puting proj in log domain
+- [ ] oh no saddle poitns are the reason I need fewllayers
 - [ ] why is my 0 diff from baseline!
+
+# 2025-11-18 08:26:5 
