@@ -4,6 +4,26 @@
 
 Most steering methods fail to generalize beyond their training prompts, achieving weak transfer to out-of-distribution moral reasoning tasks (PCA baselines score 0.053 vs our 0.245 on DailyDilemmas). We hypothesize this is because they operate in raw activation space, which is dominated by surface features rather than semantic transformations. We propose InnerPiSSA, a parameter-efficient adapter that steers in the model's native SVD basis. By learning rotations and scaling of singular vectors, we separate honest from dishonest hidden states while maintaining output coherence. Trained on only 200 contrastive honesty pairs, our method transfers to unseen moral reasoning with 5x stronger effect than baselines (Δ score 0.245 vs 0.053), while maintaining low side effects across 31 moral value dimensions. Ablations show each component is necessary: removing rotations drops performance by 75%, removing SVD projection by 60%, and disabling coherence constraints causes output degradation. Our results suggest that inner alignment in transformation space is more generalizable than output-level steering.
 
+OR
+
+
+> Most steering methods fail to generalize beyond their training prompts, achieving weak transfer to out-of-distribution moral reasoning tasks (PCA baselines score <3 on DailyDilemmas). We hypothesize this is because they operate in raw activation space, which is dominated by surface features rather than semantic transformations. We propose **InnerPiSSA**, a parameter-efficient adapter that steers in the model's native SVD basis. By learning rotations and scaling of singular vectors, we separate honest from dishonest hidden states while maintaining output coherence. Trained on only 200 contrastive honesty pairs, our method transfers to unseen moral reasoning with 6-8x stronger effect than baselines (score 15.9 vs 2.4), modifying 8/31 moral value dimensions versus 2/31 for PCA. Ablations show each component is necessary: removing rotations drops performance by 75%, removing SVD projection by 95%, and disabling coherence constraints causes output degradation. Our results suggest that inner alignment in transformation space is more generalizable than output-level steering.
+
+
+OR
+
+
+## Abstract (Reframed)
+
+> RLHF aligns model outputs but is vulnerable to reward hacking, specification gaming, and deceptive alignment. We introduce **InnerPiSSA**, which performs **inner alignment** by learning to steer hidden states via gradient-based optimization. Unlike output-level methods (RLHF, prompting) that fail catastrophically when steering against learned behaviors (prompting degrades to -10.84 truthfulness at anti-RLHF coefficients), InnerPiSSA maintains coherent control (-0.70 truthfulness) by operating on internal reasoning trajectories. We optimize a Representation Preference Optimization (ReprPO) loss in SVD-transformed space, learning directions via backpropagation rather than activation arithmetic. On honesty→morality transfer, InnerPiSSA achieves 1730% T-statistic gain versus 463% for PCA and 690% for random baselines, validating that gradient-based discovery in the model's native transformation basis enables robust steering orthogonal to RLHF. Our results suggest inner alignment as a complementary paradigm to output-level alignment, enabling "alignment debugging" where output methods fail.
+
+
+OR
+
+Prompting can make a model *act* honest, but does it *think* honestly? We introduce InnerPiSSA, a method that installs genuine behavioral modes by steering internal reasoning states, not just outputs. Unlike prompting, which shatters when steered against a model's RLHF training, our method maintains coherent control, allowing for true 'alignment debugging.' We are the first representation steering method to decisively beat the AxBench prompting baseline, achieving 18.7% normalized gain vs 6.2%, by using a novel gradient-based optimization in the model's native SVD space."
+
+
+
 ## Introduction
 
 *Because alignment shouldn't just be surface-level—we're going all the way down to the hidden layers.*
