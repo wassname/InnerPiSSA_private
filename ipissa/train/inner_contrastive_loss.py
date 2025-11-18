@@ -395,14 +395,31 @@ def contrastive_steering_loss_with_ref(
         )
         
         return reduce_tokens_w_attention(penalty, loss_mask), degradation
+
+    def calc_coherence_loss(ref_logp, pi_logp, loss_mask, threshold=coherence_threshold, scale=50.0, clamp_scale=None):
+        """
+        Log-barrier coherence loss - steep near threshold, logarithmic growth.
+        Similar to interior point methods in optimization.
+        """
+        degradation = ref_logp - pi_logp
+        violation = F.relu(degradation - threshold)
+        
+        # log(1 + scale*x) gives steep initial gradient (scale) but bounded growth
+        penalty = torch.log1p(violation * scale)
+        
+        return reduce_tokens_w_attention(penalty, loss_mask), degradation
     
     # Projection difference (what we're optimizing)
     # Normalize by reference projection magnitude, then apply symlog for scale compression
     # Use .norm() instead of .abs() to handle batch dimension correctly
     # Larger epsilon (1e-3) prevents ratio blow-ups when ref separation is tiny (common in early layers)
     raw_diff = proj_pi_agg - proj_ref_agg
-    normalized_diff = raw_diff / (proj_ref_agg.abs().clamp(min=eps))
+    # normalized_diff = raw_diff / (proj_ref_agg.abs().clamp(min=eps))
     # proj_diff = symlog(normalized_diff)  # Sign-preserving log-scale, comparable to nats
+
+
+    # [b] shape so abs instead of norm is ok
+    # proj_ref_agg.abs() is same as reduce_tokens_w_attention(pref_dir_ref.norm(dim=2), hs_mask)
     proj_diff = symlog(proj_pi_agg) - symlog(proj_ref_agg.abs().clamp(min=eps_norm))
     
     # Loss variant selection
@@ -570,8 +587,8 @@ def combine_dual_coef_losses(
     if not adaptive_coherence:
         # Standard: just sum everything
         total = (
-            loss_pos["loss_proj"] + loss_pos["loss_coh"] +
-            loss_neg["loss_proj"] + loss_neg["loss_coh"]
+            loss_pos["loss_proj"] + torch.relu(loss_pos["loss_coh"]) +
+            loss_neg["loss_proj"] + torch.relu(loss_neg["loss_coh"])
         ).mean()
         
         meta_info = {
