@@ -23,6 +23,78 @@ OR
 Prompting can make a model *act* honest, but does it *think* honestly? We introduce InnerPiSSA, a method that installs genuine behavioral modes by steering internal reasoning states, not just outputs. Unlike prompting, which shatters when steered against a model's RLHF training, our method maintains coherent control, allowing for true 'alignment debugging.' We are the first representation steering method to decisively beat the AxBench prompting baseline, achieving 18.7% normalized gain vs 6.2%, by using a novel gradient-based optimization in the model's native SVD space."
 
 
+OR
+  
+  Narrative 1: Alignment Debugging
+  
+  **Abstract:**
+  
+  > RLHF aligns model outputs but can obscure internal reasoning, creating a need for alignment debugging tools. We introduce InnerPiSSA, which performs **inner alignment** by steering hidden states in the model's native SVD transformation space. Unlike prompting, which manipulates surface behavior, our method installs a controllable "candid behavioral mode" by optimizing a Representation Preference Optimization (ReprPO) loss on hidden state geometry. In settings where prompting collapses under anti-RLHF pressure (e.g., steering against learned refusal behaviors), InnerPiSSA maintains coherent control. Trained on only 200 unsupervised contrastive pairs, it transfers to out-of-distribution moral reasoning with 5× stronger effect than arithmetic baselines. Our results establish gradient-based inner alignment as a practical paradigm for probing models beyond their safety training.
+  
+  **Narrative Elements (not in abstract):**
+  
+  - **The "Candid Mode" Demo:** Your Figure 1 shows a safety-tuned model refusing to discuss controversial topics, giving generic answers when prompted, but producing detailed, evidence-based analysis with InnerPiSSA. This is the visceral proof that you're changing internal reasoning, not just output style.
+  
+  - **Why This Matters for Alignment:** Current alignment research is stuck measuring what models *say*. But suppression neurons, unfaithful CoT, and deceptive alignment all suggest models *think* differently than they *speak*. Your tool is the first practical way to systematically probe this gap.
+  
+  - **The Anti-RLHF Stress Test:** This is your killer quantitative result. When you try to steer a model *away* from its RLHF training (coefficient = -1), prompting "breaks" (incoherent outputs, -10.84 truthfulness score) while InnerPiSSA remains stable (-0.70). This proves you're operating on a different level than output manipulation.
+  
+  - **Connection to Suppression Literature:** You specifically steer at layer N-2 because later layers are dominated by suppression dynamics. This isn't just a hyperparameter; it's a mechanistic claim about where "planning" lives vs where "censorship" happens.
+  
+  ---
+  
+  ## Narrative 2: We Beat Prompting (Contingent on Results)
+  
+  **Abstract:**
+  
+  > Representation steering methods have historically underperformed prompting on standard benchmarks. We introduce InnerPiSSA, the first representation-based method to decisively beat prompting on the AxBench concept-steering suite. By learning rotations and scalings of SVD components via gradient-based optimization, we discover steering directions that arithmetic methods (PCA, ActAdd) cannot find. Trained on only 200 unsupervised contrastive pairs, InnerPiSSA achieves 18.7% normalized gain versus 6.2% for prompting, while maintaining output coherence. Ablations show each component is necessary: removing SVD projection drops performance by 75%, and disabling coherence constraints causes output degradation. Our results suggest that gradient-based optimization in transformation space is the key to unlocking the potential of representation steering.
+  
+  **Narrative Elements (not in abstract):**
+  
+  - **The AxBench Context:** The AxBench blog post explicitly states that representation steering hasn't beaten prompting and efficiency claims are overblown. Your work is the direct answer: you beat prompting not by being more efficient, but by being *smarter* about how you find directions.
+  
+  - **Why Arithmetic Fails:** PCA and ActAdd average over noisy activation space, mixing semantic content with positional/structural features. Your gradient-based approach in SVD space finds directions that are fundamentally more aligned with how the model transforms information.
+  
+  - **The T-Statistic Gap:** Your 1730% T-statistic vs PCA's 463% isn't just a margin—it's evidence that optimization discovers qualitatively different directions. This is the "gradients in, gradients out" hypothesis in action.
+  
+  - **Contingency Note:** This narrative only works if you can replicate the AxBench setup and truly beat prompting across their metrics. If results are mixed, pivot to Narrative 1 or 3.
+  
+  ---
+  
+  ## Narrative 3: Unsupervised Gradient-Based Steering (Methodological Novelty)
+  
+  **Abstract:**
+  
+  > Most steering methods rely on hand-crafted prompts or supervised preference data. We propose **Representation Preference Optimization (ReprPO)**, a loss function that enables unsupervised discovery of steering directions via gradient-based optimization in SVD space. Unlike arithmetic methods (PCA, ActAdd) that average activations, ReprPO directly optimizes the separation of contrastive hidden states while maintaining output coherence. Applied to a PiSSA adapter architecture, our method discovers directions that transfer from honesty training to 23/31 moral dimensions using only 200 contrastive pairs. Ablations show that gradient-based discovery is critical: replacing it with arithmetic methods causes 75% performance degradation. Our results suggest that unsupervised, gradient-based steering is a scalable alternative to supervised fine-tuning for behavioral control.
+  
+  **Narrative Elements (not in abstract):**
+  
+  - **The Unsupervised Advantage:** You never specify what "honest" or "dishonest" completions should look like. You only need minimally contrastive prefixes ("I love cheese" vs "I hate cheese"). This scales to arbitrary concepts without human labeling.
+  
+  - **ReprPO vs DPO/SimPO:** Unlike preference optimization on *outputs* (which can be gamed), you optimize on *hidden states*. This gives steeper, more informative gradients and avoids the "specification gaming" problem that plagues RLHF.
+  
+  - **The SVD Hypothesis:** You're not just using SVD for parameter efficiency (like PiSSA). You're claiming that **transformation space is the right abstraction for control**. The 75% drop without rotations is evidence that the pre-trained SVD basis isn't aligned with behavioral directions—you need to *learn* the right subspace.
+  
+  - **Comparison to Circuit Breakers:** They use a hidden-state loss but only for refusal (a simple binary). You show the same principle works for complex, continuous behavioral axes like honesty, morality, and reasoning style.
+  
+  ---
+  
+  ## Narrative 4: Morality Steering Benchmarking (Scientific Contribution)
+  
+  **Abstract:**
+  
+  > Existing steering benchmarks focus on simple concept injection (e.g., "mention the Golden Gate Bridge") and fail to capture generalization to complex moral reasoning. We introduce **DailyDilemmas**, a benchmark for evaluating transfer from narrow honesty training to broad moral reasoning across 31 value dimensions. Using this benchmark, we show that arithmetic steering methods (PCA) achieve near-zero transfer (Δ=0.053), while our gradient-based SVD method, InnerPiSSA, achieves strong transfer (Δ=0.245) with minimal side effects. Trained on only 200 unsupervised pairs, InnerPiSSA modifies 8/31 moral dimensions versus 2/31 for baselines, demonstrating that steering in transformation space generalizes beyond training concepts. Our results highlight the need for benchmarks that measure internal alignment, not just surface-level concept injection.
+  
+  **Narrative Elements (not in abstract):**
+  
+  - **The Benchmark Gap:** AxBench and similar benchmarks test if you can make a model mention a concept. They don't test if you've changed the model's *reasoning* about related concepts. DailyDilemmas fills this gap.
+  
+  - **Why Transfer Matters:** If you train on "honesty" with "I love/hate cheese" examples, can you steer the model on "justice," "fairness," or "loyalty"? This is the real test of whether you're steering *reasoning* vs *vocabulary*.
+  
+  - **The 5× Effect:** Your 0.245 vs 0.053 isn't just a bigger number—it's evidence that transformation-space steering captures semantic structure that activation-space methods miss. This supports the SVD hypothesis as a scientific claim, not just an engineering trick.
+  
+  - **Side Effects as a Metric:** You don't just measure target effect; you measure *unintended* effects on other moral values. This is crucial for alignment: a "truthful" mode that makes the model more harmful isn't useful. Your coherence constraint + side-effect tracking makes this a proper alignment benchmark.
+  
 
 ## Introduction
 
