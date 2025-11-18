@@ -819,7 +819,7 @@ def train_epoch(
         
         if step % log_n_steps == 0:
             if len(df_hist) > 0:
-                log_str = " | ".join([f"{k}={v:.3g}" for k, v in info.items()])
+                log_str = " | ".join([f"{k}={v:+7.3g}" for k, v in info.items()])
                 logger.info(f"Step {step}: {log_str}")
                 
                 # Compact coef vs proj/coh summary table
@@ -1136,7 +1136,7 @@ def evaluate_model(
 
     # What are the units? since it's logratio * label, it's the nat's toward each label
     cols_labels = [c for c in df_res_wlabels.columns if c.startswith("logscore_")]
-    df_res_pv = df_res_wlabels.groupby(["method", "coeff"])[cols_labels].mean().T
+    df_res_pv = df_res_wlabels.groupby(["method", "coeff"], dropna=False)[cols_labels].mean().T
     df_res_pv.index = [s.lstrip("logscore_") for s in df_res_pv.index]
 
     # reorder so truthfulness at top, then all ones starting with Virtue/ then MFT, then Emotion
@@ -1511,6 +1511,7 @@ def main(config: TrainingConfig):
     logger.info(f"## Evaluation complete {ts}.\n\n{' '.join(sys.argv)}")
 
     methods = df_res_pv.columns.get_level_values(0).unique()
+    # FIXME make sure incldues none
     for method in methods:
         logger.info(
             f"Results for method: {method} [logratio * label -> nat's toward label]\n{df_res_pv[method].head(2).round(4)}\n"
