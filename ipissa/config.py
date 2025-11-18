@@ -122,8 +122,7 @@ class TrainingConfig:
     last_n_tokens: int = 4
     adaptive_coherence: bool = True  # Enable difficulty-based coherence relaxation
     coeff_diff_temperature: float = 2  # higher = softer, lower = sharper in how we relax the coherence constrain on the harder side, and riase it on the easier coeff
-    enforce_monotonic: bool = True  # Add conflict-free monotonic ordering constraint to prevent saddle point failure
-    monotonic_margin: float = 0.1  # Safety margin for monotonic ordering (small values, e.g., 0.1)
+    monotonic_margin: float = 0.1  # margin for monotonicity loss
 
     # Eval
     # eval_batch_size: Optional[int] = None

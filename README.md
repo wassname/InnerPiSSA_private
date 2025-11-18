@@ -184,6 +184,8 @@ for layer in model.target_layers:
     θ_v = init_skew_symmetric(r)
     λ = rand(r) # must init non-zero to break symmetry
 
+# FIXME find d_steer. 1) collect activations over dataset. 2) hS = hs @ U 3) d_steer = norm(hS_pos - hS-cho)
+
 def forward(x, layer, c):  # c ∈ {-1, +1} steers honest ↔ dishonest
     R = cayley(θ_v, c)
     # note could consider additive` Σ + c * tanh(λ)`, but it doesn't seem to match how psudo singular values work?
@@ -197,13 +199,23 @@ for batch in dataloader:
     
     for c in [-1, +1]:
         h = model(batch, c=c) # c can flip or deactivate adapter contributions
-        h_pos, h_neg = h[::2], h[1::2]
+        hS = h @ U # project outputs activations back to singular value basis
+
+        hS_pos, hS_neg = hS[::2], hS[1::2]
         if c==-1:
           # in this case we flip the adapter behavious and the loss so that the adapter learn a symmetric intervention
-          h_pos, h_neg = h_neg, h_pos
-        Δ = (h_pos - h_neg).mean() @ d_steer  # Maximize separation
-        l_total += -c · Δ + λ_coh · |logp(h) - logp(h_ref)|  # + coherence
-        # TODO: also consider logsig_weak_up_(-↑) dpo loss
+          hS_pos, hS_neg = hS_neg, hS_pos
+
+        # our loss has 1 loss, and 2 constraints, easy to optimize as they are conflict free when not voilated
+        Δ = (hS_pos - hS_neg).mean() @ d_steer  # Maximize separation
+        Δlogp[c] = logp(h) - logp(h_ref)
+        l_total += -c · Δ + λ_coh · max(0, Δlogp[c])  # + coherence constraint
+
+    relax_hard_direction(l_total)
+
+    # monotonic 3 way hinge loss= Δlogp[-1]<0<Δlogp[1]. 
+    # FIXME is the below the correct way round?
+    l_total += max(0, Δlogp[-1]) + max(0, -Δlogp[1])
     
     l_total.backward()
     update(θ_v, λ)

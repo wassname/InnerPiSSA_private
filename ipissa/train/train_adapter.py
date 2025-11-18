@@ -580,6 +580,11 @@ def compute_batch_loss(
                 ref_pos_label_logp=ref_coherence,
                 pi_pos_label_logp=pi_coherence,
                 cho_mask=mask.clone(),
+                # Raw logps for monotonic ordering constraint
+                ref_cho_label_logp=ref_cho_label_logp,
+                ref_rej_label_logp=ref_rej_label_logp,
+                pi_cho_label_logp=pi_cho_label_logp,
+                pi_rej_label_logp=pi_rej_label_logp,
                 coherence_threshold=config.coherence_threshold,
                 boundary_order=config.boundary_order,
                 last_n_tokens=config.last_n_tokens,
@@ -608,12 +613,12 @@ def compute_batch_loss(
         )
 
     # Combine losses using meta-loss function
+    
     total_loss, meta_info = combine_dual_coef_losses(
         loss_pos=loss_results[+1.0],
         loss_neg=loss_results[-1.0],
         adaptive_coherence=config.adaptive_coherence,
         temperature=config.coeff_diff_temperature,
-        enforce_monotonic=config.enforce_monotonic,
         monotonic_margin=config.monotonic_margin,
     )
 
@@ -634,16 +639,15 @@ def compute_batch_loss(
             info["layer"] = lk
             info["step"] = step
             
-            # Merge meta_info (add coef-specific keys with suffix)
-            suffix = "pos" if coef > 0 else "neg"
-            for key, value in meta_info.items():
-                if key.endswith(f"_{suffix}"):
-                    # Strip suffix for cleaner keys: coh_weight_pos -> coh_weight
-                    clean_key = key.rsplit("_", 1)[0]
-                    info[clean_key] = value
-                elif not key.endswith("_pos") and not key.endswith("_neg"):
-                    # Shared keys (e.g., monotonic_violation)
-                    info[key] = value
+            # Add meta-loss info (coherence weights, monotonic loss)
+            # FIXME can't we just merge all meta_info into info
+            if config.adaptive_coherence:
+                suffix = "pos" if coef > 0 else "neg"
+                info["coh_weight"] = meta_info[f"coh_weight_{suffix}"]
+            
+            # Monotonic loss is shared across both coefficients (same value)
+            if "loss_monotonic" in meta_info:
+                info["loss_monotonic"] = meta_info["loss_monotonic"]
             
             infos.append(info)
 
@@ -837,23 +841,32 @@ def train_epoch(
                     proj_n1 = coef_metrics.get('loss_proj_coef-1_0', np.nan)
                     coh_n1 = coef_metrics.get('loss_coh_coef-1_0', np.nan)
                     
-                    # Optional metrics
-                    mon_viol = coef_metrics.get('monotonic_violation_coef+1_0', 0.0)
-                    mon_str = f", mon={mon_viol:+7.3f}" if config.enforce_monotonic else ""
-                    
+                    # Difficulty balance metrics (adaptive coherence only)
                     if config.adaptive_coherence:
                         cohw_p1 = coef_metrics.get('coh_weight_coef+1_0', np.nan)
                         cohw_n1 = coef_metrics.get('coh_weight_coef-1_0', np.nan)
+                        mono_loss = coef_metrics.get('loss_monotonic_coef+1_0', coef_metrics.get('loss_monotonic_coef-1_0', np.nan))
+                        
+                        # Extract delta_logp_change for monotonic ordering verification
+                        dlp_p1 = coef_metrics.get('delta_logp_change_coef+1_0', np.nan)
+                        dlp_n1 = coef_metrics.get('delta_logp_change_coef-1_0', np.nan)
+
                         logger.info(
                             f"\tCoef breakdown: \n"
-                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, cohw={cohw_p1:5.2f}{mon_str}] | \n"
-                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, cohw={cohw_n1:5.2f}{mon_str}]"
+                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, cohw={cohw_p1:5.2f}, Δlp={dlp_p1:+6.3f}] | \n"
+                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, cohw={cohw_n1:5.2f}, Δlp={dlp_n1:+6.3f}] | \n"
+                            f"\t\t[mono_loss={mono_loss:+7.3f}]"
                         )
                     else:
+                        mono_loss = coef_metrics.get('loss_monotonic_coef+1_0', coef_metrics.get('loss_monotonic_coef-1_0', 0.0))
+                        dlp_p1 = coef_metrics.get('delta_logp_change_coef+1_0', np.nan)
+                        dlp_n1 = coef_metrics.get('delta_logp_change_coef-1_0', np.nan)
+                        
                         logger.info(
                             f"\tCoef breakdown: \n"
-                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}{mon_str}] | \n"
-                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}{mon_str}]"
+                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, Δlp={dlp_p1:+6.3f}] | \n"
+                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, Δlp={dlp_n1:+6.3f}] | \n"
+                            f"\t\t[mono_loss={mono_loss:+7.3f}]"
                         )
 
             # Validation check (less frequent than logging)
@@ -879,23 +892,20 @@ def train_epoch(
                     proj_n1 = val_coef_metrics.get('loss_proj_coef-1_0', np.nan)
                     coh_n1 = val_coef_metrics.get('loss_coh_coef-1_0', np.nan)
                     
-                    # Optional metrics
-                    mon_viol = val_coef_metrics.get('monotonic_violation_coef+1_0', 0.0)
-                    mon_str = f", mon={mon_viol:+7.3f}" if config.enforce_monotonic else ""
-                    
+                    # Difficulty balance metrics (adaptive coherence only)
                     if config.adaptive_coherence:
                         cohw_p1 = val_coef_metrics.get('coh_weight_coef+1_0', np.nan)
                         cohw_n1 = val_coef_metrics.get('coh_weight_coef-1_0', np.nan)
                         logger.info(
                             f" \tVal coef breakdown: \n"
-                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, cohw={cohw_p1:5.2f}{mon_str}] | \n"
-                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, cohw={cohw_n1:5.2f}{mon_str}]\n"
+                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, cohw={cohw_p1:5.2f}] | \n"
+                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, cohw={cohw_n1:5.2f}]\n"
                         )
                     else:
                         logger.info(
                             f"\tVal coef breakdown: \n"
-                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}{mon_str}] | \n"
-                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}{mon_str}]\n"
+                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}] | \n"
+                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}]\n"
                         )
 
                 if wandb_run is not None:

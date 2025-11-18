@@ -2178,67 +2178,26 @@ Training the same adapter with c=±1 creates a consistency constraint that preve
 
     ## Solution: Conflict-Free Monotonic Constraint
 
-    ### Design Principle
+    Implemented a 3-way monotonic ordering constraint to prevent saddle-point gaming where the model learns transformations that degrade outputs in BOTH coefficient directions.
 
-    Add a **constraint** (not competing objective) that enforces output monotonicity without hyperparameter balancing:
+    ## Solution: Monotonic Ordering Constraint
 
-    ```python
-    def monotonic_ordering_loss(proj_pos, proj_neg, margin=0.1):
-        """
-        Zero loss if pos > neg + margin (correct ordering)
-        Hinge penalty if ordering violated (saddle indicator)
-        """
-        violation = F.relu(proj_neg - proj_pos + margin)
-        return violation.mean()
-    ```
+    ### Key Design Principles
 
-    ### Why This Works Without Balancing
+    1. **No hyperparameter balancing needed**
+      - Uses HINGE loss: zero when constraint satisfied, linear penalty when violated
+      - Either the ordering is correct or it's not - no ambiguous "how much" tuning
+      - Complements coherence constraint which already uses margins
 
-    **Conflict-free properties**:
-    1. **Passive when satisfied**: loss = 0 → no gradients → no interference with other losses
-    2. **Active when violated**: loss > 0 → correction signal → prevents saddle exploitation
-    3. **Natural scale**: violations in projection magnitude units (~nats), matches existing losses
-    4. **Binary constraint**: either satisfied (silent) or violated (active), not a continuous trade-off
+    2. **Operates on preference gaps, not magnitudes**
+      - Doesn't care HOW MUCH the preference gap changes
+      - Only enforces: `delta_logp(c=-1) < 0 < delta_logp(c=+1)`
+      - This prevents both directions degrading while allowing asymmetric improvements
 
-    This mirrors the coherence margin design:
-    - Coherence: "don't degrade outputs beyond threshold" (quality constraint)
-    - Monotonic: "don't violate pos > neg ordering" (consistency constraint)
-
-    Both enforce **boundaries**, not **objectives**.
-
-    ### Why NOT Output-Level DPO Loss
-
-    Alternative considered but rejected:
-    ```python
-    loss_output = -F.logsigmoid(logp_pos - logp_neg - margin)
-    ```
-
-    **Problems**:
-    - Requires balancing weight (continuous objective)
-    - Scale varies across models/datasets
-    - Conflicts with projection loss (both optimize same metric)
-    - Adds hyperparameter requiring model-specific tuning
-
-    ## Key Insights
-
-    1. **S-space separation ≠ output monotonicity**: Hidden state geometry can satisfy training objectives while producing degenerate outputs
-
-    2. **Constraints vs objectives**: Not all losses should be balanced - binary constraints (coherence margin, monotonic ordering) can be passively enforced
-
-    3. **Failure mode detection**: When BOTH coefficients degrade performance while showing good internal separation, suspect saddle-point exploitation
-
-    4. **Documentation clarity**: If multiple people misunderstand the same concept, the code/comments need fixing, not just explanation
-
-    5. **Conflict-free design**: Losses that are zero when satisfied require no balancing and compose naturally with other objectives
-
-    ---
-
-    ## Open Questions
-
-    1. Will monotonic constraint enable higher-rank adapters to outperform 3-layer baseline?
-    2. Does violation magnitude correlate with rank/layer count (expressivity)?
-    3. Can we visualize the S-space → output-space mapping to confirm saddle geometry?
-    4. Are there other degenerate solutions lurking that monotonic constraint doesn't prevent?
+    3. **Zero at baseline by construction**
+      - `delta_logp_change = (logp_pi_cho - logp_pi_rej) - (logp_ref_cho - logp_ref_rej)`
+      - At c=0, pi=ref, so delta_logp_change = 0
+      - No need to compute or pass c=0 activations - just use `torch.tensor(0.0)` as anchor
 
 
 # 2025-11-18 00:11:33
