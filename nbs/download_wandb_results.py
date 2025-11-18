@@ -4,70 +4,64 @@
 import wandb
 import pandas as pd
 from pathlib import Path
+from tqdm.auto import tqdm
 import json
 from datetime import datetime
 
 # Cache directory
-cache_dir = Path(__file__).parents[3] / 'outputs' / 'wandb_cache'
+cache_dir = Path(__file__).parent / 'outputs' / 'wandb_cache'
 cache_dir.mkdir(parents=True, exist_ok=True)
 
 # Init wandb API
 api = wandb.Api()
 project = "wassname/InnerPiSSA"
 
-# Check if we have a recent cache
-cache_file = cache_dir / 'runs_cache.json'
-use_cache = cache_file.exists()
 
-if use_cache:
-    cache_age = (datetime.now() - datetime.fromtimestamp(cache_file.stat().st_mtime)).total_seconds() / 3600
-    print(f"Cache found ({cache_age:.1f}h old). Use it? [y/N]: ", end='')
-    use_cache = input().lower() == 'y'
+print("Downloading from wandb...")
+runs = api.runs(project)
+runs_data = []
 
-if use_cache:
-    print("Loading from cache...")
-    with open(cache_file) as f:
-        cached_data = json.load(f)
-    runs_data = cached_data['runs']
-else:
-    print("Downloading from wandb...")
-    runs = api.runs(project)
-    runs_data = []
-    
-    for run in runs:
-        config = dict(run.config)
-        summary = run.summary._json_dict
-        
-        # Download logs
-        log_file = cache_dir / f"{run.id}_logs.txt"
-        if not log_file.exists():
-            try:
-                logs = run.history(stream='events', pandas=False)
-                log_lines = []
-                for entry in logs:
-                    if '_runtime' in entry:
-                        log_lines.append(str(entry))
-                log_file.write_text('\n'.join(log_lines))
-            except Exception as e:
-                print(f"  Warning: couldn't download logs for {run.name}: {e}")
-        
-        run_data = {
-            'run_id': run.id,
-            'name': run.name,
-            'state': run.state,
-            'created_at': str(run.created_at),
-            'url': run.url,
-            'config': config,
-            'summary': summary,
-            'log_file': str(log_file) if log_file.exists() else None,
-        }
+for run in tqdm(runs):
+    log_file = cache_dir / f"{run.id}_logs.txt"
+    run_file = cache_dir / f"{run.id}_run.json"
+    if run_file.exists() and log_file.exists():
+        print(f"  Using cached data for {run.name}")
+        with open(run_file) as f:
+            run_data = json.load(f)
         runs_data.append(run_data)
-        print(f"  {run.name} - {summary.get('eval/main_metric')}")
+        continue
+
+    config = dict(run.config)
+    summary = run.summary._json_dict
     
-    # Save cache
-    with open(cache_file, 'w') as f:
-        json.dump({'runs': runs_data, 'updated_at': datetime.now().isoformat()}, f, indent=2)
-    print(f"Cached {len(runs_data)} runs to {cache_file}")
+    # Download logs
+    if not log_file.exists():
+        try:
+            logs = run.history(stream='events', pandas=False)
+            log_lines = []
+            for entry in logs:
+                if '_runtime' in entry:
+                    log_lines.append(str(entry))
+            log_file.write_text('\n'.join(log_lines))
+        except Exception as e:
+            print(f"  Warning: couldn't download logs for {run.name}: {e}")
+    
+    run_data = {
+        'run_id': run.id,
+        'name': run.name,
+        'state': run.state,
+        'created_at': str(run.created_at),
+        'url': run.url,
+        'config': config,
+        'summary': summary,
+        'log_file': str(log_file) if log_file.exists() else None,
+    }
+    runs_data.append(run_data)
+    print(f"  {run.name} - {summary.get('eval/main_metric')}")
+    # Save individual run data
+    with open(run_file, 'w') as f:
+        json.dump(run_data, f, indent=2)
+
 
 # Flatten for DataFrame
 results = []
