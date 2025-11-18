@@ -102,7 +102,7 @@ def collect_S_steer_vec(model, honest_dataset, tokenizer, loss_layers, config):
 
 def main(config):
     # Config
-    config.eval_batch_size = max(32, config.batch_size)
+    # config.eval_batch_size = max(32, config.batch_size)
     # config = TrainingConfig(
     #     eval_batch_size=32,
     #     # dataset_max_samples=800,

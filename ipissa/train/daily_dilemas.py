@@ -58,11 +58,15 @@ def format_messages(
         # enable_thinking=True,
     )
 
+    # TODO use attention mask to get max actual length?
+
     # warn on truncation
     if inputs_ids.shape[1] >= max_size:
         logger.warning(
             f"Input truncated to max_size={max_size} tokens for dilemma_idx={row['dilemma_idx']}, idx={row['idx']}. Consider increasing max_size."
         )
+
+    
 
     return {"input_ids": inputs_ids.squeeze(0)}
 
@@ -84,6 +88,8 @@ def load_and_process_daily_dilemmas_eval_dataset(
         load_from_cache_file=False,
         desc="Formatting messages",
     )
+
+    # TODO use attention_mask.sum(1).max() to get max dataset length
 
     if eval_max_n_dilemmas is not None:
         logger.warning(

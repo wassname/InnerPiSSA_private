@@ -127,7 +127,7 @@ class TrainingConfig:
     # eval_batch_size: Optional[int] = None
     # Instead of a full eval just use the top N value with truth labels
     eval_max_n_dilemmas: Optional[int] = None
-    eval_dataset_max_token_length: int = 196
+    eval_dataset_max_token_length: int = 288
 
     # Output
     output_dir: Path = proj_root / "outputs/adapters"

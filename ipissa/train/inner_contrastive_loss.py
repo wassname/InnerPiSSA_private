@@ -396,7 +396,7 @@ def contrastive_steering_loss_with_ref(
         
         return reduce_tokens_w_attention(penalty, loss_mask), degradation
 
-    def calc_coherence_loss(ref_logp, pi_logp, loss_mask, threshold=coherence_threshold, scale=50.0, clamp_scale=None):
+    def calc_coherence_loss(ref_logp, pi_logp, loss_mask, threshold=coherence_threshold, scale=50.0, clamp_scale=None, C=4, boundary_order=2):
         """
         Log-barrier coherence loss - steep near threshold, logarithmic growth.
         Similar to interior point methods in optimization.
@@ -481,8 +481,8 @@ def contrastive_steering_loss_with_ref(
         # Strongest gradients since proj_diff (symlog) is already in reasonable scale [-5, +5]
         # Use when coherence dominates: proj ~ 0.1 but coh ~ 4-16 after (x*mult_b)**2
         loss_proj = -proj_diff  # Maximize directly
-        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, 2, clamp_scale=20, C=2)
-        loss_coh = reduce_tokens_w_attention(logp_deg, loss_mask).mean()
+        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, clamp_scale=20, C=2)
+        # loss_coh = reduce_tokens_w_attention(F.relu(logp_deg), loss_mask).mean()
         
     else:
         raise ValueError(f"Invalid loss_type: {loss_type}")

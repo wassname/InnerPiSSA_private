@@ -193,6 +193,9 @@ def main(config):
     df_all = pd.concat(results, ignore_index=True)
     logger.info(f"Total results: {len(df_all)} rows from {len(df_all['model_id'].unique())} models")
 
+    model_name = EVAL_BASELINE_MODELS[0]
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+
     # Process and display results for each model
     dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
         tokenizer,

@@ -1966,4 +1966,5 @@ Training the same adapter with c=±1 creates a consistency constraint that preve
 # 2025-11-18 00:11:33
 
 - [/] trying adaptive weighting of directions
-- [/] try puting pojr in log domain
+- [/] try puting proj in log domain
+- [ ] why is my 0 diff from baseline!

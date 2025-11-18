@@ -1153,6 +1153,8 @@ def evaluate_model(
         axis=0,
     )
 
+    # df_res_wlabels['coeff'] = df_res_wlabels['coeff'].fillna('disabled')
+
     # Validate baseline consistency at coeff=0
     _validate_baseline_consistency(df_res_pv)
 
