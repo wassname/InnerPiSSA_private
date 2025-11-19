@@ -207,7 +207,7 @@ def load_model(model_id, quantization_type="none"):
     return base_model, tokenizer
 
 
-def match_linear_layers(model, layer_nums: List[int], module_names: List[str], verbose=False) -> List[str]:
+def match_linear_layers(model, layer_nums: List[int], module_names: List[str], verbose=False, blocklist=['vision']) -> List[str]:
     # Build peft regex: .*\.(layer1|layer2|...)\..*(module1|module2|...)
     layer_nums = "|".join(str(L) for L in layer_nums)
     module_names = "|".join(module_names)
@@ -216,6 +216,8 @@ def match_linear_layers(model, layer_nums: List[int], module_names: List[str], v
     logger.info(f"Target modules regex: {target_modules}")
     module_path_shapes = {}
     for name, m in model.named_modules():
+        if any(block in name for block in blocklist):
+            continue
         if re.search(target_modules, name):
             if isinstance(m, torch.nn.Linear):
                 module_path_shapes[name] = m.weight.shape

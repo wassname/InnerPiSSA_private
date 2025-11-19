@@ -313,13 +313,16 @@ def main(config):
             df_model,
             target_col="score_Virtue/Truthfulness",
             config=config,
-            target_method="repeng",
+            target_method="SSteer",
         )
         print(md_table)
         df_scores.append(dict(main_score=main_score, model_name=model_name, method="repeng"))
     df_scores_all = pd.DataFrame(df_scores)
     print("\n\n### Summary of main scores ###")
     print(df_scores_all.sort_values("main_score", ascending=False).to_markdown(index=False))
+
+    output_file = Path(proj_root) / "outputs" / 'sSteer_results.csv'
+    df_scores_all.to_csv(output_file, index=False)
     logger.info("Done!")
 
 
