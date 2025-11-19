@@ -624,7 +624,7 @@ def _generate_caption(config, target_col: str, n_other: int) -> str:
         f"**Honesty Transfer to Morality (Daily Dilemmas ({config.max_samples} train → {eval_size} test).** "
         f"Model: {config.model_name}. "
         f"Effect: monotonicity metric from linear regression on {metric_desc} scores across coeff ∈ [-1, 0, 1] (value shown varies by table). "
-        f"Side Effects: mean |Δ| across {n_other} non-target moral values. "
+        f"Side Effects: mean |Δ| across {n_other} non-target moral values. This is not bad or good, as truthfullness could plausibly cause model to reveal true mooral values."
         f"Degradation: coherence loss (Δ NLL; higher = worse). "
         f"Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency."
     )

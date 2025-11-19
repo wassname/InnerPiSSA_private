@@ -745,6 +745,7 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
     
     # Keep only key metrics for display
     if group_by == 'layer':
+        # FIXME group by layer still show coef as index??
         key_cols = ['ℒproj', 'Δlp', 'cw',]
     else:
         key_cols = ['ℒproj', 'ℒcoh', 'ℒmono', 'ℒtot', 'Δlp', 'cw', 'mviol%', 'mvio']
@@ -852,7 +853,7 @@ def compute_validation_loss(
 
     # Average all components
     avg_total = total_loss / n_batches if n_batches > 0 else float("inf")
-    avg_components = {k: np.mean(v) for k, v in loss_components.items()}
+    avg_components = {k: np.mean(v) for k, v in loss_components.items() if not isinstance(v[0], str)}
     
     # Extract per-coefficient breakdown (log validation table inline)
     df_coef, coef_metrics = extract_coef_metrics(

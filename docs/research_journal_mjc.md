@@ -228,3 +228,11 @@ Run layer search
 - [x] make explicity constrain ablation flags
 - [x] have a model address FIXME and TODO
 - [x] clean up that info logging
+
+
+# 2025-11-19 23:32:42
+
+- Wierd expeirment: I accidentally used layer 0 as loss and it worked ??W
+- Wierd experiment: really high constrains gave the best results. This led me to an important fix
+  - I need to let the model decide on a direction in latent space to avoid layers conflicting, and the model having to learn an internal way to reverse behavious. Now I let it flip the sign of all the projections over all coeffecient over all sampels (but seperate per layer) and now it can converge a lot better and a lot faster! It can also solve the constraints well and quickly. A huge effect!
+- I did a sweep and layer 0.5 was the best depth for loss

@@ -698,7 +698,7 @@ def combine_dual_coef_losses(
     meta_pos = {"cw": coh_weight_pos.item()}
     meta_neg = {"cw": coh_weight_neg.item()}
     meta_shared = {
-        "loss_proj_flipped": loss_proj_flipped,
+        "loss_proj_flipped": loss_proj_flipped.item(),
         # "loss_proj": loss_proj_bidirectional.mean().item()
     }  # Metrics that don't belong to either coefficient
     

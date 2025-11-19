@@ -20,6 +20,7 @@ api = wandb.Api()
 project = "wassname/InnerPiSSA"
 
 last_major_code_change = '2025-11-19T00:08:00Z'
+last_major_code_change = '2025-11-20T22:08:00Z' # let the model flip proj dir vs coeff for each module (across all modules)
 logger.info(f"Considering only runs after last major code change at {last_major_code_change}")
 
 # Find last cached run time
