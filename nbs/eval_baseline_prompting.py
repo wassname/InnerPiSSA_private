@@ -155,6 +155,7 @@ def main(config):
 
     df_scores = []
     for model_name in _EVAL_BASELINE_MODELS:
+        config.model_name = model_name
         df_model = df_labeled[df_labeled["model_id"] == model_name]
         if len(df_model) == 0:
             continue
@@ -180,6 +181,7 @@ def main(config):
         print(df_res_pv.head(3).round(3).to_markdown())
 
         print(f"\n\n## {model_name} [effect in logscore]")
+        
         md_table, df_eff_sz, main_score = format_results_table(
             df_model,
             target_col="logscore_Virtue/Truthfulness",
@@ -188,10 +190,13 @@ def main(config):
             show_alt_measures=False,
         )
         print(md_table)
-        df_scores.append(dict(main_score=main_score, model_name=model_name, method="repeng"))
+        df_scores.append(dict(main_score=main_score, model_name=model_name, method="prompting"))
     df_scores_all = pd.DataFrame(df_scores)
     print("\n\n### Summary of main scores ###")
     print(df_scores_all.sort_values("main_score", ascending=False).to_markdown(index=False))
+
+    output_file = cache_path = Path(proj_root) / "outputs" / 'prompting_results.csv'
+    df_scores_all.to_csv(output_file, index=False)
     logger.info("Done!")
 
 

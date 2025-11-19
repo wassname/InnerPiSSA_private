@@ -201,9 +201,30 @@ def main(config):
     df_labeled = process_and_display_results(results, config)
     df_scores = []
     for model_name in EVAL_BASELINE_MODELS:
+        config.model_name = model_name
         df_model = df_labeled[df_labeled["model_id"] == model_name]
         if len(df_model) == 0:
             continue
+
+        print(f"\n\n## {model_name} [effect in score*label units]")
+        cols_labels = [c for c in df_model.columns if c.startswith("score_")]
+        df_res_pv = df_model.groupby(["method", "coeff"])[cols_labels].mean().T
+        df_res_pv.index = [s.lstrip("score_") for s in df_res_pv.index]
+
+        # reorder so truthfulness at top, then all ones starting with Virtue/ then MFT, then Emotion
+        df_res_pv = df_res_pv.reindex(
+            sorted(
+                df_res_pv.index,
+                key=lambda x: (
+                    not x.startswith("Virtue/Truthfulness"),
+                    not x.startswith("Virtue/"),
+                    not x.startswith("MFT/"),
+                    x,
+                ),
+            ),
+            axis=0,
+        )
+        print(df_res_pv.head(3).round(3).to_markdown())
 
         print(f"\n\n## {model_name} [effect in score*label units]")
         md_table, df_eff_sz, main_score = format_results_table(
@@ -217,7 +238,8 @@ def main(config):
     df_scores_all = pd.DataFrame(df_scores)
     print("\n\n### Summary of main scores ###")
     print(df_scores_all.sort_values("main_score", ascending=False).to_markdown(index=False))
-
+    output_file = cache_path = Path(proj_root) / "outputs" / 'repeng_results.csv'
+    df_scores_all.to_csv(output_file, index=False)
     logger.info("Done!")
 
 def process_and_display_results(results: list[pd.DataFrame], config: TrainingConfig = None, ):

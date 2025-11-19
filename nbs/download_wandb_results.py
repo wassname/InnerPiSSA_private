@@ -7,19 +7,20 @@ from pathlib import Path
 from tqdm.auto import tqdm
 import json
 from datetime import datetime
+from ipissa.config import EVAL_BASELINE_MODELS, TrainingConfig, proj_root
 
 # Cache directory
-cache_dir = Path(__file__).parent.parent / 'outputs' / 'wandb_cache'
+cache_dir = proj_root / 'outputs' / 'wandb_cache'
 cache_dir.mkdir(parents=True, exist_ok=True)
 
 # Init wandb API
 api = wandb.Api()
 project = "wassname/InnerPiSSA"
 
-
+last_major_code_change = '2025-11-17T12:00:00Z'
 
 # Find last cached run time
-last_run = "1970-01-01T00:00:00"
+last_run = last_major_code_change or "1970-01-01T00:00:00"
 cached_runs = list(cache_dir.glob("*_run.json"))
 if cached_runs:
     latest_time = None
@@ -140,6 +141,8 @@ df = df[(df['state'] == 'finished') & (df['runtime'] > 60)]
 print(2, len(df))
 df = df[df['eval_max_n_dilemmas'].isna()]
 print(3, len(df))
+df = df[last_major_code_change < df['created_at']]
+print(4, len(df))
 
 output_dir = Path(__file__).parent.parent
 output_file = output_dir / 'outputs' / 'wandb_results.csv'
@@ -151,11 +154,27 @@ summary_cols = ['created_at', 'model_name', 'name', 'args', 'main_metric', 'effe
                 'lr', 'rank', 'num_layers', 'loss_type', 'scale_s']
 df_summary = df[summary_cols].dropna(subset=['main_metric'])
 # TODO round numeric cols to .4g
+# TODO filter to last major code change
 summary_file = output_dir / 'outputs' / 'wandb_summary.csv'
 df_summary.to_csv(summary_file, index=False)
 print(f"Saved summary to {summary_file}")
-
+print(df_summary)
 print("""Remember only models 4B params or more matter. The code has changes at time has gone by so weight recent ones more. I'm looking for which configuration works across large models.""")
+print("""compare to output when running 
+uv run python nbs/eval_baseline_repeng.py | tail -n 20
+uv run python nbs/eval_baseline_prompting.py | tail -n 20
+""")
+f = proj_root / "outputs" / 'prompting_results.csv'
+print(f"\n\n{f}\n")
+print(pd.read_csv(f).sort_values('main_score', ascending=False))
+
+f = proj_root / "outputs" / 'repeng_results.csv'
+print(f"\n\n{f}\n")
+print(pd.read_csv(f).sort_values('main_score', ascending=False))
+
+f = proj_root / "outputs" / 'sSteer_results.csv'
+print(f"\n\n{f}\n")
+print(pd.read_csv(f).sort_values('main_score', ascending=False))
 
 # # Also load baselines from 
 # from ipissa.train.daily_dilemas import format_results_table
