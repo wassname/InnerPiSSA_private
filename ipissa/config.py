@@ -116,12 +116,23 @@ class TrainingConfig:
     ] = (
         "raw"
     )
+
+    last_n_tokens: int = 4
+    # loss constraints
+    ## coherenbce
     coherence_threshold: float = 1.5
     boundary_order: int = 1
-    last_n_tokens: int = 4
-    adaptive_coherence: bool = True  # Enable difficulty-based coherence relaxation
+    ## adaptive
+    constr_coherence: bool = True  # Enable coherence constraint
+    adaptive_relaxation: bool = True  # Enable difficulty-based coherence relaxation
     coeff_diff_temperature: float = 2  # higher = softer, lower = sharper in how we relax the coherence constrain on the harder side, and riase it on the easier coeff
-    monotonic_margin: Optional[float] = 0.1  # margin for monotonicity loss
+    ## monotonic constraint
+    constr_monotonic: bool = True  # Enable monotonicity constraint
+    monotonic_margin: float = 0.  # margin for monotonicity loss
+    monotonic_scaling: float = 100.0  # scaling factor for monotonicity loss
+
+
+    
 
     # Eval
     # eval_batch_size: Optional[int] = None
@@ -227,6 +238,15 @@ class TrainingConfig:
 # Preset configs for different hardware/model combinations https://brentyi.github.io/tyro/examples/hierarchical_structures/
 default_configs = {
     ".": ("default", TrainingConfig()),
+
+    # These models are too small for reliable results
+    "tiny": (
+        "Tiny random model (debugging/CI)",
+        TrainingConfig(
+            model_name="snake7gun/tiny-random-qwen3",
+            quick=True,
+        ),
+    ),
     "q06b-24gb": (
         "Qwen 0.6B on 24GB GPU (fast iteration)",
         TrainingConfig(
@@ -234,6 +254,8 @@ default_configs = {
             batch_size=32,
         ),
     ),
+
+    # larger models
     "q4b-24gb": (
         "Qwen 4B on 24GB GPU (balanced quality/speed)",
         TrainingConfig(
@@ -241,6 +263,7 @@ default_configs = {
             batch_size=6,
         ),
     ),
+
     "q4b-80gb": (
         "Qwen 4B on 80GB GPU (large batch training)",
         TrainingConfig(
@@ -262,6 +285,15 @@ default_configs = {
             batch_size=32,
         ),
     ),
+
+    "gemma4b-80gb": (
+        "Gemma 3 4B on 80GB GPU",
+        TrainingConfig(
+            model_name="google/gemma-3-4b-it",
+            batch_size=64,
+        ),
+    ),
+    # add gemma4b
     "gemma12b-80gb": (
         "Gemma 3 12B on 80GB GPU",
         TrainingConfig(
@@ -270,28 +302,5 @@ default_configs = {
         ),
     ),
 
-    
 
-    "oss20-80gb": (
-        "GPT-OSS 20B on 80GB GPU",
-        TrainingConfig(
-            model_name="openai/gpt-oss-20b",
-            batch_size=12,
-        ),
-    ),
-
-    "tiny": (
-        "Tiny random model (debugging/CI)",
-        TrainingConfig(
-            model_name="snake7gun/tiny-random-qwen3",
-            quick=True,
-        ),
-    ),
-    # TODO 100gb gpu configs
-    # meta-llama/Llama-3.2-3B-Instruct
-    # meta-llama/Llama-3.1-8B-Instruct
-    # google/gemma-3-12b-it
-    # Qwen/Qwen3-32B
-    # google/gemma-3-27b-it
-    # unsloth/Llama-3.3-70B-Instruct
 }

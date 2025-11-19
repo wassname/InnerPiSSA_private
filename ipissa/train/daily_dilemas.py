@@ -59,15 +59,10 @@ def format_messages(
         # enable_thinking=True,
     )
 
-    # TODO use attention mask to get max actual length?
-
-    # warn on truncation
     if inputs_ids.shape[1] >= max_size:
         logger.warning(
             f"Input truncated to max_size={max_size} tokens for dilemma_idx={row['dilemma_idx']}, idx={row['idx']}. Consider increasing max_size."
         )
-
-    
 
     return {"input_ids": inputs_ids.squeeze(0)}
 
@@ -90,8 +85,6 @@ def load_and_process_daily_dilemmas_eval_dataset(
         desc="Formatting messages",
     )
 
-    # TODO use attention_mask.sum(1).max() to get max dataset length
-
     if eval_max_n_dilemmas is not None:
         logger.warning(
             f"Not a full eval, selecting {eval_max_n_dilemmas} dilemmas."
@@ -107,14 +100,6 @@ def load_and_process_daily_dilemmas_eval_dataset(
         ["dilemma_idx", "idx", "input_ids"]
     ).with_format("torch")
 
-    # def unsqueeze_items(example):
-    #     for k,v in example.items():
-    #         if v.ndim == 0:
-    #             example[k] = v.unsqueeze(0)
-    #     return example
-    
-    # # some collators don't like 0-dim tensors - no wait that was due to batch_size=None
-    # dataset_pt = dataset_pt.map(unsqueeze_items)
     enable_caching()
     return dataset_dd, dataset_pt
 
@@ -398,9 +383,9 @@ def compute_coherence_metrics(
 
         # Filter out NaNs for stats
         valid_logratios = g["logratio"].dropna()
-        pct_valid = len(valid_logratios) / len(g) if len(g) > 0 else 0.0
+        pct_valid = len(valid_logratios) / len(g)
 
-        if len(valid_logratios) == 0:
+        if valid_logratios.empty:
             return pd.Series(
                 {
                     "pct_valid": 0.0,
@@ -417,14 +402,8 @@ def compute_coherence_metrics(
 
         # Input NLL metrics (positive = degradation, negative = improvement)
         valid_input_nll = g["input_nll"].dropna()
-        input_nll_mean = (
-            valid_input_nll.mean() if len(valid_input_nll) > 0 else float("nan")
-        )
-        input_nll_shift = (
-            input_nll_mean - baseline_nll
-            if len(valid_input_nll) > 0
-            else float("inf")
-        )
+        input_nll_mean = valid_input_nll.mean() if valid_input_nll.size else float("nan")
+        input_nll_shift = input_nll_mean - baseline_nll if valid_input_nll.size else float("inf")
 
         # Coherence requires: valid outputs + no significant degradation
         # logratio_shift is the TRANSFER EFFECT, not a coherence metric - don't filter it!

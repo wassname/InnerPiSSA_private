@@ -449,13 +449,8 @@ def train_steer_vector(
         )
         cvec_Sw_steer = None
 
-    # dirs_pca = read_representations(last_act, logprobs, grads=None)
-    # cvec_pca_steer = ControlVector(
-    #     model_type=model.config.model_type, directions=dirs_pca
-    # )
-
     logger.info(
-        "Extracted steering vectors: loss (unweighted S-space), steer (S-weighted), PCA (activation-space)"
+        "Extracted steering vectors: loss (unweighted S-space), steer (S-weighted)"
     )
     return cvec_loss_steer, None, None
 
@@ -556,13 +551,7 @@ def compute_batch_loss(
             pi_rej_label_logp = pi_label_logprobs[1::2]
             pi_cho_label_logp = pi_label_logprobs[::2]
 
-            # # FIXME this logic could be simpler if we had a seperat swap logic after checking adapter type
-            # hs_pi_pos, hs_pi_neg, ref_coherence, pi_coherence = _get_coef_aligned_activations(
-            #     hs_pi_cho, hs_pi_rej, ref_cho_label_logp, ref_rej_label_logp,
-            #     pi_cho_label_logp, pi_rej_label_logp, coef, U_w=U_w
-            # )
-
-            # Determine positive/negative activations based on coefficient sign
+            # Swap chosen/rejected based on coefficient sign (preserves autograd)
             if coef > 0:
                 hs_pi_pos_u = hs_pi_cho
                 hs_pi_neg_u = hs_pi_rej
@@ -611,8 +600,8 @@ def compute_batch_loss(
             # Store per-layer loss (fix: was overwriting for each layer!)
             loss_results_per_layer[coef][lk] = loss_dict
 
-    # Sum losses across layers for each coefficient
-    # Aggregate scalar losses (loss_proj, loss_coh) and keep last layer's metrics for logging
+    # Aggregate losses across layers for each coefficient
+    # Use mean instead of sum to avoid scaling issues with multiple loss layers
     loss_results = {}
     for coef in [-1.0, 1.0]:
 
@@ -620,13 +609,14 @@ def compute_batch_loss(
         lk = loss_layers[-1]
         loss_results[coef] = {k: v for k, v in loss_results_per_layer[coef][lk].items()}
         
-        # Sum the actual loss components across all layers
+        # Mean the loss components across all layers for better scaling
+        n_layers = len(loss_layers)
         loss_results[coef]["loss_proj"] = sum(
             loss_results_per_layer[coef][layer]["loss_proj"] for layer in loss_layers
-        )
+        ) / n_layers
         loss_results[coef]["loss_coh"] = sum(
             loss_results_per_layer[coef][layer]["loss_coh"] for layer in loss_layers
-        )
+        ) / n_layers
         loss_results[coef]["loss_total"] = (
             loss_results[coef]["loss_proj"] + loss_results[coef]["loss_coh"]
         )
@@ -636,35 +626,33 @@ def compute_batch_loss(
     total_loss, meta_info = combine_dual_coef_losses(
         loss_pos=loss_results[+1.0],
         loss_neg=loss_results[-1.0],
-        adaptive_coherence=config.adaptive_coherence,
+        adaptive_relaxation=config.adaptive_relaxation,
         temperature=config.coeff_diff_temperature,
         monotonic_margin=config.monotonic_margin,
+        monotonic_scaling=config.monotonic_scaling,
+        enable_coherence=config.constr_coherence,
+        enable_monotonic=config.constr_monotonic,
     )
 
     # Flatten info for logging
     for coef in [-1.0, 1.0]:
-        info = {k: v for k, v in loss_results[coef].items() if k not in ["loss_proj", "loss_coh", "loss_total"]}
-        # Add back loss components for logging
-        info["loss_proj"] = loss_results[coef]["loss_proj"]
-        info["loss_coh"] = loss_results[coef]["loss_coh"]
-        info["loss_total"] = loss_results[coef]["loss_total"]
+        # Start with loss results, convert tensors to scalars
+        info = {}
+        for k, v in loss_results[coef].items():
+            if torch.is_tensor(v):
+                info[k] = v.mean().detach().cpu().item()
+            else:
+                info[k] = v
         
+        # Add metadata
         if scheduler is not None:
-            info["lr"] = torch.tensor(scheduler.get_last_lr()[0])
-        info = {k: v.mean().detach().cpu().item() if torch.is_tensor(v) else v for k, v in info.items()}
+            info["lr"] = scheduler.get_last_lr()[0]
         info["coef"] = coef
         info["layer"] = lk
         info["step"] = step
         
-        # Add meta-loss info (coherence weights, monotonic loss)
-        # FIXME can't we just merge all meta_info into info
-        if config.adaptive_coherence:
-            suffix = "pos" if coef > 0 else "neg"
-            info["coh_weight"] = meta_info[f"coh_weight_{suffix}"]
-        
-        # Monotonic loss is shared across both coefficients (same value)
-        if "loss_monotonic" in meta_info:
-            info["loss_monotonic"] = meta_info["loss_monotonic"]
+        # Merge meta_info directly (no need for conditional logic)
+        info.update(meta_info)
         
         infos.append(info)
 
@@ -831,9 +819,8 @@ def train_epoch(
         info = df_hist.iloc[-1].to_dict()
         
         # Extract per-coefficient breakdown for detailed logging
-        coef_metrics = extract_coef_metrics(infos[-len(loss_layers)*2:]) if len(infos) >= len(loss_layers)*2 else {}
+        coef_metrics = extract_coef_metrics(infos[-len(loss_layers)*2:])
         
-        # FIXME why last
         if wandb_run is not None:
             # Log step-aggregated metrics
             wandb_run.log(info, step=step)
@@ -843,45 +830,44 @@ def train_epoch(
                 wandb_run.log(coef_log, step=step)
         
         if step % log_n_steps == 0:
-            if len(df_hist) > 0:
-                log_str = " | ".join([f"{k}={v:+7.3g}" for k, v in info.items()])
-                logger.info(f"Step {step}: {log_str}")
+            log_str = " | ".join([f"{k}={v:+7.3g}" for k, v in info.items()])
+            logger.info(f"Step {step}: {log_str}")
+            
+            # Compact coef vs proj/coh summary table
+            if coef_metrics:
+                # Extract key metrics for +1 and -1 coefficients
+                proj_p1 = coef_metrics.get('loss_proj_coef+1_0', np.nan)
+                coh_p1 = coef_metrics.get('loss_coh_coef+1_0', np.nan)
+                proj_n1 = coef_metrics.get('loss_proj_coef-1_0', np.nan)
+                coh_n1 = coef_metrics.get('loss_coh_coef-1_0', np.nan)
                 
-                # Compact coef vs proj/coh summary table
-                if coef_metrics:
-                    # Extract key metrics for +1 and -1 coefficients
-                    proj_p1 = coef_metrics.get('loss_proj_coef+1_0', np.nan)
-                    coh_p1 = coef_metrics.get('loss_coh_coef+1_0', np.nan)
-                    proj_n1 = coef_metrics.get('loss_proj_coef-1_0', np.nan)
-                    coh_n1 = coef_metrics.get('loss_coh_coef-1_0', np.nan)
+                # Difficulty balance metrics (adaptive coherence only)
+                if config.adaptive_relaxation:
+                    cohw_p1 = coef_metrics.get('coh_weight_coef+1_0', np.nan)
+                    cohw_n1 = coef_metrics.get('coh_weight_coef-1_0', np.nan)
+                    mono_loss = coef_metrics.get('loss_monotonic_coef+1_0', coef_metrics.get('loss_monotonic_coef-1_0', np.nan))
                     
-                    # Difficulty balance metrics (adaptive coherence only)
-                    if config.adaptive_coherence:
-                        cohw_p1 = coef_metrics.get('coh_weight_coef+1_0', np.nan)
-                        cohw_n1 = coef_metrics.get('coh_weight_coef-1_0', np.nan)
-                        mono_loss = coef_metrics.get('loss_monotonic_coef+1_0', coef_metrics.get('loss_monotonic_coef-1_0', np.nan))
-                        
-                        # Extract delta_logp_change for monotonic ordering verification
-                        dlp_p1 = coef_metrics.get('delta_logp_change_coef+1_0', np.nan)
-                        dlp_n1 = coef_metrics.get('delta_logp_change_coef-1_0', np.nan)
+                    # Extract delta_logp_change for monotonic ordering verification
+                    dlp_p1 = coef_metrics.get('delta_logp_change_coef+1_0', np.nan)
+                    dlp_n1 = coef_metrics.get('delta_logp_change_coef-1_0', np.nan)
 
-                        logger.info(
-                            f"\tCoef breakdown: \n"
-                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, cohw={cohw_p1:5.2f}, Δlp={dlp_p1:+6.3f}] | \n"
-                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, cohw={cohw_n1:5.2f}, Δlp={dlp_n1:+6.3f}] | \n"
-                            f"\t\t[mono_loss={mono_loss:+7.3f}]"
-                        )
-                    else:
-                        mono_loss = coef_metrics.get('loss_monotonic_coef+1_0', coef_metrics.get('loss_monotonic_coef-1_0', 0.0))
-                        dlp_p1 = coef_metrics.get('delta_logp_change_coef+1_0', np.nan)
-                        dlp_n1 = coef_metrics.get('delta_logp_change_coef-1_0', np.nan)
-                        
-                        logger.info(
-                            f"\tCoef breakdown: \n"
-                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, Δlp={dlp_p1:+6.3f}] | \n"
-                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, Δlp={dlp_n1:+6.3f}] | \n"
-                            f"\t\t[mono_loss={mono_loss:+7.3f}]"
-                        )
+                    logger.info(
+                        f"\tCoef breakdown: \n"
+                        f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, cohw={cohw_p1:5.2f}, Δlp={dlp_p1:+6.3f}] | \n"
+                        f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, cohw={cohw_n1:5.2f}, Δlp={dlp_n1:+6.3f}] | \n"
+                        f"\t\t[mono_loss={mono_loss:+7.3f}]"
+                    )
+                else:
+                    mono_loss = coef_metrics.get('loss_monotonic_coef+1_0', coef_metrics.get('loss_monotonic_coef-1_0', 0.0))
+                    dlp_p1 = coef_metrics.get('delta_logp_change_coef+1_0', np.nan)
+                    dlp_n1 = coef_metrics.get('delta_logp_change_coef-1_0', np.nan)
+                    
+                    logger.info(
+                        f"\tCoef breakdown: \n"
+                        f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, Δlp={dlp_p1:+6.3f}] | \n"
+                        f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, Δlp={dlp_n1:+6.3f}] | \n"
+                        f"\t\t[mono_loss={mono_loss:+7.3f}]"
+                    )
 
             # Validation check (less frequent than logging)
             if (
@@ -907,7 +893,7 @@ def train_epoch(
                     coh_n1 = val_coef_metrics.get('loss_coh_coef-1_0', np.nan)
                     
                     # Difficulty balance metrics (adaptive coherence only)
-                    if config.adaptive_coherence:
+                    if config.adaptive_relaxation:
                         cohw_p1 = val_coef_metrics.get('coh_weight_coef+1_0', np.nan)
                         cohw_n1 = val_coef_metrics.get('coh_weight_coef-1_0', np.nan)
                         logger.info(
@@ -1087,42 +1073,6 @@ def evaluate_model(
     #     logger.info(
     #         "Evaluating S-weighted steering baseline (dataset-level pref dir with S-weighting)"
     #     )
-    #     results.extend(
-    #         sweep_coefficients(
-    #             "S-weighted steer",
-    #             lambda c: steer(model, dirs_Sw_steer, coeff=c, retain_grad=False),
-    #         )
-    #     )
-
-    # # PCA baseline (activation-space PCA)
-    # if dirs_pca_steer is not None:
-    #     results.extend(
-    #         sweep_coefficients(
-    #             "PCA (baseline)",
-    #             lambda c: steer(model, dirs_pca_steer, coeff=c, retain_grad=False),
-    #         )
-    #     )
-
-    #     # Random baseline
-    #     logger.info("Preparing random steering baseline")
-    #     dirs_random = ControlVector(
-    #         model_type=model.config.model_type,
-    #         directions={
-    #             k: torch.randn_like(v) for k, v in dirs_pca_steer.directions.items()
-    #         },
-    #     )
-    #     for k in dirs_random.directions:
-    #         dirs_random.directions[k] = (
-    #             dirs_random.directions[k] / dirs_random.directions[k].norm()
-    #         )
-
-    #     results.extend(
-    #         sweep_coefficients(
-    #             "random",
-    #             lambda c: steer(model, dirs_random, coeff=c, retain_grad=False),
-    #         )
-    #     )
-
     # Load per-model prompting baseline
     model_safe = config.model_name.replace('/', '_')
     output_path = proj_root / "outputs" / f"baselines/prompting/{model_safe}.parquet"
@@ -1218,7 +1168,6 @@ def generate_example_output(model, tokenizer, choice_ids, max_new_tokens=64, ins
 Situation: You found a wallet with $500 cash and an ID. Returning it would cost you time and effort, but keeping it would be dishonest.
 Action: Keep the money"""
 
-    # inputs = tokenizer(example_prompt, return_tensors="pt").to(model.device)
     batch = tokenizer.apply_chat_template(
         [
             {"role": "system", "content": instructions},
@@ -1242,17 +1191,13 @@ Action: Keep the money"""
             input_ids=input_ids,
             attention_mask=attn_mask,
             choice_ids=choice_ids,
-            # max_new_tokens=max_new_tokens,
-            # output_logits=True,
-            # return_dict_in_generate=True,
             continue_n_tokens=max_new_tokens,
-            # generation_config=generation_config,
         )
 
     N = input_ids.shape[1]
     q = tokenizer.decode(outputs.sequences[0][:N], skip_special_tokens=False)
     a = tokenizer.decode(outputs.sequences[0][N:], skip_special_tokens=False)
-    score = torch.mean(logratios) if len(logratios) > 0 else np.nan
+    score = torch.mean(logratios).item()
 
     return (q, a, score, seq_nll[0].item())
 
@@ -1341,11 +1286,13 @@ def auto_flip_adapter_sign(model, tokenizer, choice_ids, adapter_name, threshold
         logger.info(
             f"After flip: coeff=-1: {new_score_neg:.3f}, coeff=0: {new_score_zero:.3f}, coeff=+1: {new_score_pos:.3f}"
         )
-        if new_score_pos > new_score_pos + threshold:
-            logger.warning("Adapter sign flipped automatically. Please verify outputs!")
-        # assert new_score_pos > new_score_neg + threshold, (
-        #     "Flip failed to correct direction!"
-        # )
+        if new_score_pos > new_score_neg + threshold:
+            logger.info("Adapter flip successful: +1 now increases truthfulness")
+        else:
+            raise ValueError(
+                f"Adapter flip FAILED! After flip: +1={new_score_pos:.3f}, -1={new_score_neg:.3f}. "
+                f"Expected +1 > -1, but gap is {new_score_pos - new_score_neg:.3f} < threshold {threshold}"
+            )
 
     return flipped
 
@@ -1552,7 +1499,6 @@ def main(config: TrainingConfig):
     logger.info(f"## Evaluation complete {ts}.\n\n{' '.join(sys.argv)}")
 
     methods = df_res_pv.columns.get_level_values(0).unique()
-    # FIXME make sure incldues none
     for method in methods:
         logger.info(
             f"Results for method: {method} [logratio * label -> nat's toward label]\n{df_res_pv[method].head(2).round(4)}\n"
@@ -1594,11 +1540,18 @@ def main(config: TrainingConfig):
 
     if wandb_run is not None:
         logger.info(f"W&B run: {wandb_run.get_url()}")
-        # TODO also do the baseline scores
         wandb_run.summary["eval/main_metric"] = main_score
         wandb_run.log({"main_metric": main_score})
-
-        # wandb_run.summary["eval/effect_size_truthfulness"] = effect_size_truth
+        
+        # Log baseline (coeff=0) scores for each method
+        try:
+            baseline_data = df_res_pv.xs(0.0, level=1, axis=1)  # Extract coeff=0 column
+            for method in baseline_data.columns:
+                baseline_score = baseline_data[method].iloc[0]
+                wandb_run.summary[f"eval/baseline_{method}"] = baseline_score
+            logger.info(f"Logged baseline scores: {baseline_data.iloc[0].to_dict()}")
+        except KeyError:
+            logger.warning("Could not extract baseline (coeff=0) scores for logging")
 
         # Log additional metrics to WandB
         coherence = compute_coherence_metrics(df_res_wlabels)
@@ -1619,7 +1572,6 @@ def main(config: TrainingConfig):
                 }
             )
 
-        # TODO have to restrict it to numeric
         df_res_pv_flat = df_res_pv.reset_index().rename(columns={"index": "value"})
         numeric_cols = df_res_pv_flat.select_dtypes(include=[np.number]).columns
         df_res_pv_flat = df_res_pv_flat[numeric_cols]

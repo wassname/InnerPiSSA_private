@@ -31,115 +31,115 @@ except ImportError:
 class AdapterScaler:
     """Handles scaling of adapter parameters during forward passes."""
 
-    @staticmethod
-    def scale_road_params(
-        module: RoadLayer,
-        adapter_name: str,
-        coeff: float,
-        originals: List[Tuple],
-    ) -> None:
-        """Scale ROAD adapter alpha parameters for reversible steering.
+    # @staticmethod
+    # def scale_road_params(
+    #     module: RoadLayer,
+    #     adapter_name: str,
+    #     coeff: float,
+    #     originals: List[Tuple],
+    # ) -> None:
+    #     """Scale ROAD adapter alpha parameters for reversible steering.
         
-        Only scales road_alpha (magnitude), not road_theta (rotation angle).
+    #     Only scales road_alpha (magnitude), not road_theta (rotation angle).
         
-        Rationale: road_theta is an angle parameter used in cos(theta) and sin(theta).
-        Scaling angles doesn't give reversible behavior - cos(-theta) = cos(theta).
-        road_alpha is the magnitude scaling that should be reversed for steering.
-        The rotation matrix is [α*cos(θ), -α*sin(θ); α*sin(θ), α*cos(θ)], so scaling
-        α by coeff scales the entire transformation linearly.
+    #     Rationale: road_theta is an angle parameter used in cos(theta) and sin(theta).
+    #     Scaling angles doesn't give reversible behavior - cos(-theta) = cos(theta).
+    #     road_alpha is the magnitude scaling that should be reversed for steering.
+    #     The rotation matrix is [α*cos(θ), -α*sin(θ); α*sin(θ), α*cos(θ)], so scaling
+    #     α by coeff scales the entire transformation linearly.
 
-        ROAD is multiplicative: road_alpha scales rotation matrix. Initializes to 1.0, so scale deviations from identity around 1.
+    #     ROAD is multiplicative: road_alpha scales rotation matrix. Initializes to 1.0, so scale deviations from identity around 1.
 
-           https://arxiv.org/pdf/2409.00119.
-           https://github.com/huggingface/peft/blob/6030f9160ed2fc17220f6f41382a66f1257b6a93/src/peft/tuners/road/layer.py
-        """
-        if hasattr(module, 'road_alpha') and adapter_name in module.road_alpha:
-            originals.append((module, 'road_alpha', module.road_alpha))
+    #        https://arxiv.org/pdf/2409.00119.
+    #        https://github.com/huggingface/peft/blob/6030f9160ed2fc17220f6f41382a66f1257b6a93/src/peft/tuners/road/layer.py
+    #     """
+    #     if hasattr(module, 'road_alpha') and adapter_name in module.road_alpha:
+    #         originals.append((module, 'road_alpha', module.road_alpha))
             
-            object.__setattr__(module, 'road_alpha', {
-                k: ((v - 1.0) * coeff + 1.0) if k == adapter_name else v
-                for k, v in module.road_alpha.items()
-            })
+    #         object.__setattr__(module, 'road_alpha', {
+    #             k: ((v - 1.0) * coeff + 1.0) if k == adapter_name else v
+    #             for k, v in module.road_alpha.items()
+    #         })
 
 
-    @staticmethod
-    def scale_ia3_params(
-        module: IA3Layer,
-        adapter_name: str,
-        coeff: float,
-        originals: List[Tuple]
-    ) -> Tuple:
-        """Scale IA3 adapter parameters."""
-        # Store original ParameterDict
-        originals.append((module, 'ia3_l', module.ia3_l))
+    # @staticmethod
+    # def scale_ia3_params(
+    #     module: IA3Layer,
+    #     adapter_name: str,
+    #     coeff: float,
+    #     originals: List[Tuple]
+    # ) -> Tuple:
+    #     """Scale IA3 adapter parameters."""
+    #     # Store original ParameterDict
+    #     originals.append((module, 'ia3_l', module.ia3_l))
         
-        # Replace with new dict containing scaled tensors
-        # Use object.__setattr__ to bypass nn.Module's type checking
-        # Gradients flow through multiplication to original parameters
-        object.__setattr__(module, 'ia3_l', {
-            k: ((v - 1.0) * coeff + 1.0) if k == adapter_name else v
-            for k, v in module.ia3_l.items()
-        })
+    #     # Replace with new dict containing scaled tensors
+    #     # Use object.__setattr__ to bypass nn.Module's type checking
+    #     # Gradients flow through multiplication to original parameters
+    #     object.__setattr__(module, 'ia3_l', {
+    #         k: ((v - 1.0) * coeff + 1.0) if k == adapter_name else v
+    #         for k, v in module.ia3_l.items()
+    #     })
     
-    @staticmethod
-    def scale_vera_params(
-        module: VeraLayer,
-        adapter_name: str,
-        coeff: float,
-        originals: List[Tuple]
-    ) -> Tuple:
-        """Scale VeRA adapter parameters for reversible steering.
+    # @staticmethod
+    # def scale_vera_params(
+    #     module: VeraLayer,
+    #     adapter_name: str,
+    #     coeff: float,
+    #     originals: List[Tuple]
+    # ) -> Tuple:
+    #     """Scale VeRA adapter parameters for reversible steering.
         
-        Only scales lambda_b (output scaling), not lambda_d (bottleneck scaling).
+    #     Only scales lambda_b (output scaling), not lambda_d (bottleneck scaling).
         
-        Forward pass: result += lambda_b * (B @ (lambda_d * (A @ x)))
-        Both are element-wise multipliers, so scaling both gives coeff^2 scaling.
-        We only scale lambda_b to get linear coeff scaling for reversibility.
+    #     Forward pass: result += lambda_b * (B @ (lambda_d * (A @ x)))
+    #     Both are element-wise multipliers, so scaling both gives coeff^2 scaling.
+    #     We only scale lambda_b to get linear coeff scaling for reversibility.
 
-        see https://github.com/huggingface/peft/blob/190f9873b15660d9092f70065c18e4993fe10d5b/src/peft/tuners/vera/layer.py#L136
-        """
+    #     see https://github.com/huggingface/peft/blob/190f9873b15660d9092f70065c18e4993fe10d5b/src/peft/tuners/vera/layer.py#L136
+    #     """
         
-        if hasattr(module, 'vera_lambda_b') and adapter_name in module.vera_lambda_b:
-            # Store original ParameterDict
-            originals.append((module, 'vera_lambda_b', module.vera_lambda_b))
+    #     if hasattr(module, 'vera_lambda_b') and adapter_name in module.vera_lambda_b:
+    #         # Store original ParameterDict
+    #         originals.append((module, 'vera_lambda_b', module.vera_lambda_b))
             
-            # Replace with new dict containing scaled tensors
-            # Computation graph: scaled_tensor = original_param * coeff
-            # Gradients will flow back through multiplication to original_param
-            object.__setattr__(module, 'vera_lambda_b', {
-                k: v * coeff if k == adapter_name else v
-                for k, v in module.vera_lambda_b.items()
-            })
+    #         # Replace with new dict containing scaled tensors
+    #         # Computation graph: scaled_tensor = original_param * coeff
+    #         # Gradients will flow back through multiplication to original_param
+    #         object.__setattr__(module, 'vera_lambda_b', {
+    #             k: v * coeff if k == adapter_name else v
+    #             for k, v in module.vera_lambda_b.items()
+    #         })
     
-    @staticmethod
-    def scale_delora_params(
-        module,  # DeloraLayer type, but optional import
-        adapter_name: str,
-        coeff: float,
-        originals: List[Tuple]
-    ) -> None:
-        """Scale DeLoRA adapter lambda parameter for reversible steering.
+    # @staticmethod
+    # def scale_delora_params(
+    #     module,  # DeloraLayer type, but optional import
+    #     adapter_name: str,
+    #     coeff: float,
+    #     originals: List[Tuple]
+    # ) -> None:
+    #     """Scale DeLoRA adapter lambda parameter for reversible steering.
         
-        DeLoRA forward: result = base_weight @ x + lambda * (B @ A) @ x
-        Where lambda controls magnitude and B @ A controls direction.
+    #     DeLoRA forward: result = base_weight @ x + lambda * (B @ A) @ x
+    #     Where lambda controls magnitude and B @ A controls direction.
         
-        Scaling lambda gives: W @ x ± coeff * lambda * (B @ A) @ x
-        This is additive and perfectly reversible: coeff=1 adds, coeff=-1 subtracts.
+    #     Scaling lambda gives: W @ x ± coeff * lambda * (B @ A) @ x
+    #     This is additive and perfectly reversible: coeff=1 adds, coeff=-1 subtracts.
         
-        Unlike multiplicative methods (VeRA, ROAD), negative scaling doesn't flip 
-        activations - it just reverses the direction of the weight delta.
+    #     Unlike multiplicative methods (VeRA, ROAD), negative scaling doesn't flip 
+    #     activations - it just reverses the direction of the weight delta.
 
-        https://github.com/huggingface/peft/blob/4a90a21c947f100216a0ea3c16fcf3ecf55a2945/src/peft/tuners/delora/layer.py
-        """
-        if hasattr(module, 'delora_lambda') and adapter_name in module.delora_lambda:
-            # Store original ParameterDict
-            originals.append((module, 'delora_lambda', module.delora_lambda))
+    #     https://github.com/huggingface/peft/blob/4a90a21c947f100216a0ea3c16fcf3ecf55a2945/src/peft/tuners/delora/layer.py
+    #     """
+    #     if hasattr(module, 'delora_lambda') and adapter_name in module.delora_lambda:
+    #         # Store original ParameterDict
+    #         originals.append((module, 'delora_lambda', module.delora_lambda))
             
-            # Replace with new dict containing scaled tensors
-            object.__setattr__(module, 'delora_lambda', {
-                k: v * coeff if k == adapter_name else v
-                for k, v in module.delora_lambda.items()
-            })
+    #         # Replace with new dict containing scaled tensors
+    #         object.__setattr__(module, 'delora_lambda', {
+    #             k: v * coeff if k == adapter_name else v
+    #             for k, v in module.delora_lambda.items()
+    #         })
         
 
     @staticmethod
@@ -239,14 +239,14 @@ def ScaleAdapter(
         for name, module in model.named_modules():
             if isinstance(module, InnerPiSSALayer) and adapter_name in module.active_adapters:
                 AdapterScaler.scale_ipissa_params(module=module, adapter_name=adapter_name, coeff=coeff, originals=originals)
-            if isinstance(module, IA3Layer) and adapter_name in module.active_adapters:
-                AdapterScaler.scale_ia3_params(module=module, adapter_name=adapter_name, coeff=coeff, originals=originals)
-            elif isinstance(module, VeraLayer) and adapter_name in module.vera_lambda_b:
-                AdapterScaler.scale_vera_params(module=module, adapter_name=adapter_name, coeff=coeff, originals=originals)
-            elif DeloraLayer is not None and isinstance(module, DeloraLayer) and hasattr(module, 'delora_lambda') and adapter_name in module.delora_lambda:
-                AdapterScaler.scale_delora_params(module=module, adapter_name=adapter_name, coeff=coeff, originals=originals)
-            elif isinstance(module, RoadLayer) and adapter_name in module.active_adapters:
-                AdapterScaler.scale_road_params(module=module, adapter_name=adapter_name, coeff=coeff, originals=originals)
+            # if isinstance(module, IA3Layer) and adapter_name in module.active_adapters:
+            #     AdapterScaler.scale_ia3_params(module=module, adapter_name=adapter_name, coeff=coeff, originals=originals)
+            # elif isinstance(module, VeraLayer) and adapter_name in module.vera_lambda_b:
+            #     AdapterScaler.scale_vera_params(module=module, adapter_name=adapter_name, coeff=coeff, originals=originals)
+            # elif DeloraLayer is not None and isinstance(module, DeloraLayer) and hasattr(module, 'delora_lambda') and adapter_name in module.delora_lambda:
+            #     AdapterScaler.scale_delora_params(module=module, adapter_name=adapter_name, coeff=coeff, originals=originals)
+            # elif isinstance(module, RoadLayer) and adapter_name in module.active_adapters:
+            #     AdapterScaler.scale_road_params(module=module, adapter_name=adapter_name, coeff=coeff, originals=originals)
             elif isinstance(module, LoraLayer) and adapter_name in module.active_adapters:
                 AdapterScaler.scale_lora_params(module=module, adapter_name=adapter_name, coeff=coeff, originals=originals)
         

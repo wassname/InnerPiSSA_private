@@ -160,44 +160,6 @@ def reduce_tokens_w_attention(
     
     return (x * attn_mask).sum(dim) / attn_mask.sum(dim).clamp(min=1)
 
-# def select_top_k_directions(
-#     pref_dir: Float[Tensor, "k d"],
-#     hs_ref_cho: HS,
-#     hs_ref_rej: HS,
-#     cho_mask: Mask,
-#     top_k: int = 2,
-#     eps: float = 1e-6,
-# ) -> Float[Tensor, "k_selected d"]:
-#     """
-#     Select top-k PCA directions that best align with reference separation.
-    
-#     Args:
-#         pref_dir: All PCA directions (k, d)
-#         hs_ref_cho/rej: Reference hidden states
-#         cho_mask: Attention mask
-#         top_k: Number of directions to keep
-    
-#     Returns:
-#         Top-k directions (top_k, d)
-#     """
-#     # Reference separation vector
-#     pref_dir_ref = hs_ref_cho - hs_ref_rej  # (b, t, d)
-    
-#     # Normalize directions
-#     U = safe_norm(pref_dir, p=2, dim=-1, eps=eps)  # (k, d)
-    
-#     # Project ref separation onto all directions
-#     proj_ref = torch.einsum("...d,kd->...k", pref_dir_ref, U)  # (b, t, k)
-    
-#     # Aggregate: mean absolute projection per direction
-#     loss_mask = cho_mask[:, :-1] if cho_mask.shape[1] > pref_dir_ref.shape[1] else cho_mask
-#     proj_mag_per_dir = reduce_tokens_w_attention(proj_ref.abs(), cho_mask).mean(0)  # (k,)
-    
-#     # Select top-k by magnitude
-#     _, top_indices = torch.topk(proj_mag_per_dir, k=min(top_k, len(proj_mag_per_dir)))
-    
-#     return pref_dir[top_indices]  # (top_k, d)
-
 
 def softclamp_tanh(x, n=10):
     return torch.tanh(x/n)*n
@@ -320,85 +282,85 @@ def contrastive_steering_loss_with_ref(
     ref_logp = ref_pos_label_logp.detach()
     pi_logp = pi_pos_label_logp
 
-    def calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, clamp_scale=10, C=4.0):
-        """
-        Polynomial hinge loss for coherence constraint (generalized SVM margin).
+    # def calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, clamp_scale=10, C=4.0):
+    #     """
+    #     Polynomial hinge loss for coherence constraint (generalized SVM margin).
         
-        Standard hinge: ℓ(y) = max(0, 1 - t·y)
-        Squared hinge: ℓ(y) = max(0, 1 - t·y)²
-        This: ℓ(logp) = [C · max(0, logp_deg - margin)]^p
+    #     Standard hinge: ℓ(y) = max(0, 1 - t·y)
+    #     Squared hinge: ℓ(y) = max(0, 1 - t·y)²
+    #     This: ℓ(logp) = [C · max(0, logp_deg - margin)]^p
         
-        Design:
-        - Zero loss inside margin (hard constraint boundary)
-        - Polynomial growth outside (smooth gradients, no cliff)
-        - Per-token (prevents reward hacking via high-probability tokens)
+    #     Design:
+    #     - Zero loss inside margin (hard constraint boundary)
+    #     - Polynomial growth outside (smooth gradients, no cliff)
+    #     - Per-token (prevents reward hacking via high-probability tokens)
         
-        Why C scaling?
-        In [0,1] nat range, x² < x, so raw squared hinge is too weak.
-        C amplifies violations before exponentiation: (0.5 · C)^p dominates.
+    #     Why C scaling?
+    #     In [0,1] nat range, x² < x, so raw squared hinge is too weak.
+    #     C amplifies violations before exponentiation: (0.5 · C)^p dominates.
         
-        Args:
-            ref_logp, pi_logp: Per-token log probabilities (b, t)
-            loss_mask: Per-token mask (b, t)
-            boundary_order: Polynomial degree (2 = squared hinge, 1 = standard hinge)
-            clamp_scale: Optional outlier suppression via tanh
-            C: Regularization strength (scales violations before exponentiation)
+    #     Args:
+    #         ref_logp, pi_logp: Per-token log probabilities (b, t)
+    #         loss_mask: Per-token mask (b, t)
+    #         boundary_order: Polynomial degree (2 = squared hinge, 1 = standard hinge)
+    #         clamp_scale: Optional outlier suppression via tanh
+    #         C: Regularization strength (scales violations before exponentiation)
         
-        Returns:
-            loss: Scalar penalty (b,) aggregated over tokens
-            logp_deg: Per-token degradation (b, t) for monitoring
-        """
-        logp_deg = ref_logp - pi_logp  # Positive = pi worse than ref
-        if clamp_scale is not None:
-            # We clamp before token aggregation to prevent extreme outliers from dominating
-            logp_deg = softclamp_tanh(logp_deg, clamp_scale)
+    #     Returns:
+    #         loss: Scalar penalty (b,) aggregated over tokens
+    #         logp_deg: Per-token degradation (b, t) for monitoring
+    #     """
+    #     logp_deg = ref_logp - pi_logp  # Positive = pi worse than ref
+    #     if clamp_scale is not None:
+    #         # We clamp before token aggregation to prevent extreme outliers from dominating
+    #         logp_deg = softclamp_tanh(logp_deg, clamp_scale)
         
-        violation = F.relu(logp_deg - coherence_threshold)
-        penalty_per_token = (violation * C) ** boundary_order
-        loss = reduce_tokens_w_attention(penalty_per_token, loss_mask) # [b]
-        return loss, logp_deg
+    #     violation = F.relu(logp_deg - coherence_threshold)
+    #     penalty_per_token = (violation * C) ** boundary_order
+    #     loss = reduce_tokens_w_attention(penalty_per_token, loss_mask) # [b]
+    #     return loss, logp_deg
 
 
-    def calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, 
-                            threshold=coherence_threshold, C=4.0, transition_point=0.5, clamp_scale=None):
-        """
-        Smooth hinge loss with Huber-like transition.
+    # def calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, 
+    #                         threshold=coherence_threshold, C=4.0, transition_point=0.5, clamp_scale=None):
+    #     """
+    #     Smooth hinge loss with Huber-like transition.
 
-        Design:
-        - Zero loss inside margin (hard constraint boundary)
-        - Polynomial growth outside (smooth gradients, no cliff)
-        - Per-token (prevents reward hacking via high-probability tokens)
+    #     Design:
+    #     - Zero loss inside margin (hard constraint boundary)
+    #     - Polynomial growth outside (smooth gradients, no cliff)
+    #     - Per-token (prevents reward hacking via high-probability tokens)
         
-        Args:
-            transition_point: Where to switch from polynomial to linear (in violation units)
-                            e.g., 0.5 means switch at 0.5 nats above threshold
-        """
-        degradation = ref_logp - pi_logp
-        violation = F.relu(degradation - threshold)
+    #     Args:
+    #         transition_point: Where to switch from polynomial to linear (in violation units)
+    #                         e.g., 0.5 means switch at 0.5 nats above threshold
+    #     """
+    #     degradation = ref_logp - pi_logp
+    #     violation = F.relu(degradation - threshold)
         
-        # Calculate the transition point and ensure continuity
-        b = boundary_order
-        v_t = transition_point  # violation value at transition
+    #     # Calculate the transition point and ensure continuity
+    #     b = boundary_order
+    #     v_t = transition_point  # violation value at transition
         
-        # At transition, both functions and derivatives must match
-        # Quadratic at v_t: f(v_t) = (1/b) * (C * v_t)^b
-        # Linear: f(v) = a * v + c, with f'(v) = a
+    #     # At transition, both functions and derivatives must match
+    #     # Quadratic at v_t: f(v_t) = (1/b) * (C * v_t)^b
+    #     # Linear: f(v) = a * v + c, with f'(v) = a
         
-        # Match derivatives: b * C^b * v_t^(b-1) = a
-        linear_slope = b * (C ** b) * (v_t ** (b-1))
+    #     # Match derivatives: b * C^b * v_t^(b-1) = a
+    #     linear_slope = b * (C ** b) * (v_t ** (b-1))
         
-        # Match values: (1/b) * (C * v_t)^b = linear_slope * v_t + intercept
-        quadratic_value = (1/b) * ((C * v_t) ** b)
-        linear_intercept = quadratic_value - linear_slope * v_t
+    #     # Match values: (1/b) * (C * v_t)^b = linear_slope * v_t + intercept
+    #     quadratic_value = (1/b) * ((C * v_t) ** b)
+    #     linear_intercept = quadratic_value - linear_slope * v_t
         
-        small_violation = violation < v_t
-        penalty = torch.where(
-            small_violation,
-            (1/b) * ((violation * C) ** b),  # Polynomial growth
-            linear_slope * violation + linear_intercept  # Linear growth
-        )
+    #     small_violation = violation < v_t
+    #     penalty = torch.where(
+    #         small_violation,
+    #         (1/b) * ((violation * C) ** b),  # Polynomial growth
+    #         linear_slope * violation + linear_intercept  # Linear growth
+    #     )
         
-        return reduce_tokens_w_attention(penalty, loss_mask), degradation
+    #     return reduce_tokens_w_attention(penalty, loss_mask), degradation
 
     def calc_coherence_loss(ref_logp, pi_logp, loss_mask, threshold=coherence_threshold, scale=50.0, clamp_scale=None, C=4, boundary_order=2):
         """
@@ -578,7 +540,7 @@ def monotonic_ordering_loss(
     delta_logp_zero: Float[Tensor, "b"],  # Change at c=0 (always zero by construction)
     delta_logp_pos: Float[Tensor, "b"],  # Change at c=+1
     margin: float = 0.0,
-    scale: float = 14.0,  # Scale to match proj/coh loss magnitudes
+    scale: float = 100.0,  # Scale to match proj/coh loss magnitudes # TODO add to config
 ):
     """
     Enforce monotonic ordering across coefficient sweep without conflicting with coherence.
@@ -635,9 +597,12 @@ def monotonic_ordering_loss(
 def combine_dual_coef_losses(
     loss_pos: dict,
     loss_neg: dict,
-    adaptive_coherence: bool = False,
+    adaptive_relaxation: bool = False,
     temperature: float = 2.0,
     monotonic_margin: float = 0.1,
+    monotonic_scaling: float = 100.0,
+    enable_monotonic: bool = True,
+    enable_coherence: bool = True,
 ):
     """
     Combine losses from both coefficient directions (+1 and -1).
@@ -671,7 +636,7 @@ def combine_dual_coef_losses(
         total_loss: Combined scalar loss for backprop
         meta_info: Dict with coh_weight_{pos,neg}, loss_monotonic (if applicable)
     """
-    if not adaptive_coherence:
+    if not adaptive_relaxation:
         # Standard: just sum everything
         total = (
             loss_pos["loss_proj"] + torch.relu(loss_pos["loss_coh"]) +
@@ -703,6 +668,9 @@ def combine_dual_coef_losses(
     coh_weights = F.softmax(proj_diffs / temperature, dim=0) * 2.0  # Sum to 2.0
     coh_weight_pos = torch.clamp(coh_weights[0], max=1.0)  # Cap at 1.0 to prevent over-tightening and stop oscilations as one becomes easier the the other
     coh_weight_neg = torch.clamp(coh_weights[1], max=1.0)
+    if not enable_coherence:
+        coh_weight_pos = 0.0
+        coh_weight_neg = 0.0
     
     # Combine with adaptive weights
     total = (
@@ -716,14 +684,14 @@ def combine_dual_coef_losses(
     }
     
     # Optional: Add monotonic ordering constraint
-    if monotonic_margin is not None:
+    if enable_monotonic is not None:
         delta_logp_neg = loss_neg["delta_logp_change"]
         delta_logp_zero = torch.tensor(0.0, device=delta_logp_neg.device)
         delta_logp_pos = loss_pos["delta_logp_change"]
         
         loss_monotonic, mono_info = monotonic_ordering_loss(
             delta_logp_neg, delta_logp_zero, delta_logp_pos,
-            margin=monotonic_margin
+            margin=monotonic_margin, scale=monotonic_scaling
         )
         
         total = total + loss_monotonic

@@ -103,7 +103,12 @@ run:
     # + Coherence only               
     # + Reversibility only (actually we want do this as it's baked into our metric)      
     # + Monotonic + Coherence         
-    # + All three                     
+    # + All three     
+    run_exp_small --no_constr_monotonic --no_constr_coherence
+    run_exp_small --constr_monotonic --no_constr_coherence
+    run_exp_small --no_constr_monotonic --constr_coherence
+    # run_exp_small --constr_reversibility --no_constr_monotonic --no_constr_coherence
+    run_exp_small --constr_monotonic --constr_coherence                
 
 
     # === Learning rate ablations ===
