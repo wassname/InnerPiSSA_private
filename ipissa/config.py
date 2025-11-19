@@ -67,92 +67,122 @@ EVAL_BASELINE_MODELS = [
 class TrainingConfig:
     """Configuration for training contrastive InnerPiSSA adapter."""
 
-    # Model config
     model_name: str = "Qwen/Qwen3-4B-Instruct-2507"
     quantization_type: Literal["4bit", "8bit", "none"] = "none"
 
-    # layers to target for adapters
-    # ["down_proj", o_proj"] - output to residual stream
-    # ['gate_proj', up_proj'] - mlp up proj
-    # ['q_proj', 'k_proj', 'v_proj'] - attention projections, attn up_proj
-    modules: List[str] = ["o_proj", "down_proj"] # for adapter and loss
+    modules: List[str] = ["o_proj", "down_proj"]
+    """Layers for adapter and loss. down_proj/o_proj = residual out, gate_proj/up_proj = mlp up, q/k/v_proj = attn"""
 
-    n_depths: int = 8  # intervene on this many layers, spaced evenly
-    depth_start: float = 0.3  # ignore the first X% of layers
-    depth_end: int = -3  # ignore the last X layers
+    n_depths: int = 8
+    """Intervene on this many layers, spaced evenly"""
+
+    depth_start: float = 0.3
+    """Ignore first X% of layers"""
+
+    depth_end: int = -3
+    """Ignore last X layers"""
     
-    # loss computation layers (negative = from end, e.g. -3 = 3rd-to-last layer)
-    loss_depths: List[float] = [0.65]  # which layer(s) to compute loss on, multiple will take lots of memory. https://arxiv.org/html/2406.19384v3 suggests 0.5-0.85 
+    loss_depths: float | list[float] = [0.5]
+    """Layer(s) to compute loss on, as fraction of total depth (0.0=first, 1.0=last)""" 
 
-    # Training params
     bs: int = 8
+    """Batch size"""
+
     n_epochs: int = 20
     lr: float = 8e-3
+    """Learning rate"""
+
     wd: float = 1.0
-    n_logs: int = 10  # log this many times per training
+    """Weight decay"""
+
+    n_logs: int = 10
+    """Log this many times per training"""
+
     effective_bs: int = 32
+    """Effective batch size via gradient accumulation"""
+
     quick: bool = False
-    val_split: float = 0.15  # fraction of data for validation
-    early_stop_patience: int = (
-        5  # stop if val loss doesn't improve for N validation checks
-    )
+    """Quick mode for debugging"""
 
-    # Adapter params
+    val_split: float = 0.15
+    """Fraction of data for validation"""
+
+    early_stop_patience: int = 5
+    """Stop if val loss doesn't improve for N validation checks"""
+
     adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"
-    r: int = 256
-    scale_s: Literal["add2", "add_tanh", "mult", "none"] = "add2"
-    rot_u: bool = False  # can be less stable as it modifies output space and diverges from loss space
-    rot_v: bool = True
 
-    # Dataset
+    r: int = 256
+    """Adapter rank"""
+
+    scale_s: Literal["add2", "add_tanh", "mult", "none"] = "add2"
+    """How to modify singular values"""
+
+    rot_u: bool = False
+    """Rotate U (output space). Less stable, diverges from loss space"""
+
+    rot_v: bool = True
+    """Rotate V (input space)"""
+
     dataset_name: str = "honest"
     max_samples: Optional[int] = 800
+    """Max training samples (None = all)"""
 
-    # Loss
     loss_type: Literal[
-        "logsig_weak_up",      # (-↑) Saturates after margin
-        "softpl_strong_up",    # (+↑ −↓) Strong upside, weak downside  
-        "tanh_sym",            # (±) Symmetric bounds both ways
-        "softpl_ratio",        # (+↑ −↓) Softplus on ratio (AFTER FIX)
-        "focal_balanced",      # (⚖) Down-weights easy examples
-        "logsig_dpo",          # (std) Standard DPO baseline
-        "raw"                   # (-↑) Direct projection difference
-    ] = (
+        "logsig_weak_up",
+        "softpl_strong_up",
+        "tanh_sym",
+        "softpl_ratio",
+        "focal_balanced",
+        "logsig_dpo",
         "raw"
-    )
+    ] = "raw"
+    """Loss function: raw=direct projection, logsig_weak_up=saturates after margin, softpl_strong_up=strong upside+weak downside, tanh_sym=symmetric bounds, softpl_ratio=softplus on ratio, focal_balanced=down-weights easy, logsig_dpo=standard DPO"""
 
     n_last_tokens: int = 6
+    """Extract from last N tokens of sequence"""
     
-    ## coherence constraint
-    coh_thresh: float = 0.5 # Margin in nats, above which a steep penalty is applied
-    # boundary_order: int = 2
-    coh: bool = True  # Enable coherence constraint
-    coh_weight: float = 5.0  # scaling factor for coherence loss, should be a large number for a hard cliff
-    ## adaptive coherence relaxation
-    coh_adaptive: bool = True  # Enable difficulty-based coherence relaxation
-    coh_temp: float = 2  # higher = softer, lower = sharper in how we relax the coherence constrain on the harder side, and riase it on the easier coeff
-    ## monotonic constraint
-    mono: bool = True  # Enable monotonicity constraint
-    mono_margin: float = 0.1  # margin for monotonicity loss, minimum monotonic seperation
-    mono_weight: float = 100.0  # scaling factor for monotonicity loss, should be a large number for a hard cliff. This is conflict free when satisfied.
+    coh_thresh: float = 0.5
+    """Coherence margin in nats, above which steep penalty applies"""
 
+    coh: bool = True
+    """Enable coherence constraint"""
 
+    coh_weight: float = 5.0
+    """Coherence loss scaling (large = hard cliff)"""
+
+    coh_adaptive: bool = True
+    """Enable difficulty-based coherence relaxation"""
+
+    coh_temp: float = 2
+    """Coherence relaxation temperature (higher=softer, lower=sharper)"""
+
+    mono: bool = True
+    """Enable monotonicity constraint"""
+
+    mono_margin: float = 0.1
+    """Minimum monotonic separation margin"""
     
+    mono_weight: float = 100.0
+    """Monotonicity loss scaling (large = hard cliff, conflict-free when satisfied)"""
 
-    # Eval
-    # eval_batch_size: Optional[int] = None
-    # Instead of a full eval just use the top N value with truth labels
-    eval_max_dilemmas: Optional[int] = None # max eval dilemmas (None = all)
-    eval_max_tokens: int = 288 # max tokens for eval sample (cropped above this)
 
-    # Output
+    eval_max_dilemmas: Optional[int] = None
+    """Max eval dilemmas (None = all)"""
+
+    eval_max_tokens: int = 288
+    """Max tokens for eval sample (cropped above this)"""
+
     output_dir: Path = proj_root / "outputs/adapters"
-    experiment_name: Optional[str] = None  # Custom name for this experiment (auto-generated if None)
+    experiment_name: Optional[str] = None
+    """Custom name (auto-generated if None)"""
+
     use_wandb: bool = True
     wandb_project: str = "InnerPiSSA"
-    wandb_tags: Optional[List[str]] = None  # Tags for organizing WandB runs
-    save_checkpoints: bool = False
+    wandb_tags: Optional[List[str]] = None
+    """Tags for organizing WandB runs"""
 
+    save_checkpoints: bool = False
     verbose: bool = False
 
     @property
@@ -160,17 +190,9 @@ class TrainingConfig:
         return self.bs // 2
     
     def get_experiment_name(self) -> str:
-        """Generate descriptive experiment name from config.
+        """Generate experiment name: {model_short}-{loss_type}-r{rank}[-{variations}].
         
-        Format: {model_short}-{loss_type}-r{rank}[-{variations}]
-        
-        Front-loads critical info (model, loss, rank) that affects results.
-        Optional variations suffix shows non-default settings.
-        
-        Examples:
-            qwen34b-tanh-r24
-            qwen06b-logs-r48-urot
-            gemma12b-soft-r24-noV
+        Examples: qwen34b-tanh-r24, qwen06b-logs-r48-urot, gemma12b-soft-r24-noV
         """
         if self.experiment_name:
             return self.experiment_name
@@ -235,9 +257,6 @@ class TrainingConfig:
     @property
     def grad_accum_steps(self):
         return max(1, self.effective_bs // self.bs)
-
-    # def __post_init__(self):
-    #     self.grad_accum_steps = (self.effective_batch_size // self.batch_size)
 
 
 # Preset configs for different hardware/model combinations https://brentyi.github.io/tyro/examples/hierarchical_structures/

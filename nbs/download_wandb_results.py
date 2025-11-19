@@ -4,6 +4,7 @@
 
 import wandb
 import pandas as pd
+from loguru import logger
 from pathlib import Path
 from tqdm.auto import tqdm
 import json
@@ -19,6 +20,7 @@ api = wandb.Api()
 project = "wassname/InnerPiSSA"
 
 last_major_code_change = '2025-11-19T00:08:00Z'
+logger.info(f"Considering only runs after last major code change at {last_major_code_change}")
 
 # Find last cached run time
 last_run = last_major_code_change or "1970-01-01T00:00:00"
@@ -33,9 +35,9 @@ if cached_runs:
                 if latest_time is None or created_at > latest_time:
                     latest_time = created_at
     last_run = latest_time.isoformat()
-    print(f"Using cached runs after {last_run}")
+    logger.info(f"Using cached runs after {last_run}")
 
-print("Downloading from wandb...")
+logger.info("Downloading from wandb...")
 lastest_runs = api.runs(project, filters={"state": "finished", "created_at": {"$gt": last_run}})
 runs_data = []
 
@@ -81,13 +83,10 @@ for run in tqdm(lastest_runs):
         'lastHistoryStep': run.lastHistoryStep,
     }
     runs_data.append(run_data)
-    print(f"  {run.name} - {summary.get('eval/main_metric')}")
+    logger.info(f"  {run.name} - {summary.get('eval/main_metric')}")
     # Save individual run data
     with open(run_file, 'w') as f:
         json.dump(run_data, f, indent=2)
-
-
-# load all log files, extract from "## Evaluation complete" to "🥇", and clean off log prefix e.g. `10:20:20 | INFO     | Main metric: 🥇779.973`
 
 
 # Flatten for DataFrame
@@ -105,136 +104,120 @@ for run_data in runs_data:
         'created_at': run_data['created_at'],
         'url': run_data['url'],
         'log_file': run_data.get('log_file'),
-        "args": ' '.join(run_data['metadata']['args']),
+        "args": ' '.join(run_data['metadata'].get('args', [])),
 
-        # Config
-        # model id, full eval?, quick?
-        'model_name': config.get('model_name'),
-        'lr': config.get('lr'),
-        'rank': config.get('rank'),
-        'num_layers': config.get('num_layers'),
-        'loss_type': config.get('loss_type'),
-        'scale_s': config.get('scale_s'),
-        'n_epochs': config.get('n_epochs'),
-        'batch_size': config.get('batch_size'),
-        'eval_max_n_dilemmas': config.get('eval_max_n_dilemmas'),
-
-        # Results
-        "runtime": summary.get('_runtime'),
+        # Metadata
+        'git_commit': run_data.get('metadata', {}).get('git', {}).get('commit'),
+        'gpu': run_data.get('metadata', {}).get('gpu'),
+        
+        # Results - layer info
+        'layer_num': summary.get('layer_num'),
+        
+        # Results - main metrics
         'main_metric': summary.get('eval/main_metric'),
-        'effect': summary.get('eval/InnerPiSSA (ours)/effect'),
-        'side_effects': summary.get('eval/InnerPiSSA (ours)/side_effects'),
-        'degradation': summary.get('eval/InnerPiSSA (ours)/degradation'),
-        'p_value': summary.get('eval/InnerPiSSA (ours)/p_value'),
-        # TODO also baseline if it's there (prompting, repeng)
+        "runtime": summary.get('_runtime'),
+        
+        # Results - baselines
+        'baseline_effect_InnerPiSSA': summary.get('eval/baseline_InnerPiSSA (ours)'),
+        'baseline_effect_s_steer': summary.get('eval/baseline_S-space steer'),
+        'baseline_effect_pca': summary.get('eval/baseline_pca (wassname)'),
+        'baseline_effect_prompting': summary.get('eval/baseline_prompting'),
+        'baseline_effect_repeng': summary.get('eval/baseline_repeng'),
+        
+        # Results - final val metrics
+        'val_loss_total': summary.get('val/loss_total'),
+        'val_loss_proj': summary.get('val/loss_proj'),
+        'val_loss_coh': summary.get('val/loss_coh'),
+        'val_loss_monotonic': summary.get('val/loss_monotonic'),
+        'val_proj_diff': summary.get('val/proj_diff'),
+        'val_logp_degradation': summary.get('val/logp_degradation'),
+        
+        # Results - final train metrics
+        'train_loss_total': summary.get('loss_total'),
+        'train_loss_proj': summary.get('loss_proj'),
+        'train_loss_coh': summary.get('loss_coh'),
+        'train_loss_monotonic': summary.get('loss_monotonic'),
+        'train_proj_diff': summary.get('proj_diff'),
+        'train_logp_degradation': summary.get('logp_degradation'),
+
+        **config,
     }
     results.append(result)
 
+config_keys = config.keys()
 
-# print('run_data', json.dumps(run_data, indent=2))
+logger.debug(f'DEBUG run_data  {json.dumps(run_data, indent=2)}')
 
 df = pd.DataFrame(results)
 df = df.sort_values(['model_name', 'created_at'], ascending=False)
-print(1, len(df))
+logger.info(f"Total runs: {len(df)}")
 # filter out not finished, and not run for at least 1 minute
 df = df[(df['state'] == 'finished') & (df['runtime'] > 60)]
+logger.info(f"After filtering finished & >60s: {len(df)}")
 # filter out eval_max_n_dilemmas is not [None or < 2000]
-print(2, len(df))
-df = df[df['eval_max_n_dilemmas'].isna()]
-print(3, len(df))
+df = df[df['eval_max_dilemmas'].isna()]
+logger.info(f"After filtering full evals: {len(df)}")
 df = df[last_major_code_change < df['created_at']]
-print(4, len(df))
+logger.info(f"After filtering recent runs: {len(df)}")
 
 output_dir = Path(__file__).parent.parent
-output_file = output_dir / 'outputs' / 'wandb_results.csv'
-df.to_csv(output_file, index=False)
-print(f"\nSaved {len(df)} runs to {output_file}")
+results_file = output_dir / 'outputs' / 'wandb_results.csv'
+df.to_csv(results_file, index=False)
+logger.info(f"Saved {len(df)} runs to {results_file}")
 
+logger.debug(f"cols in df: {df.columns.tolist()}")
+config
 # Also save a filtered version with just the key metrics
-summary_cols = ['created_at', 'model_name', 'name', 'args', 'main_metric', 'effect', 'side_effects', 'degradation', 
-                'lr', 'rank', 'num_layers', 'loss_type', 'scale_s']
+summary_cols = ['created_at', 'model_name', 'name', 'layer_num', 'main_metric', 
+                'baseline_prompting', 'baseline_repeng', 'baseline_s_steer',
+                'lr', 'rank', 'n_depths', 'loss_depths', 'loss_type', 'scale_s',
+                'coh_weight', 'mono_weight', 'val_loss_total', 'val_proj_diff', 'wandb_id',']
 df_summary = df[summary_cols].dropna(subset=['main_metric'])
 summary_file = output_dir / 'outputs' / 'wandb_summary.csv'
-df_summary.to_csv(summary_file, index=False)
-print(f"Saved summary to {summary_file}")
+df_summary.to_csv(summary_file, index=False, float_format='%.4g', na_rep='NA')
+logger.info(f"Saved summary to {summary_file}")
 # print(df_summary)
 from tabulate import tabulate
-print(tabulate(df_summary, headers='keys', tablefmt='pipe', floatfmt=".4g"))
+logger.info(f"\n{tabulate(df_summary, headers='keys', tablefmt='pipe', floatfmt='.4g')}")
 
 import subprocess
 help_text = subprocess.run(['uv', 'run', 'python', 'nbs/train.py', '.', '-h'], capture_output=True, text=True).stdout
-print(f"Train.py help:\n{help_text}")
+logger.info(f"Train.py help:\n{help_text}")
+f_help = proj_root / 'outputs'/ 'help_train.txt'
+f_help.write_text(help_text)
+logger.info(f"Saved train.py help to {f_help}")
 
 try:
-    f = proj_root / "outputs" / 'prompting_results.csv'
-    print(f"\n\n{f}\n")
-    print(pd.read_csv(f).sort_values('main_score', ascending=False))
+    fpr = proj_root / "outputs" / 'prompting_results.csv'
+    logger.info(f"\n\n{fpr}\n{pd.read_csv(fpr).sort_values('main_score', ascending=False)}")
 except Exception as e:
-    print(f"Could not load prompting results: {e}")
+    logger.warning(f"Could not load prompting results: {e}")
 
 try:
-    f = proj_root / "outputs" / 'repeng_results.csv'
-    print(f"\n\n{f}\n")
-    print(pd.read_csv(f).sort_values('main_score', ascending=False))
+    fre = proj_root / "outputs" / 'repeng_results.csv'
+    logger.info(f"\n\n{fre}\n{pd.read_csv(fre).sort_values('main_score', ascending=False)}")
 except Exception as e:
-    print(f"Could not load repeng results: {e}")
+    logger.warning(f"Could not load repeng results: {e}")
 
 try:
-    f = proj_root / "outputs" / 'sSteer_results.csv'
-    print(f"\n\n{f}\n")
-    print(pd.read_csv(f).sort_values('main_score', ascending=False))
+    fss = proj_root / "outputs" / 'sSteer_results.csv'
+    logger.info(f"\n\n{fss}\n{pd.read_csv(fss).sort_values('main_score', ascending=False)}")
 except Exception as e:
-    print(f"Could not load sSteer results: {e}")
+    logger.warning(f"Could not load sSteer results: {e}")
 
-# # Also load baselines from 
-# from ipissa.train.daily_dilemas import format_results_table
-# from eval_baseline_repeng import process_and_display_results, load_baselines
-# results = load_baselines()
-# df_repeng = process_and_display_results(results)
-# for model_name in df_repeng['model_id'].unique():
-#     df_model = df_repeng[df_repeng["model_id"] == model_name]
-#     md_table, df_eff_sz, main_score = format_results_table(
-#         df_model,
-#         target_col="score_Virtue/Truthfulness",
-#         # config=config,
-#         target_method="repeng",
-#     )
-#     # TODO log main_score to csv
-# df_repeng
-# %%
-print("""old arg remapping' \
-'# Layer selection
-layers → modules
-num_layers → n_depths
-perc_start → depth_start
-end_layers → depth_end
-loss_layers → loss_depths
+summary_file = output_dir / 'outputs' / 'wandb_summary.csv'
 
-# Training
-batch_size → bs
-weight_decay → wd
-log_n → n_logs
 
-# Adapter
-rank → r
-ipissa_rotate_u → rot_u
-ipissa_rotate_v → rot_v
+logger.info(f"""
+=== SWEEP ANALYSIS TASK ===
 
-# Dataset
-dataset_max_samples → max_samples
-last_n_tokens → n_last_tokens
+Goal: Identify which hyperparameters generalize across large models (ideally 4B+ params).
 
-# Constraints
-constr_coherence → coh
-coherence_threshold → coh_thresh
-coherence_scalar → coh_weight
-adaptive_relaxation → coh_adaptive
-coeff_diff_temperature → coh_temp
-constr_monotonic → mono
-monotonic_scaling → mono_weight
-
-# Eval
-eval_max_n_dilemmas → eval_max_dilemmas
-eval_dataset_max_token_length → eval_max_tokens
+Data:
+- Summary CSV: {summary_file} (shape={df_summary.shape})
+- Full results: {results_file} (shape={df.shape})
+- README.md: Metrics Reference section for definitions
+- CLI reference: {f_help}
+- Baseline CSVs: {fpr}, {fre}, {fss}
+            
 """)
-print("""Remember only models 4B params or more matter. The code has changes at time has gone by so weight recent ones more. I'm looking for which configuration works across large models.""")
