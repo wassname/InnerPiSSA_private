@@ -642,9 +642,11 @@ def combine_dual_coef_losses(
     """
     if not adaptive_relaxation:
         # Standard: just sum everything
+        loss_proj_bidirectional = -torch.abs(loss_pos["loss_proj"] + loss_neg["loss_proj"])
         total = (
-            loss_pos["loss_proj"] + torch.relu(loss_pos["loss_coh"]) +
-            loss_neg["loss_proj"] + torch.relu(loss_neg["loss_coh"])
+            loss_proj_bidirectional 
+            + torch.relu(loss_pos["loss_coh"]) 
+            + torch.relu(loss_neg["loss_coh"])
         ).mean()
         
         meta_pos = {"cw": 1.0}
@@ -672,19 +674,33 @@ def combine_dual_coef_losses(
     coh_weight_pos = torch.clamp(coh_weights[0], max=1.0)  # Cap at 1.0 to prevent over-tightening and stop oscilations as one becomes easier the the other
     coh_weight_neg = torch.clamp(coh_weights[1], max=1.0)
     if not enable_coherence:
-        coh_weight_pos = 0.0
-        coh_weight_neg = 0.0
+        coh_weight_pos = torch.tensor(0.0, device=proj_diffs.device)
+        coh_weight_neg = torch.tensor(0.0, device=proj_diffs.device)
     
-    # Combine with adaptive weights
+    # Projection loss: maximize bidirectional separation magnitude
+    # Both coefficients separate in OPPOSITE directions by construction (alpha=±1)
+    # We want large separation in EITHER direction (model picks easiest path) for each module
+    # Without abs(), they could cancel out if model learns conflicting directions
+    # we do the flip the same in all samples in the batch, but layers/module can be different
+    loss_proj_flipped = (loss_pos["loss_proj"] + loss_neg["loss_proj"]).mean() > 0
+    loss_proj_bidirectional = (loss_pos["loss_proj"] + loss_neg["loss_proj"])
+    if loss_proj_flipped:
+        loss_proj_bidirectional = -loss_proj_bidirectional
+    
+    # Combine with adaptive coherence weights
     total = (
-        loss_pos["loss_proj"] + coh_weight_pos * loss_pos["loss_coh"] +
-        loss_neg["loss_proj"] + coh_weight_neg * loss_neg["loss_coh"]
+        loss_proj_bidirectional + 
+        coh_weight_pos * loss_pos["loss_coh"] +
+        coh_weight_neg * loss_neg["loss_coh"]
     ).mean()
     
     # Build per-coefficient metadata dicts
     meta_pos = {"cw": coh_weight_pos.item()}
     meta_neg = {"cw": coh_weight_neg.item()}
-    meta_shared = {}  # Metrics that don't belong to either coefficient
+    meta_shared = {
+        "loss_proj_flipped": loss_proj_flipped,
+        # "loss_proj": loss_proj_bidirectional.mean().item()
+    }  # Metrics that don't belong to either coefficient
     
     # Optional: Add monotonic ordering constraint
     if enable_monotonic:
