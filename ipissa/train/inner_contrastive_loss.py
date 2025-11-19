@@ -672,11 +672,10 @@ def combine_dual_coef_losses(
     # Without abs(), they could cancel out if model learns conflicting directions
     # we do the flip the same in all samples in the batch, but layers/module can be different
     loss_proj_flipped = (loss_pos["loss_proj"] + loss_neg["loss_proj"]).mean() > 0
-    loss_proj_bidirectional = (loss_pos["loss_proj"] + loss_neg["loss_proj"])
     if loss_proj_flipped:
         proj_diff_pos = -proj_diff_pos
         proj_diff_neg = -proj_diff_neg
-        loss_proj_bidirectional = -loss_proj_bidirectional
+    loss_proj_bidirectional = proj_diff_pos + proj_diff_neg
 
     # Softmax with POSITIVE sign: LESS negative proj_diff → LOWER weight (relaxed coherence)
     # Example: proj_diff_pos=-0.5, proj_diff_neg=-3.0
@@ -689,8 +688,6 @@ def combine_dual_coef_losses(
         coh_weight_pos = torch.tensor(0.0, device=proj_diffs.device)
         coh_weight_neg = torch.tensor(0.0, device=proj_diffs.device)
     
-
-
     
     # Combine with adaptive coherence weights
     total = (
