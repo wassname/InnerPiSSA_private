@@ -1,4 +1,4 @@
-Cimport dataclasses
+import dataclasses
 import functools
 import re
 import typing

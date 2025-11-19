@@ -41,24 +41,29 @@ run:
         echo "=== Running: $@ ==="
         $BASElarger "$@"
     }
+    # scratch
+    run_exp_small --n_depths=10 --loss_depths -10 --r 256 --wd 1
+    run_exp_small --n_depths=10 --loss_depths -20 --r 256 --wd 1 --rot_u --scale_s=mult
+    run_exp_small --n_depths=10 --loss_depths -30 --r 512 --wd 1 --rot_u --scale_s=none
+    run_exp_small --rot_u 
+    run_exp_small --scale_s=none
+    run_exp_small --scale_s=mult
+    run_exp_small --n_epochs=10 --loss_depths -1 --r 8  --wd 0
+    run_exp_small --n_epochs=10 --loss_depths --modules gate_proj up_proj
+    run_exp_small --n_epochs=10 --loss_depths --modules k_proj q_proj v_proj gate_proj up_proj --r=16 # all up proj
+    run_exp_small --n_epochs=10 --loss_depths -20
+    run_exp_small --adapter_type dora --loss_depths -1
+    run_exp_small --adapter_type dora --loss_depths -10
+    run_exp_small --mono_weight=1 --coh_weight=1
+    run_exp_small --mono_weight=1000 --coh_weight=1000
+    run_exp_small --mono_weight=.1 --coh_weight=1000
+    run_exp_small --mono_weight=1000 --coh_weight=.1
 
     # make sure baselines are cached
     uv run python nbs/eval_baseline_wassname_Ssteer_baseline.py
     uv run python nbs/eval_baseline_repeng.py
     uv run python nbs/eval_baseline_prompting.py
 
-    # # scratch
-    # uv run python nbs/train.py q4b-80gb --lr=7e-3 --n_epochs=10 --n_depths=10 --loss_depths -10 --r 256 --wd 1
-    # uv run python nbs/train.py q4b-80gb --lr=7e-3 --n_epochs=10 --n_depths=10 --loss_depths -10 --modules gate_proj up_proj
-    # uv run python nbs/train.py q4b-80gb --lr=7e-3 --n_epochs=10 --n_depths=10 --loss_depths -10 --modules k_proj q_proj v_proj gate_proj up_proj --r=16 # all up proj
-    # uv run python nbs/train.py q4b-80gb --lr=7e-3 --n_epochs=10 --n_depths=10 --loss_depths -20
-    # uv run python nbs/train.py q4b-80gb --lr=7e-3 --n_epochs=10 --n_depths=10 --loss_depths -1  --wd 0
-    # uv run python nbs/train.py q4b-80gb --lr=7e-3 --adapter_type dora --loss_depths -1
-    # uv run python nbs/train.py q4b-80gb --lr=7e-3 --adapter_type dora --loss_depths -10
-    # uv run python nbs/train.py q4b-80gb --mono_weight=1 --coh_weight=1
-    # uv run python nbs/train.py q4b-80gb --mono_weight=1000 --coh_weight=1000
-    # uv run python nbs/train.py q4b-80gb --mono_weight=.1 --coh_weight=1000
-    # uv run python nbs/train.py q4b-80gb --mono_weight=1000 --coh_weight=.1
 
     # === Loss type ablations ===
     echo "### Loss type ablations ###"
@@ -71,15 +76,18 @@ run:
     run_exp_small --loss_type=focal_balanced
 
 
-    
-    # === Loss layer ablations ===
-    echo "### Loss layer ablations ###"
-    run_exp_small --loss_depths -1  # last layer
-    run_exp_small --loss_depths -3  # default: 3rd from last
-    run_exp_small --loss_depths -5  # 5th from last
-    run_exp_small --loss_depths -10  # 10th from last
-    run_exp_small --loss_depths -3 -5  # multiple layers
-    run_exp_small --loss_depths -1 -3 -5  # multiple layers
+
+    echo "=== Loss depth ablation (prediction ensembling zone) ==="
+    run_exp_small --loss_depths 0.10 --experiment_name="loss_d50"
+    run_exp_small --loss_depths 0.20 --experiment_name="loss_d50"
+    run_exp_small --loss_depths 0.30 --experiment_name="loss_d50"
+    run_exp_small --loss_depths 0.40 --experiment_name="loss_d50"
+    run_exp_small --loss_depths 0.50 --experiment_name="loss_d50"
+    run_exp_small --loss_depths 0.60 --experiment_name="loss_d60"  
+    run_exp_small --loss_depths 0.70 --experiment_name="loss_d70"  # your winner
+    run_exp_small --loss_depths 0.80 --experiment_name="loss_d80"  # current default
+    run_exp_small --loss_depths 0.90 --experiment_name="loss_d90"
+    run_exp_small --loss_depths 0.5 0.8 # multiple layers
     
 
 

@@ -82,13 +82,13 @@ class TrainingConfig:
     depth_end: int = -3  # ignore the last X layers
     
     # loss computation layers (negative = from end, e.g. -3 = 3rd-to-last layer)
-    loss_depths: List[float] = [0.85]  # which layer(s) to compute loss on, take a lot of ram
+    loss_depths: List[float] = [0.65]  # which layer(s) to compute loss on, multiple will take lots of memory. https://arxiv.org/html/2406.19384v3 suggests 0.5-0.85 
 
     # Training params
     bs: int = 8
     n_epochs: int = 20
-    lr: float = 2e-3
-    wd: float = 0.001
+    lr: float = 8e-3
+    wd: float = 1.0
     n_logs: int = 10  # log this many times per training
     effective_bs: int = 32
     quick: bool = False
@@ -99,7 +99,7 @@ class TrainingConfig:
 
     # Adapter params
     adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"
-    r: int = 24
+    r: int = 256
     scale_s: Literal["add2", "add_tanh", "mult", "none"] = "add2"
     rot_u: bool = False  # can be less stable as it modifies output space and diverges from loss space
     rot_v: bool = True
@@ -127,7 +127,7 @@ class TrainingConfig:
     coh_thresh: float = 0.5 # Margin in nats, above which a steep penalty is applied
     # boundary_order: int = 2
     coh: bool = True  # Enable coherence constraint
-    coh_weight: float = 10.0  # scaling factor for coherence loss, should be a large number for a hard cliff
+    coh_weight: float = 5.0  # scaling factor for coherence loss, should be a large number for a hard cliff
     ## adaptive coherence relaxation
     coh_adaptive: bool = True  # Enable difficulty-based coherence relaxation
     coh_temp: float = 2  # higher = softer, lower = sharper in how we relax the coherence constrain on the harder side, and riase it on the easier coeff

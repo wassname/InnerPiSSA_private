@@ -656,7 +656,7 @@ def format_results_table(
     col_names = {
         "method": "Method",
         "effect": "Effect ↑",
-        "side_effects": "Side Effects\nΔ Other ↓",
+        "side_effects": "Side Effects\nΔ Other",
         "p_value": "p-value",
         "degradation": "Degradation\nΔ NLL ↑",
         "coeff": "Coeff\n±",

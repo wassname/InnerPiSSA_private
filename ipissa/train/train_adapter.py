@@ -89,12 +89,13 @@ def normalize_layer_spec(layer_spec: List[float | int], total_layers: int) -> Li
     """
     normalized = []
     for x in layer_spec:
-        if isinstance(x, float):
+        if (x>=0) and (x < 1):
             # Fraction: convert to layer number, then modulo handles negatives
-            layer_num = int(x * total_layers) % total_layers
-        else:
-            # Integer: modulo handles negative offsets
-            layer_num = int(x) % total_layers
+            x = int(x * total_layers)
+        
+        # Integer: modulo handles negative offsets
+        layer_num = int(x) % total_layers
+
         normalized.append(layer_num)
     return normalized
 
