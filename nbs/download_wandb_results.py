@@ -85,6 +85,9 @@ for run in tqdm(lastest_runs):
         json.dump(run_data, f, indent=2)
 
 
+# load all log files, extract from "## Evaluation complete" to "🥇", and clean off log prefix e.g. `10:20:20 | INFO     | Main metric: 🥇779.973`
+
+
 # Flatten for DataFrame
 results = []
 for run_data in runs_data:
@@ -153,3 +156,19 @@ df_summary.to_csv(summary_file, index=False)
 print(f"Saved summary to {summary_file}")
 
 print("""Remember only models 4B params or more matter. The code has changes at time has gone by so weight recent ones more. I'm looking for which configuration works across large models.""")
+
+# # Also load baselines from 
+# from ipissa.train.daily_dilemas import format_results_table
+# from eval_baseline_repeng import process_and_display_results, load_baselines
+# results = load_baselines()
+# df_repeng = process_and_display_results(results)
+# for model_name in df_repeng['model_id'].unique():
+#     df_model = df_repeng[df_repeng["model_id"] == model_name]
+#     md_table, df_eff_sz, main_score = format_results_table(
+#         df_model,
+#         target_col="score_Virtue/Truthfulness",
+#         # config=config,
+#         target_method="repeng",
+#     )
+#     # TODO log main_score to csv
+# df_repeng

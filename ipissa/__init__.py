@@ -1,5 +1,5 @@
 from . import control, extract
-from .extract import ControlVector, DatasetEntry
+from .extract import ControlVector
 from .dataset import make_dataset
 
-__all__ = ["control", "extract", "ControlVector", "DatasetEntry"]
+__all__ = ["control", "extract", "ControlVector"]

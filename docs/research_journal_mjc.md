@@ -2302,3 +2302,16 @@ This works btw, but it does need longer to converge now at a lower lr. but we ca
   The monotonic loss just ensures **consistent ordering**, not **which** ordering. Then auto-flip corrects the sign post-hoc.
 
   Want me to implement this change to the monotonic loss?
+
+
+
+# 2025-11-18 12:40:57
+
+Run layer search
+├─ Pattern found (layer depth matters)
+│  ├─ Yes → Finish the ablations, write it up (50-60 hours total)
+│  └─ Payoff: arXiv paper, portfolio piece, mechanistic insight
+│
+└─ No pattern (fails on all large models)
+   ├─ Honest negative result → write a short paper (20-30 hours total)
+   └─ Payoff: "Why representation steering fails on large models"

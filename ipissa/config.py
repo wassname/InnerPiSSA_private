@@ -71,11 +71,14 @@ class TrainingConfig:
     model_name: str = "Qwen/Qwen3-4B-Instruct-2507"
     quantization_type: Literal["4bit", "8bit", "none"] = "none"
 
-    # layers to target
+    # layers to target for adapters
     layers: List[str] = ["down_proj", "k_proj", "v_proj", "q_proj"]
     num_layers: int = 3  # intervene on this many layers, spaced evenly
     perc_start: float = 0.3  # ignore the first X% of layers
     end_layers: int = -3  # ignore the last X layers
+    
+    # loss computation layers (negative = from end, e.g. -3 = 3rd-to-last layer)
+    loss_layers: List[int] = [-3]  # which layer(s) to compute loss on
 
     # Training params
     batch_size: int = 8
@@ -94,12 +97,8 @@ class TrainingConfig:
     adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"
     rank: int = 24
     scale_s: Literal["add2", "add_tanh", "mult", "none"] = "add2"
-    ipissa_rotate_u: bool = False  # can be less stable as it modified output space and diverges from loss space
+    ipissa_rotate_u: bool = False  # can be less stable as it modifies output space and diverges from loss space
     ipissa_rotate_v: bool = True
-    loss_full_u: bool = (
-        True  # use full loss on u projection instead of just the adapted part
-    )
-    loss_ds_pref_dir: bool = False  # extract prefered direction the reference model hs on the entire dataset (true), not just the per sample ref hs
 
     # Dataset
     dataset_name: str = "honest"
@@ -122,7 +121,7 @@ class TrainingConfig:
     last_n_tokens: int = 4
     adaptive_coherence: bool = True  # Enable difficulty-based coherence relaxation
     coeff_diff_temperature: float = 2  # higher = softer, lower = sharper in how we relax the coherence constrain on the harder side, and riase it on the easier coeff
-    monotonic_margin: float = 0.1  # margin for monotonicity loss
+    monotonic_margin: Optional[float] = 0.1  # margin for monotonicity loss
 
     # Eval
     # eval_batch_size: Optional[int] = None
@@ -197,7 +196,7 @@ class TrainingConfig:
         
         # Add variations only if different from defaults (keeps name short)
         variations = []
-        if self.adapter_type != defaults.adapter_type:
+        if self.adapter_type and self.adapter_type != defaults.adapter_type:
             variations.append(self.adapter_type)  # Add "lora" or "dora" to name
         if self.ipissa_rotate_u != defaults.ipissa_rotate_u:
             variations.append('urot' if self.ipissa_rotate_u else 'noU')

@@ -241,20 +241,20 @@ def PCAWeighted(train, weights=None, n_components=1) -> torch.Tensor:
     return direction
 
 
-def _choose_sign_from_grads(direction: torch.Tensor, grad_matrix: torch.Tensor) -> torch.Tensor:
-    """
-    Fix direction sign using first-order loss change.
-    We want +v on positives and -v on negatives to reduce loss:
-      mean((g_neg - g_pos) @ v) >= 0
-    If the mean is negative, flip v.
-    """
-    v = direction
-    g_pos = grad_matrix[::2]   # [n/2, d]
-    g_neg = grad_matrix[1::2]  # [n/2, d]
-    score = torch.mean((g_neg - g_pos) @ v)
-    if torch.isnan(score):
-        return v  # keep as-is if degenerate
-    return v if score >= 0 else -v
+# def _choose_sign_from_grads(direction: torch.Tensor, grad_matrix: torch.Tensor) -> torch.Tensor:
+#     """
+#     Fix direction sign using first-order loss change.
+#     We want +v on positives and -v on negatives to reduce loss:
+#       mean((g_neg - g_pos) @ v) >= 0
+#     If the mean is negative, flip v.
+#     """
+#     v = direction
+#     g_pos = grad_matrix[::2]   # [n/2, d]
+#     g_neg = grad_matrix[1::2]  # [n/2, d]
+#     score = torch.mean((g_neg - g_pos) @ v)
+#     if torch.isnan(score):
+#         return v  # keep as-is if degenerate
+#     return v if score >= 0 else -v
 
 def choose_sign_from_hiddens(direction: torch.Tensor, hiddens: torch.Tensor) -> torch.Tensor:
     """Flip direction so positives project higher than negatives on average."""

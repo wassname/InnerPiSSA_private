@@ -153,6 +153,7 @@ def main(config):
     df_labels = load_labels(dataset_dd)
     df_labeled = process_daily_dilemma_results(df_all, dataset_dd, df_labels)[0]
 
+    df_scores = []
     for model_name in _EVAL_BASELINE_MODELS:
         df_model = df_labeled[df_labeled["model_id"] == model_name]
         if len(df_model) == 0:
@@ -187,7 +188,10 @@ def main(config):
             show_alt_measures=False,
         )
         print(md_table)
-
+        df_scores.append(dict(main_score=main_score, model_name=model_name, method="repeng"))
+    df_scores_all = pd.DataFrame(df_scores)
+    print("\n\n### Summary of main scores ###")
+    print(df_scores_all.sort_values("main_score", ascending=False).to_markdown(index=False))
     logger.info("Done!")
 
 

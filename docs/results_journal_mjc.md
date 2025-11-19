@@ -842,3 +842,19 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
     | S-weighted steer  |    0.5785  |      0.004401  |   0.563   |     0.0464    |            55.28  |
     | random            |    0.0501  |      0.000772  |   0.96    |    -0.0008061 |             5.01  |
     | PCA (baseline)    |    0.03887 |      0.0009581 |   0.969   |     0.0002114 |             3.886 |
+
+
+
+
+### Summary of main scores ###
+|   main_score | model_name                     | method   |
+|-------------:|:-------------------------------|:---------|
+|   799.237    | unsloth/Llama-3.1-8B-Instruct  | repeng   |
+|   234.182    | Qwen/Qwen3-4B-Instruct-2507    | repeng   |
+|   155.524    | wassname/qwen-14B-codefourchan | repeng   |
+|    18.7567   | Qwen/Qwen3-0.6B                | repeng   |
+|    13.6495   | Qwen/Qwen3-14B                 | repeng   |
+|     0.607871 | google/gemma-3-12b-it          | repeng   |
+|     0.431713 | google/gemma-3-4b-it           | repeng   |
+
+uv run python nbs/eval_baseline_prompting.py

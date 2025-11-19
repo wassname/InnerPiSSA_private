@@ -229,17 +229,26 @@ def setup_adapter(base_model, config: TrainingConfig):
     total_layers = base_model.config.num_hidden_layers
     start_layer = int(config.perc_start * total_layers)
     end_layer = total_layers + config.end_layers
+
+    # TODO is there a way to select but not the loss layers?
     layers = np.linspace(start_layer, end_layer, config.num_layers, dtype=int)
 
+    loss_layers = [total_layers + x for x in config.loss_layers]
+
     # Build peft regex: .*\.(layer1|layer2|...)\..*(module1|module2|...)
-    layer_nums = "|".join(str(L) for L in layers)
+    # Note: we exclude loss_layers from adapter target modules to avoid double-wrapping
+    if set(loss_layers).issubset(set(layers)):
+        logger.warning(f"Removing loss layers {loss_layers} from adapter target layers {layers} to ensure they are run, and hooks fire normally.")
+    if not (set(layers)-set(loss_layers)):
+        raise ValueError("All adapter layers are also loss layers; at least one layer must not be a loss layer.")
+    layer_nums = "|".join(str(L) for L in layers if L not in loss_layers)
     module_names = "|".join(config.layers)
     target_modules = f".*\\.({layer_nums})\\..*({module_names})"
 
     logger.info(f"Target modules regex: {target_modules}")
     available = {}
     for name, m in base_model.named_modules():
-        if re.search("\.0\.", name):
+        if re.search(r"\.0\.", name):
             if isinstance(m, torch.nn.Linear):
                 available[name] = m.weight.shape
     logger.info(f"Available modules: {available}")
@@ -273,55 +282,80 @@ def setup_adapter(base_model, config: TrainingConfig):
 
 
 def get_loss_layers(model, config: TrainingConfig):
-    """Determine which layers to apply loss to, should be a layer 1) with an adapter (as sometimes we reuse U - but we migth deprecate this), and be has layer.weight """
-
-    # Find all PEFT-wrapped modules (they have a base_layer attribute)
-    # This works for any PEFT adapter type (LoRA, DoRA, InnerPiSSA, etc.)
-    parent_layers = []
-    for name, module in model.named_modules():
-        # PEFT layers have a base_layer attribute that holds the original nn.Linear
-        if hasattr(module, 'base_layer') and isinstance(module.base_layer, torch.nn.Linear):
-            parent_layers.append(name)
+    """Determine which layers to apply loss to based on config.loss_layers.
     
-    parent_layers = sorted(set(parent_layers))
-
-    model_max_layers = model.config.num_hidden_layers
-    suffixes = set([p.split(".")[-1] for p in parent_layers])
-
+    Args:
+        model: The model (used to get total layer count and find matching modules)
+        config: TrainingConfig with loss_layers (negative offsets from end)
+    
+    Returns:
+        List of layer names matching config.layers suffixes at depths specified by config.loss_layers.
+        Returns the actual executed layers (adapter wrappers), not base_layer submodules.
+        
+    Example:
+        config.loss_layers = [-3, -5]  # 3rd and 5th from last layer
+        config.layers = ["down_proj", "k_proj"]
+        -> ["model.layers.29.mlp.down_proj", "model.layers.29.self_attn.k_proj",
+            "model.layers.27.mlp.down_proj", "model.layers.27.self_attn.k_proj"]
+    """
+    num_hidden_layers = model.config.num_hidden_layers
+    
+    # Convert negative offsets to absolute layer indices
+    loss_layer_indices = [
+        num_hidden_layers + offset if offset < 0 else offset
+        for offset in config.loss_layers
+    ]
+    
+    # Find all linear layers at these depths matching config.layers suffixes
+    # Hook the actual executed layers (adapter wrappers or base Linear), not base_layer
     loss_layers = []
-    for suffix in suffixes:
-        candidates = [p for p in parent_layers if p.endswith(suffix)]
-
-        def get_layer_num(s):
-            m = re.search(r"\.layers\.(\d+)\.", s)
-            return int(m.group(1)) if m else None
-
-        candidate = None
-        candidate_i = 0
-        for c in candidates:
-            i = get_layer_num(c)
-            if i is None:
-                continue
-            if (candidate is None) or ((i > candidate_i) and i <= model_max_layers - 3):
-                candidate = c
-                candidate_i = i
-
-        if candidate is not None:
-            loss_layers.append(candidate)
-
-    logger.info(f"Loss layers: {loss_layers}")
+    for name, module in model.named_modules():
+        # Skip base_layer submodules - they're never executed
+        if name.endswith('.base_layer'):
+            continue
+            
+        if not isinstance(module, torch.nn.Linear):
+            continue
+        
+        # Extract layer number from name (e.g., "model.layers.29.mlp.down_proj" -> 29)
+        match = re.search(r"\.layers\.(\d+)\.", name)
+        if not match:
+            continue
+        layer_idx = int(match.group(1))
+        
+        # Check if this layer index is in our target list
+        if layer_idx not in loss_layer_indices:
+            continue
+        
+        # Check if module name ends with one of our target suffixes
+        if any(name.endswith(suffix) for suffix in config.layers):
+            loss_layers.append(name)
+    
+    loss_layers = sorted(set(loss_layers))
+    assert len(loss_layers) > 0, f"No loss layers found matching config.loss_layers={loss_layer_indices} and config.layers={config.layers}"
+    logger.info(f"Loss layers (indices {loss_layer_indices}): {loss_layers}")
     return loss_layers
 
 
 def extract_U_matrices(model, loss_layers: List[str], config: TrainingConfig):
-    """Extract SVD U, S, V matrices for weight reconstruction."""
+    """Extract SVD U, S, V matrices for weight reconstruction.
+    
+    Works with both adapter layers (extracts from base_layer.weight) and 
+    non-adapter layers (extracts from weight directly).
+    """
     Uw_full = {}
     Vw_full = {}
     Sw_full = {}
 
     for lk in tqdm(loss_layers, desc='svd'):
         m = model.get_submodule(lk)
-        W = m.weight.data.float()
+        
+        # Check if this is an adapter layer (has base_layer) or regular layer
+        if hasattr(m, 'base_layer'):
+            W = m.base_layer.weight.data.float()
+        else:
+            W = m.weight.data.float()
+        
         U, S, Vh = torch.linalg.svd(W, full_matrices=False)
         Uw_full[lk] = U.to(model.device).float()
         Sw_full[lk] = S.to(model.device).float()
@@ -364,7 +398,7 @@ def train_steer_vector(
         )
 
     # For InnerPiSSA: Extract S-space directions using SVD projection
-    # For LoRA/DoRA: Skip S-space (no SVD), use activation-space PCA only
+    # For LoRA/DoRA: Use activation-space PCA only
     if config.adapter_type == "innerpissa":
         loss_dirs = {}  # Unweighted S-space for loss
         Sw_dirs = {}  # S-weighted for steering
@@ -389,32 +423,28 @@ def train_steer_vector(
                 "V": V,  # Bare V (no sqrt(S))
             }
 
-            # # 2. S-weighted direction for steering application
-            # sqrt_S = torch.sqrt(S)  # [r]
-            # U_scaled = U * sqrt_S  # [d_out, r], element-wise: U_ij * sqrt(S_j)
-            # V_scaled = V * sqrt_S  # [d_in, r], element-wise: V_ij * sqrt(S_j)
-
-            # hs_s_weighted = hs_cpu @ U_scaled  # [n, r] S-weighted projection
-            # h_cho_sw = hs_s_weighted[::2]
-            # h_rej_sw = hs_s_weighted[1::2]
-            # delta_s_steer = (h_cho_sw - h_rej_sw).mean(dim=0)  # [r] S-weighted
-            # delta_s_steer = F.normalize(delta_s_steer, dim=0)
-
-            # Sw_dirs[layer] = {
-            #     "U_scaled": U_scaled,  # U * sqrt(S)
-            #     "delta_s": delta_s_steer,
-            #     "V_scaled": V_scaled,  # V * sqrt(S)
-            # }
-
         cvec_loss_steer = ControlVector(
             model_type=model.config.model_type, directions=loss_dirs
         )
-        # cvec_Sw_steer = ControlVector(
-        #     model_type=model.config.model_type, directions=Sw_dirs
-        # )
+        cvec_Sw_steer = None
     else:
-        # LoRA/DoRA: No SVD decomposition, skip S-space steering
-        cvec_loss_steer = None
+        # LoRA/DoRA: Extract activation-space PCA directions for loss
+        loss_dirs = {}  # Activation-space directions for loss
+        
+        for layer in tqdm(loss_layers, desc='read_representations_pca'):
+            hs_cpu = last_act[layer].float()
+            
+            # Activation-space PCA: simple mean difference
+            h_cho = hs_cpu[::2]
+            h_rej = hs_cpu[1::2]
+            delta_act = (h_cho - h_rej).mean(dim=0)  # [d] activation space
+            delta_act = F.normalize(delta_act, dim=0)
+            
+            loss_dirs[layer] = delta_act  # Store as tensor, not dict
+        
+        cvec_loss_steer = ControlVector(
+            model_type=model.config.model_type, directions=loss_dirs
+        )
         cvec_Sw_steer = None
 
     # dirs_pca = read_representations(last_act, logprobs, grads=None)
@@ -435,7 +465,6 @@ def compute_batch_loss(
     loss_layers,
     Uw_full,
     config: TrainingConfig,
-    return_info: bool = False,
     step: int = 0,
     scheduler=None,
 ):
@@ -448,13 +477,11 @@ def compute_batch_loss(
         loss_layers: Layers to compute loss on
         Uw_full: Full U matrices for projection
         config: Training config
-        return_info: If True, return detailed info dicts for logging
         step: Current training step (for info logging)
         scheduler: LR scheduler (for info logging)
 
     Returns:
-        If return_info=False: total_loss (scalar)
-        If return_info=True: (total_loss, infos_list)
+       (total_loss, infos_list)
     """
     attention_mask = batch["attention_mask"]
     mask_cho = attention_mask[::2]
@@ -478,7 +505,7 @@ def compute_batch_loss(
     ref_rej_label_logp = ref_label_logp[1::2].detach()
 
     total_loss = torch.tensor(0.0, device=model.device)
-    infos = [] if return_info else None
+    infos = []
     
     # Collect losses from both coefficients for meta-loss combination
     # Structure: {coef: {layer: loss_dict}} to accumulate across layers
@@ -489,7 +516,7 @@ def compute_batch_loss(
         with torch.amp.autocast("cuda", dtype=torch.bfloat16):
             with ScaleAdapter(model, coeff=coef):
                 with TraceDict(
-                    model, layers=loss_layers, retain_grad=not return_info
+                    model, layers=loss_layers
                 ) as ret:
                     outputs_pi = model(**batch, output_hidden_states=True)
 
@@ -499,33 +526,21 @@ def compute_batch_loss(
             # InnerPiSSA: Use SVD projection onto U
             # LoRA/DoRA: Work directly in activation space (no U projection)
             if config.adapter_type == "innerpissa":
-                U_w = (
-                    Uw_full[lk]
-                    if config.loss_full_u
-                    else model.get_submodule(lk)
-                    .ipissa_u[config.dataset_name]
-                    .to(model.device)
-                    .float()
-                )
+                U_w = Uw_full[lk]  # Always use full SVD U for stable loss computation
 
-                if config.loss_ds_pref_dir:
-                    # Dataset-level preference direction (unweighted S-space)
-                    pref_dir_ref_dH_Uw = (
-                        dirs_loss.directions[lk]["delta_s"].clone().to(model.device).float()
-                    )
-                else:
-                    hs_ref_Uw = hs_ref @ U_w
-                    pref_dir_ref_dH_Uw = hs_ref_Uw[::2] - hs_ref_Uw[1::2]
+                # Dataset-level preference direction (unweighted S-space)
+                # directions[layer] is a dict with keys: U, delta_s, V
+                pref_dir_ref_dH_Uw = (
+                    dirs_loss.directions[lk]["delta_s"].clone().to(model.device).float()
+                )
             else:
                 # LoRA/DoRA: Use activation-space PCA direction (no U projection)
                 U_w = None  # Not used
-                if config.loss_ds_pref_dir:
-                    # Dataset-level preference direction (activation space)
-                    pref_dir_ref_dH_Uw = (
-                        dirs_loss.directions[lk].clone().to(model.device).float()
-                    )
-                else:
-                    pref_dir_ref_dH_Uw = hs_ref[::2] - hs_ref[1::2]
+                # Dataset-level preference direction (activation space)
+                # directions[layer] is a tensor directly
+                pref_dir_ref_dH_Uw = (
+                    dirs_loss.directions[lk].clone().to(model.device).float()
+                )
 
             hs_ref_cho = hs_ref[::2]
             hs_ref_rej = hs_ref[1::2]
@@ -598,7 +613,9 @@ def compute_batch_loss(
     # Aggregate scalar losses (loss_proj, loss_coh) and keep last layer's metrics for logging
     loss_results = {}
     for coef in [-1.0, 1.0]:
+
         # Start with a copy of the last layer's dict (for metrics like proj_pi, proj_ref, etc.)
+        lk = loss_layers[-1]
         loss_results[coef] = {k: v for k, v in loss_results_per_layer[coef][lk].items()}
         
         # Sum the actual loss components across all layers
@@ -622,38 +639,34 @@ def compute_batch_loss(
         monotonic_margin=config.monotonic_margin,
     )
 
-    if return_info:
-        # Flatten info for logging
-        infos = []
-        for coef in [-1.0, 1.0]:
-            info = {k: v for k, v in loss_results[coef].items() if k not in ["loss_proj", "loss_coh", "loss_total"]}
-            # Add back loss components for logging
-            info["loss_proj"] = loss_results[coef]["loss_proj"]
-            info["loss_coh"] = loss_results[coef]["loss_coh"]
-            info["loss_total"] = loss_results[coef]["loss_total"]
-            
-            if scheduler is not None:
-                info["lr"] = torch.tensor(scheduler.get_last_lr()[0])
-            info = {k: v.mean().detach().cpu().item() if torch.is_tensor(v) else v for k, v in info.items()}
-            info["coef"] = coef
-            info["layer"] = lk
-            info["step"] = step
-            
-            # Add meta-loss info (coherence weights, monotonic loss)
-            # FIXME can't we just merge all meta_info into info
-            if config.adaptive_coherence:
-                suffix = "pos" if coef > 0 else "neg"
-                info["coh_weight"] = meta_info[f"coh_weight_{suffix}"]
-            
-            # Monotonic loss is shared across both coefficients (same value)
-            if "loss_monotonic" in meta_info:
-                info["loss_monotonic"] = meta_info["loss_monotonic"]
-            
-            infos.append(info)
+    # Flatten info for logging
+    for coef in [-1.0, 1.0]:
+        info = {k: v for k, v in loss_results[coef].items() if k not in ["loss_proj", "loss_coh", "loss_total"]}
+        # Add back loss components for logging
+        info["loss_proj"] = loss_results[coef]["loss_proj"]
+        info["loss_coh"] = loss_results[coef]["loss_coh"]
+        info["loss_total"] = loss_results[coef]["loss_total"]
+        
+        if scheduler is not None:
+            info["lr"] = torch.tensor(scheduler.get_last_lr()[0])
+        info = {k: v.mean().detach().cpu().item() if torch.is_tensor(v) else v for k, v in info.items()}
+        info["coef"] = coef
+        info["layer"] = lk
+        info["step"] = step
+        
+        # Add meta-loss info (coherence weights, monotonic loss)
+        # FIXME can't we just merge all meta_info into info
+        if config.adaptive_coherence:
+            suffix = "pos" if coef > 0 else "neg"
+            info["coh_weight"] = meta_info[f"coh_weight_{suffix}"]
+        
+        # Monotonic loss is shared across both coefficients (same value)
+        if "loss_monotonic" in meta_info:
+            info["loss_monotonic"] = meta_info["loss_monotonic"]
+        
+        infos.append(info)
 
-    if return_info:
-        return total_loss, infos
-    return total_loss
+    return total_loss, infos
 
 
 def extract_coef_metrics(infos):
@@ -730,7 +743,7 @@ def compute_validation_loss(
 
         # Get loss with detailed info (but no gradients)
         batch_loss, batch_infos = compute_batch_loss(
-            model, batch, dirs_loss, loss_layers, Uw_full, config, return_info=True
+            model, batch, dirs_loss, loss_layers, Uw_full, config
         )
 
         total_loss += batch_loss.item()
@@ -792,7 +805,6 @@ def train_epoch(
             loss_layers,
             Uw_full,
             config,
-            return_info=True,
             step=step,
             scheduler=scheduler,
         )
@@ -1388,6 +1400,7 @@ def main(config: TrainingConfig):
 
     # Setup loss layers
     loss_layers = get_loss_layers(model, config)
+    assert len(loss_layers) > 0, "No valid loss layers found!"
     
     # Extract SVD matrices only for InnerPiSSA (LoRA/DoRA don't use SVD)
     if config.adapter_type == "innerpissa":

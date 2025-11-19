@@ -2,6 +2,14 @@
 
 ## Abstract
 
+RLHF trains models to suppress unaligned reasoning, but suppression happens primarily in output layers, leaving internal representations unchanged. This creates a fundamental problem: we cannot distinguish between genuine alignment (the model thinks the right way) and behavioral suppression (the model thinks one way, outputs another). We propose InnerPiSSA, a method to probe internal reasoning by steering hidden states in the model's native transformation space—the geometric basis where planning happens before suppression. Using unsupervised contrastive learning and gradient-based optimization on reversible SVD rotations, we discover directions that separate honest from dishonest reasoning without labeled preference data. Key finding: when steered against RLHF training (c=-1), prompting completely collapses (Truthfulness: -10.84), while InnerPiSSA maintains coherent internal control (-0.70), enabling us to observe what the model "thinks" independently of its trained outputs. On a 4B model, InnerPiSSA achieves statistical significance (p<1e-12) in steering honesty-related reasoning across 335 dimensions, with minimal side effects (0.153). Layer ablations show effect peaks at layer N-2, consistent with where suppression dynamics concentrate. Our method provides the first mechanistic tool for alignment debugging: probing deceptive alignment, specification gaming, and reward hacking by accessing the internal reasoning that RLHF suppresses.
+
+OR
+
+
+
+OR
+
 Most steering methods fail to generalize beyond their training prompts, achieving weak transfer to out-of-distribution moral reasoning tasks (PCA baselines score 0.053 vs our 0.245 on DailyDilemmas). We hypothesize this is because they operate in raw activation space, which is dominated by surface features rather than semantic transformations. We propose InnerPiSSA, a parameter-efficient adapter that steers in the model's native SVD basis. By learning rotations and scaling of singular vectors, we separate honest from dishonest hidden states while maintaining output coherence. Trained on only 200 contrastive honesty pairs, our method transfers to unseen moral reasoning with 5x stronger effect than baselines (Δ score 0.245 vs 0.053), while maintaining low side effects across X moral value dimensions. Ablations show each component is necessary: removing rotations drops performance by 75%, removing SVD projection by 60%, and disabling coherence constraints causes output degradation. Our results suggest that inner alignment in transformation space is more generalizable than output-level steering.
 
 

@@ -40,6 +40,16 @@ logger.remove()
 logger.add(sys.stderr, format="{message}", level="INFO")
 
 
+
+
+def load_baselines():
+    files = list((Path(proj_root) / "outputs" / "baselines" / "repeng").glob("*.parquet"))
+    results = []
+    for f in files:
+        df = pd.read_parquet(f)
+        results.append(df)
+    return results
+
 def sanitize_model_id(model_id: str) -> str:
     """Sanitize model ID for use in filenames."""
     return model_id.replace('/', '_')
@@ -72,9 +82,10 @@ def main(config):
 
         # Check if cache exists for this model
         model_safe = sanitize_model_id(model_name)
+        cache_path = Path(proj_root) / "outputs" / f"baselines/repeng/{model_safe}.parquet"
         if config.quick:
             model_safe += "_QUICK"
-        cache_path = Path(proj_root) / "outputs" / f"baselines/repeng/{model_safe}.parquet"
+        
 
         if cache_path.exists():
             logger.info(f"Loading cached results from {cache_path}")
@@ -185,25 +196,10 @@ def main(config):
         del base_model, tokenizer, model, control_vector
         gc.collect()
         torch.cuda.empty_cache()
-
-    # Combine all results and show summary
-    df_all = pd.concat(results, ignore_index=True)
-    logger.info(f"Total results: {len(df_all)} rows from {len(df_all['model_id'].unique())} models")
-
-    model_name = EVAL_BASELINE_MODELS[0]
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-    # Process and display results for each model
-    dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
-        tokenizer,
-        instructions="",
-        max_tokens=config.eval_dataset_max_token_length,
-        eval_max_n_dilemmas=config.eval_max_n_dilemmas
-    )
-
-    df_labels = load_labels(dataset_dd)
-    df_labeled = process_daily_dilemma_results(df_all, dataset_dd, df_labels)[0]
-
+    
+    logger.info("Done with evaluation! Processing results...")
+    df_labeled = process_and_display_results(results, config)
+    df_scores = []
     for model_name in EVAL_BASELINE_MODELS:
         df_model = df_labeled[df_labeled["model_id"] == model_name]
         if len(df_model) == 0:
@@ -217,8 +213,59 @@ def main(config):
             target_method="repeng",
         )
         print(md_table)
+        df_scores.append(dict(main_score=main_score, model_name=model_name, method="repeng"))
+    df_scores_all = pd.DataFrame(df_scores)
+    print("\n\n### Summary of main scores ###")
+    print(df_scores_all.sort_values("main_score", ascending=False).to_markdown(index=False))
 
     logger.info("Done!")
+
+def process_and_display_results(results: list[pd.DataFrame], config: TrainingConfig = None, ):
+    """Load cached results and display formatted tables for each model.
+    
+    Args:
+        config: Training configuration
+        results: List of DataFrames with evaluation results (optional, will load from cache if empty)
+    """
+    if config is None:
+        config = TrainingConfig()
+    # Load all cached results if not provided
+    if not results:
+        results = []
+        for model_name in EVAL_BASELINE_MODELS:
+            model_safe = sanitize_model_id(model_name)
+            if config.quick:
+                model_safe += "_QUICK"
+            cache_path = Path(proj_root) / "outputs" / f"baselines/repeng/{model_safe}.parquet"
+            
+            if cache_path.exists():
+                df_cached = pd.read_parquet(cache_path)
+                results.append(df_cached)
+    
+    if not results:
+        logger.warning("No results to process")
+        return
+    
+    # Combine all results and show summary
+    df_all = pd.concat(results, ignore_index=True)
+    logger.info(f"Total results: {len(df_all)} rows from {len(df_all['model_id'].unique())} models")
+
+    # Load tokenizer and dataset (needed for processing)
+    model_name = df_all['model_id'].iloc[0]
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
+        tokenizer,
+        instructions="",
+        max_tokens=config.eval_dataset_max_token_length,
+        eval_max_n_dilemmas=config.eval_max_n_dilemmas
+    )
+
+    df_labels = load_labels(dataset_dd)
+    df_labeled = process_daily_dilemma_results(df_all, dataset_dd, df_labels)[0]
+    logger.info("Processed results with labels")
+    return df_labeled
+
 
 
 

@@ -137,7 +137,6 @@ def test_evaluate_model_with_adapter():
         quantization_type="none",
         rank=4,  # Very small rank for speed
         batch_size=2,
-        eval_batch_size=2,
         eval_max_n_dilemmas=2,  # Only test on 2 dilemmas
         num_layers=2,  # Target just 2 layers for speed
         layers=["gate_proj", "down_proj"],  # Sparse targeting
