@@ -82,13 +82,13 @@ class TrainingConfig:
     depth_end: int = -3  # ignore the last X layers
     
     # loss computation layers (negative = from end, e.g. -3 = 3rd-to-last layer)
-    loss_depths: List[int] = [-3]  # which layer(s) to compute loss on, take a lot of ram
+    loss_depths: List[float] = [0.85]  # which layer(s) to compute loss on, take a lot of ram
 
     # Training params
     bs: int = 8
-    n_epochs: int = 30
+    n_epochs: int = 20
     lr: float = 2e-3
-    wd: float = 0.01
+    wd: float = 0.001
     n_logs: int = 10  # log this many times per training
     effective_bs: int = 32
     quick: bool = False
@@ -127,7 +127,7 @@ class TrainingConfig:
     coh_thresh: float = 0.5 # Margin in nats, above which a steep penalty is applied
     # boundary_order: int = 2
     coh: bool = True  # Enable coherence constraint
-    coh_weight: float = 100.0  # scaling factor for coherence loss, should be a large number for a hard cliff
+    coh_weight: float = 10.0  # scaling factor for coherence loss, should be a large number for a hard cliff
     ## adaptive coherence relaxation
     coh_adaptive: bool = True  # Enable difficulty-based coherence relaxation
     coh_temp: float = 2  # higher = softer, lower = sharper in how we relax the coherence constrain on the harder side, and riase it on the easier coeff
@@ -276,6 +276,7 @@ default_configs = {
             bs=64,
         ),
     ),
+    # Qwen/Qwen3-8B
     "q14b-80gb": (
         "Qwen 14B on 80GB GPU (production quality)",
         TrainingConfig(
@@ -283,6 +284,7 @@ default_configs = {
             bs=32,
         ),
     ),
+    # Qwen/Qwen3-32B
     "l8b-80gb": (
         "Llama 3.1 8B on 80GB GPU",
         TrainingConfig(
@@ -291,6 +293,22 @@ default_configs = {
         ),
     ),
 
+
+    # google/gemma-3-270m-it
+    "gemma270m-80gb": (
+        "Gemma 3 270m on 80GB GPU",
+        TrainingConfig(
+            model_name="google/gemma-3-270m-it",
+            bs=128,
+        ),
+    ),
+    "gemma1b-80gb": (
+        "Gemma 3 1B on 80GB GPU",
+        TrainingConfig(
+            model_name="google/gemma-3-1b-it",
+            bs=128,
+        ),
+    ),
     "gemma4b-80gb": (
         "Gemma 3 4B on 80GB GPU",
         TrainingConfig(
@@ -306,6 +324,8 @@ default_configs = {
             bs=32,
         ),
     ),
+
+    # google/gemma-3-27b-it
 
 
 }

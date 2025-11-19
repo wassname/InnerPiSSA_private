@@ -73,6 +73,31 @@ def clear_mem():
     torch.cuda.empty_cache()
 
 
+def normalize_layer_spec(layer_spec: List[float | int], total_layers: int) -> List[int]:
+    """Convert layer specs to absolute layer numbers.
+    
+    Handles formats:
+    - Float fraction: 0.5 -> layer 16, -0.15 -> layer 27 (for 32 layers)
+    - Integer offset: 10 -> layer 10, -3 -> layer 29 (for 32 layers)
+    
+    Args:
+        layer_spec: List of layer specs (float fraction or integer offset)
+        total_layers: Total number of layers in model
+    
+    Returns:
+        List of absolute layer numbers
+    """
+    normalized = []
+    for x in layer_spec:
+        if isinstance(x, float):
+            # Fraction: convert to layer number, then modulo handles negatives
+            layer_num = int(x * total_layers) % total_layers
+        else:
+            # Integer: modulo handles negative offsets
+            layer_num = int(x) % total_layers
+        normalized.append(layer_num)
+    return normalized
+
 
 def load_train_suffixes(
     data_dir: Path = proj_root / "nbs/data", max_per_file: Optional[int] = None
@@ -235,7 +260,8 @@ def setup_adapter(base_model, config: TrainingConfig):
     # TODO is there a way to select but not the loss layers?
     layers = np.linspace(start_layer, end_layer, config.n_depths, dtype=int)
 
-    loss_layers = [total_layers + x for x in config.loss_depths]
+    # Convert loss_depths to absolute layer numbers
+    loss_layers = normalize_layer_spec(config.loss_depths, total_layers)
 
     # Build peft regex: .*\.(layer1|layer2|...)\..*(module1|module2|...)
     # Note: we exclude loss_layers from adapter target modules to avoid double-wrapping
@@ -303,10 +329,7 @@ def get_loss_layers(model, config: TrainingConfig):
     num_hidden_layers = model.config.num_hidden_layers
     
     # Convert negative offsets to absolute layer indices
-    loss_layer_indices = [
-        num_hidden_layers + offset if offset < 0 else offset
-        for offset in config.loss_depths
-    ]
+    loss_layer_indices = normalize_layer_spec(config.loss_depths, num_hidden_layers)
     
     # Find all linear layers at these depths matching config.layers suffixes
     # Hook the actual executed layers (adapter wrappers or base Linear), not base_layer
@@ -334,7 +357,7 @@ def get_loss_layers(model, config: TrainingConfig):
             loss_layers.append(name)
     
     loss_layers = sorted(set(loss_layers))
-    assert len(loss_layers) > 0, f"No loss layers found matching config.loss_layers={loss_layer_indices} and config.layers={config.modules}"
+    assert len(loss_layers) > 0, f"No loss layers found matching config.loss_layers={loss_layer_indices} and config.layers={config.modules}->{loss_layers}"
     logger.info(f"Loss layers (indices {loss_layer_indices}): {loss_layers}")
     return loss_layers
 
