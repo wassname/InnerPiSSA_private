@@ -681,6 +681,10 @@ def compute_batch_loss(
             info["coef"] = coef
             info["layer"] = lk
             info["step"] = step
+            info["module"] = lk
+
+            if meta_shared['loss_proj_flipped']:
+                info['loss_proj'] = -info['loss_proj']
             
             # Merge coefficient-specific metadata (cw, mono_violation)
             info.update(meta_coef)
