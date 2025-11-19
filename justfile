@@ -44,18 +44,29 @@ run:
 
     # === Loss type ablations ===
     echo "### Loss type ablations ###"
-    run_exp --loss_type=softpl_strong_up #   # default
-    run_exp --loss_type=softpl_ratio
-    run_exp --loss_type=logsig_dpo
-    run_exp --loss_type=logsig_weak_up
-    run_exp --loss_type=tanh_sym
-    run_exp --loss_type=focal_balanced
-    run_exp --loss_type=raw
+    run_exp_small --loss_type=raw
+    run_exp_small --loss_type=tanh_sym
+    run_exp_small --loss_type=softpl_strong_up #   # default
+    run_exp_small --loss_type=softpl_ratio
+    run_exp_small --loss_type=logsig_dpo
+    run_exp_small --loss_type=logsig_weak_up
+    run_exp_small --loss_type=focal_balanced
+
+
     
-    # can we learn with high lr, low steps?
-    run_exp_small --lr=1e-0 --n_epochs=2 --rank=8 --num_layers=15 # no this learns a one sides intervention and symmetry escapes it
-    run_exp_small --lr=1e-1 --n_epochs=4 --rank=8 --num_layers=15
-    run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15
+    # === Loss layer ablations ===
+    echo "### Loss layer ablations ###"
+    run_exp_small --loss_layers=-1  # last layer
+    run_exp_small --loss_layers=-3  # default: 3rd from last
+    run_exp_small --loss_layers=-5  # 5th from last
+    run_exp_small --loss_layers=-10  # 10th from last
+    run_exp_small --loss_layers=-3,-5  # multiple layers
+    run_exp_small --loss_layers=-1,-3,-5  # multiple layers
+    
+    # # can we learn with high lr, low steps?
+    # run_exp_small --lr=1e-0 --n_epochs=2 --rank=8 --num_layers=15 # no this learns a one sides intervention and symmetry escapes it
+    # run_exp_small --lr=1e-1 --n_epochs=4 --rank=8 --num_layers=15
+    # run_exp_small --lr=1e-2 --n_epochs=8 --rank=8 --num_layers=15
 
     # #uv run python nbs/train.py . --model_name=unsloth/Llama-3.1-8B-Instruct --loss_type=tanh_sym_(±)  --batch-size=32
     # # uv run python nbs/train.py gemma12b-80gb --loss_type=tanh_sym_(±)  --batch-size=32
@@ -74,11 +85,12 @@ run:
 
     # lora and dopra baseline
     # uv run python nbs/train.py q4b-80gb --adapter_type lora --loss_type=tanh_sym 
-    run_exp --adapter_type lora --loss_type=tanh_sym # lora is too uncontrained
-    run_exp --adapter_type dora --loss_type=focal_balanced
-    run_exp --adapter_type dora --loss_type=logsig_weak_up
-    run_exp --adapter_type dora --loss_type=raw
-    run_exp --adapter_type dora --loss_type=raw
+    run_exp_small --adapter_type lora --loss_type=tanh_sym # lora is too uncontrained
+    run_exp_small --adapter_type dora --loss_type=focal_balanced
+    run_exp_small --adapter_type dora --loss_type=logsig_weak_up
+    run_exp_small --adapter_type dora --loss_type=raw
+
+
 
     # TODO sweep target layers
 
@@ -96,7 +108,7 @@ run:
 
     # === Learning rate ablations ===
     echo "### Learning rate ablations ###"
-    run_exp_small --lr=1e-0
+    # run_exp_small --lr=1e-0
     run_exp_small --lr=1e-1
     run_exp_small --lr=1e-2
     run_exp_small --lr=1e-3
@@ -105,11 +117,11 @@ run:
 
     # === Weight decay ablations ===
     echo "### Weight decay ablations ###"
-    run_exp --weight_decay=0.001
-    run_exp --weight_decay=0.01
-    run_exp --weight_decay=0.1  # default
-    run_exp --weight_decay=1.0
-    run_exp --weight_decay=10.0
+    run_exp_small --weight_decay=0.001
+    run_exp_small --weight_decay=0.01
+    run_exp_small --weight_decay=0.1  # default
+    run_exp_small --weight_decay=1.0
+    run_exp_small --weight_decay=10.0
 
 
     # Try differen't models
@@ -124,55 +136,47 @@ run:
 
     # === Layer selection ablations ===
     echo "### Layer selection ablations ###"
-    run_exp --layers k_proj q_proj v_proj gate_proj up_proj --rank=16
-    run_exp --layers o_proj down_proj
-    run_exp --layers gate_proj up_proj  # default
-    run_exp --layers gate_proj down_proj
-    run_exp --layers o_proj up_proj
-    run_exp --layers gate_proj up_proj down_proj o_proj --rank=16
-    run_exp --layers k_proj q_proj v_proj --rank=16
+    run_exp_small --layers k_proj q_proj v_proj gate_proj up_proj --rank=16
+    run_exp_small --layers o_proj down_proj
+    run_exp_small --layers gate_proj up_proj  # default
+    run_exp_small --layers gate_proj down_proj
+    run_exp_small --layers o_proj up_proj
+    run_exp_small --layers gate_proj up_proj down_proj o_proj --rank=16
+    run_exp_small --layers k_proj q_proj v_proj --rank=16
     # all pre compute
 
 
     # === Rank ablations ===
     echo "### Rank ablations ###"
-    run_exp --rank=8  --num_layers=30
-    run_exp --rank=24  --num_layers=15  # default
-    run_exp --rank=64  --num_layers=5
-    run_exp --rank=256  --num_layers=3
-    run_exp --rank=512  --num_layers=1
+    run_exp_small --rank=8  --num_layers=30
+    run_exp_small --rank=24  --num_layers=15  # default
+    run_exp_small --rank=64  --num_layers=5
+    run_exp_small --rank=256  --num_layers=3
+    run_exp_small --rank=512  --num_layers=1
     
     
     # === Number of layers ablations ===
     echo "### Number of layers ablations ###"
-    run_exp --num_layers=1
-    run_exp --num_layers=3
-    run_exp --num_layers=5  # default
-    run_exp --num_layers=8
-    run_exp --num_layers=12
+    run_exp_small --num_layers=1
+    run_exp_small --num_layers=3
+    run_exp_small --num_layers=5  # default
+    run_exp_small --num_layers=8
+    run_exp_small --num_layers=12
     
     # === Layer range ablations ===
     echo "### Layer range ablations ###"
-    run_exp --perc_start=0.1
-    run_exp --perc_start=0.3  # default
-    run_exp --perc_start=0.5
-    run_exp --end_layers=-1
-    run_exp --end_layers=-5
-    
-    # === Loss layer ablations ===
-    echo "### Loss layer ablations ###"
-    run_exp --loss_layers=-1  # last layer
-    run_exp --loss_layers=-3  # default: 3rd from last
-    run_exp --loss_layers=-5  # 5th from last
-    run_exp --loss_layers=-10  # 10th from last
-    run_exp --loss_layers=-3,-5  # multiple layers
-    run_exp --loss_layers=-1,-3,-5  # multiple layers
+    run_exp_small --perc_start=0.1
+    run_exp_small --perc_start=0.3  # default
+    run_exp_small --perc_start=0.5
+    run_exp_small --end_layers=-1
+    run_exp_small --end_layers=-5
+
 
     # === Rotation ablations ===
     echo "### Rotation ablations ###"
-    run_exp --ipissa_rotate_u --no_ipissa_rotate_v
-    run_exp --ipissa_rotate_u 
-    run_exp --no_ipissa_rotate_v
+    run_exp_small --ipissa_rotate_u --no_ipissa_rotate_v
+    run_exp_small --ipissa_rotate_u 
+    run_exp_small --no_ipissa_rotate_v
     # run_exp --no_ipissa_rotate_u --no_ipissa_rotate_v --scale_s=none  # minimal adapter
 
     # === Scale mechanism ablations ===

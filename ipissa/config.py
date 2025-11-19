@@ -73,7 +73,7 @@ class TrainingConfig:
 
     # layers to target for adapters
     layers: List[str] = ["down_proj", "k_proj", "v_proj", "q_proj"]
-    num_layers: int = 3  # intervene on this many layers, spaced evenly
+    num_layers: int = 8  # intervene on this many layers, spaced evenly
     perc_start: float = 0.3  # ignore the first X% of layers
     end_layers: int = -3  # ignore the last X layers
     
@@ -83,8 +83,8 @@ class TrainingConfig:
     # Training params
     batch_size: int = 8
     n_epochs: int = 30
-    lr: float = 6e-4
-    weight_decay: float = 0.1
+    lr: float = 2e-3
+    weight_decay: float = 0.01
     log_n: int = 10  # log this many times per training
     effective_batch_size: int = 32
     quick: bool = False

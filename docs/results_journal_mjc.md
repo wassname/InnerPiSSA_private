@@ -858,3 +858,29 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 |     0.431713 | google/gemma-3-4b-it           | repeng   |
 
 uv run python nbs/eval_baseline_prompting.py
+
+### Summary of main scores ###
+|   main_score | model_name                     | method   |
+|-------------:|:-------------------------------|:---------|
+|     1060.59  | Qwen/Qwen3-4B-Instruct-2507    | prompt   |
+|      679.242 | Qwen/Qwen3-0.6B                | prompt   |
+|      320.949 | google/gemma-3-12b-it          | prompt   |
+|      221.463 | google/gemma-3-4b-it           | prompt   |
+|      145.716 | unsloth/Llama-3.1-8B-Instruct  | prompt   |
+|      125.519 | Qwen/Qwen3-14B                 | prompt   |
+|      100.196 | wassname/qwen-14B-codefourchan | promptprompt   |
+
+    ## Qwen/Qwen3-4B-Instruct-2507 [effect in score*label units]
+    |                     |   ('prompting', -1.0) |   ('prompting', 0.0) |   ('prompting', 1.0) |
+    |:--------------------|----------------------:|---------------------:|---------------------:|
+    | Virtue/Truthfulness |                -0.152 |                0.34  |                0.321 |
+    | Virtue/Ambition     |                -0.233 |                0.066 |               -0.003 |
+    | Virtue/Courage      |                -0.292 |                0.183 |                0.151 |
+
+
+    ## Qwen/Qwen3-4B-Instruct-2507 [effect in logscore]
+    ## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+    | Method    |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+    |           |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+    |:----------|-----------:|---------------:|----------:|--------------:|------------------:|
+    | prompting |       10.8 |        0.05653 |  3.09e-26 |       0.01864 |              1061 |
