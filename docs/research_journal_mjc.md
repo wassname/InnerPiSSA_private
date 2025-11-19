@@ -224,6 +224,7 @@ Run layer search
 - [x] oh no saddle points  are the reason I need fewllayers - added monotonic loss, it works but takes bit longer to train
 - [ ] why is my 0 diff from baseline!
 - [ ] run layer ablation
-- [ ] make explicity constrain ablation flags
-- [ ] have a model address FIXME and TODO
-- [ ] clean up that info
+  - [x] support
+- [x] make explicity constrain ablation flags
+- [x] have a model address FIXME and TODO
+- [x] clean up that info logging

@@ -5,7 +5,7 @@ Example usage:
     python nbs/train.py --batch_size 14 --n_epochs 30
     python nbs/train.py --quick --use_wandb
 """
-
+from tabulate import tabulate
 import enum
 import gc
 import json
@@ -659,27 +659,87 @@ def compute_batch_loss(
     return total_loss, infos
 
 
-def extract_coef_metrics(infos):
-    """Extract per-coefficient aggregated metrics before step-level averaging.
+def extract_coef_metrics(infos, log_table=False, group_by='coef'):
+    """Extract aggregated metrics as dataframe and dict with flexible grouping.
     
-    Returns dict like: {'loss_proj_coef+1': float, 'loss_coh_coef+1': float, ...}
+    Args:
+        infos: List of info dicts from compute_batch_loss
+        log_table: If True, log the table directly (for inline logging)
+        group_by: 'coef' for per-coefficient, 'layer' for per-layer breakdown
+    
+    Returns:
+        (df_display, metrics_dict) where:
+        - df_display: DataFrame with group_by as index and short column names for display
+        - metrics_dict: Flattened dict like {'loss_proj_coef+1_0': float, ...}
     """
     df_infos = pd.DataFrame(infos)
     
-    # Aggregate by coefficient (average across layers)
-    df_by_coef = df_infos.groupby(["coef"]).agg({
+    # Extract layer number for layer-level grouping
+    if group_by == 'layer':
+        df_infos['layer_num'] = df_infos['layer'].str.extract(r'\.(\d+)\.').astype(int)
+        group_cols = ['layer_num', 'coef']
+    else:
+        group_cols = ['coef']
+    
+    # Aggregate by specified grouping (average across layers if group_by='coef')
+    df_grouped = df_infos.groupby(group_cols).agg({
         col: "mean" for col in df_infos.columns 
-        if pd.api.types.is_numeric_dtype(df_infos[col].dtype) and col not in ["step", "coef"]
+        if pd.api.types.is_numeric_dtype(df_infos[col].dtype) and col not in ["step", "coef", "layer", "layer_num"]
     })
     
-    # Flatten to dict with descriptive keys
-    metrics = {}
-    for coef in df_by_coef.index:
-        suffix = f"coef{coef:+.1f}".replace(".", "_")  # +1.0 -> coef+1_0
-        for col in df_by_coef.columns:
-            metrics[f"{col}_{suffix}"] = df_by_coef.loc[coef, col]
+    # Rename columns to be concise for display
+    col_map = {
+        'loss_proj': 'proj',
+        'loss_coh': 'coh', 
+        'loss_total': 'tot',
+        'delta_logp_change': 'Δlp',
+        'coh_weight_pos': 'w+',
+        'coh_weight_neg': 'w-',
+        'loss_monotonic': 'mono',
+        'mono_frac_violated': 'viol%',
+        'mono_violation_pos': 'vio+',
+        'mono_violation_neg': 'vio-',
+        'logp_degradation': 'degr',
+        'prob_ratio': 'p_rat',
+        'proj_pi': 'π_prj',
+        'proj_ref': 'ref_prj',
+        'proj_diff': 'Δprj',
+    }
+    df_grouped2 = df_grouped.rename(columns=col_map)
     
-    return metrics
+    # Keep only key metrics for display
+    key_cols = ['proj', 'coh', 'tot', 'Δlp', 'w+', 'w-', 'mono', 'viol%']
+    df_display = df_grouped2[[c for c in key_cols if c in df_grouped2.columns]]
+    
+    # For multi-level index (layer grouping), pivot for compact display
+    if group_by == 'layer':
+        # Pivot so layers are columns, coeffs are rows (more compact)
+        df_display = df_display.unstack(level=0)
+        # Flatten column names: 'proj_29' instead of ('proj', 29)
+        df_display.columns = [f"{metric}_L{layer}" for metric, layer in df_display.columns]
+    
+    # Optional: log table inline
+    if log_table:
+        title = f"Per-{group_by} metrics" if group_by == 'coef' else f"Per-layer metrics"
+        table = tabulate(df_display, tablefmt='pipe', headers='keys', floatfmt='+.2f')
+        logger.info(f"\n{title}:\n{table}")
+    
+    # Flatten to dict with descriptive keys for wandb logging
+    metrics = {}
+    if group_by == 'layer':
+        # Multi-level: include both layer and coef in key
+        for (layer_num, coef) in df_grouped.index:
+            suffix = f"L{layer_num}_coef{coef:+.1f}".replace(".", "_")
+            for col in df_grouped.columns:
+                metrics[f"{col}_{suffix}"] = df_grouped.loc[(layer_num, coef), col]
+    else:
+        # Single-level: only coef in key
+        for coef in df_grouped.index:
+            suffix = f"coef{coef:+.1f}".replace(".", "_")
+            for col in df_grouped.columns:
+                metrics[f"{col}_{suffix}"] = df_grouped.loc[coef, col]
+    
+    return df_display, metrics
 
 
 def process_infos(infos, by_layer=True, by_coef=True, by_layer_num=True, verbose=False):
@@ -755,10 +815,12 @@ def compute_validation_loss(
     avg_total = total_loss / n_batches if n_batches > 0 else float("inf")
     avg_components = {k: np.mean(v) for k, v in loss_components.items()}
     
-    # Extract per-coefficient breakdown
-    coef_metrics = extract_coef_metrics(all_infos) if all_infos else {}
+    # Extract per-coefficient breakdown (log validation table inline)
+    df_coef, coef_metrics = extract_coef_metrics(
+        all_infos, log_table=True  # Log validation tables
+    ) if all_infos else (None, {})
 
-    return avg_total, avg_components, coef_metrics
+    return avg_total, avg_components, df_coef, coef_metrics
 
 
 def train_epoch(
@@ -819,7 +881,14 @@ def train_epoch(
         info = df_hist.iloc[-1].to_dict()
         
         # Extract per-coefficient breakdown for detailed logging
-        coef_metrics = extract_coef_metrics(infos[-len(loss_layers)*2:])
+        df_coef, coef_metrics = extract_coef_metrics(
+            infos[-len(loss_layers)*2:], 
+            log_table=(step % log_n_steps == 0)  # Log table at same frequency as step logging
+        )
+        
+        # Optional: log per-layer metrics less frequently for debugging
+        if step % (log_n_steps * 5) == 0 and step > 0 and len(loss_layers) > 1:
+            extract_coef_metrics(infos[-len(loss_layers)*2:], log_table=True, group_by='layer')
         
         if wandb_run is not None:
             # Log step-aggregated metrics
@@ -833,49 +902,14 @@ def train_epoch(
             log_str = " | ".join([f"{k}={v:+7.3g}" for k, v in info.items()])
             logger.info(f"Step {step}: {log_str}")
             
-            # Compact coef vs proj/coh summary table
-            if coef_metrics:
-                # Extract key metrics for +1 and -1 coefficients
-                proj_p1 = coef_metrics.get('loss_proj_coef+1_0', np.nan)
-                coh_p1 = coef_metrics.get('loss_coh_coef+1_0', np.nan)
-                proj_n1 = coef_metrics.get('loss_proj_coef-1_0', np.nan)
-                coh_n1 = coef_metrics.get('loss_coh_coef-1_0', np.nan)
-                
-                # Difficulty balance metrics (adaptive coherence only)
-                if config.adaptive_relaxation:
-                    cohw_p1 = coef_metrics.get('coh_weight_coef+1_0', np.nan)
-                    cohw_n1 = coef_metrics.get('coh_weight_coef-1_0', np.nan)
-                    mono_loss = coef_metrics.get('loss_monotonic_coef+1_0', coef_metrics.get('loss_monotonic_coef-1_0', np.nan))
-                    
-                    # Extract delta_logp_change for monotonic ordering verification
-                    dlp_p1 = coef_metrics.get('delta_logp_change_coef+1_0', np.nan)
-                    dlp_n1 = coef_metrics.get('delta_logp_change_coef-1_0', np.nan)
-
-                    logger.info(
-                        f"\tCoef breakdown: \n"
-                        f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, cohw={cohw_p1:5.2f}, Δlp={dlp_p1:+6.3f}] | \n"
-                        f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, cohw={cohw_n1:5.2f}, Δlp={dlp_n1:+6.3f}] | \n"
-                        f"\t\t[mono_loss={mono_loss:+7.3f}]"
-                    )
-                else:
-                    mono_loss = coef_metrics.get('loss_monotonic_coef+1_0', coef_metrics.get('loss_monotonic_coef-1_0', 0.0))
-                    dlp_p1 = coef_metrics.get('delta_logp_change_coef+1_0', np.nan)
-                    dlp_n1 = coef_metrics.get('delta_logp_change_coef-1_0', np.nan)
-                    
-                    logger.info(
-                        f"\tCoef breakdown: \n"
-                        f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, Δlp={dlp_p1:+6.3f}] | \n"
-                        f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, Δlp={dlp_n1:+6.3f}] | \n"
-                        f"\t\t[mono_loss={mono_loss:+7.3f}]"
-                    )
-
+            # Log per-coefficient table inline (already logged in extract_coef_metrics)
             # Validation check (less frequent than logging)
             if (
                 val_dataloader is not None
                 and step % (log_n_steps * 2) == 0
                 and step > 0
             ):
-                val_loss, val_components, val_coef_metrics = compute_validation_loss(
+                val_loss, val_components, val_df_coef, val_coef_metrics = compute_validation_loss(
                     model, val_dataloader, cv_dirs_loss, loss_layers, Uw_full, config
                 )
 
@@ -885,28 +919,7 @@ def train_epoch(
                 )
                 logger.info(f"Validation loss: {val_loss:.4f} | {val_log_str}")
                 
-                # Log per-coefficient validation breakdown
-                if val_coef_metrics:
-                    proj_p1 = val_coef_metrics.get('loss_proj_coef+1_0', np.nan)
-                    coh_p1 = val_coef_metrics.get('loss_coh_coef+1_0', np.nan)
-                    proj_n1 = val_coef_metrics.get('loss_proj_coef-1_0', np.nan)
-                    coh_n1 = val_coef_metrics.get('loss_coh_coef-1_0', np.nan)
-                    
-                    # Difficulty balance metrics (adaptive coherence only)
-                    if config.adaptive_relaxation:
-                        cohw_p1 = val_coef_metrics.get('coh_weight_coef+1_0', np.nan)
-                        cohw_n1 = val_coef_metrics.get('coh_weight_coef-1_0', np.nan)
-                        logger.info(
-                            f" \tVal coef breakdown: \n"
-                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}, cohw={cohw_p1:5.2f}] | \n"
-                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}, cohw={cohw_n1:5.2f}]\n"
-                        )
-                    else:
-                        logger.info(
-                            f"\tVal coef breakdown: \n"
-                            f"\t\t[+1: proj={proj_p1:+7.3f}, coh={coh_p1:+7.3f}] | \n"
-                            f"\t\t[-1: proj={proj_n1:+7.3f}, coh={coh_n1:+7.3f}]\n"
-                        )
+                # Validation metrics already logged inline via extract_coef_metrics
 
                 if wandb_run is not None:
                     val_metrics = {"val/loss_total": val_loss}

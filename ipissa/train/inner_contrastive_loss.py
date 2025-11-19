@@ -589,6 +589,7 @@ def monotonic_ordering_loss(
         "frac_violated": ((violation_neg > 0) | (violation_pos > 0)).float().mean().item(),
         "violation_pos": violation_pos.mean().item(),
         "violation_neg": violation_neg.mean().item(),
+        "monotonic_direction": 1 if (violation_forward.mean() < violation_backward.mean()) else -1
     }
     
     return loss, info

@@ -118,18 +118,18 @@ class TrainingConfig:
     )
 
     last_n_tokens: int = 4
-    # loss constraints
-    ## coherenbce
-    coherence_threshold: float = 1.5
-    boundary_order: int = 1
-    ## adaptive
+    
+    ## coherence constraint
+    coherence_threshold: float = 0.5
+    boundary_order: int = 2
     constr_coherence: bool = True  # Enable coherence constraint
+    ## adaptive coherence relaxation
     adaptive_relaxation: bool = True  # Enable difficulty-based coherence relaxation
     coeff_diff_temperature: float = 2  # higher = softer, lower = sharper in how we relax the coherence constrain on the harder side, and riase it on the easier coeff
     ## monotonic constraint
     constr_monotonic: bool = True  # Enable monotonicity constraint
-    monotonic_margin: float = 0.  # margin for monotonicity loss
-    monotonic_scaling: float = 100.0  # scaling factor for monotonicity loss
+    monotonic_margin: float = 0.1  # margin for monotonicity loss, minimum monotonic seperation
+    monotonic_scaling: float = 100.0  # scaling factor for monotonicity loss, should be a large number for a hard cliff. This is conflict free when satisfied.
 
 
     
