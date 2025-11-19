@@ -1492,17 +1492,11 @@ def main(config: TrainingConfig):
     )
 
     # Auto-flip adapter sign if needed
-    flipped = auto_flip_adapter_sign(model, tokenizer, choice_ids, config.dataset_name)
-    if flipped:
-        logger.info("Adapter sign flipped successfully.")
-        # Re-log examples after flip
-        log_example_outputs(
-            model,
-            tokenizer,
-            choice_ids,
-            [-1, 0, 1],
-            "AFTER AUTO-FLIP - Example outputs at different steering coefficients:",
-        )
+    try:
+        flipped = auto_flip_adapter_sign(model, tokenizer, choice_ids, config.dataset_name)
+    except ValueError as e:
+        logger.error(f"Auto-flip failed: {e}")
+        flipped = False
 
     # Evaluation
     df_res_wlabels, df_res_pv = evaluate_model(

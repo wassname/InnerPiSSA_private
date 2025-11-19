@@ -131,7 +131,7 @@ for run_data in runs_data:
     results.append(result)
 
 
-print('run_data', json.dumps(run_data, indent=2))
+# print('run_data', json.dumps(run_data, indent=2))
 
 df = pd.DataFrame(results)
 df = df.sort_values(['model_name', 'created_at'], ascending=False)
@@ -154,59 +154,16 @@ print(f"\nSaved {len(df)} runs to {output_file}")
 summary_cols = ['created_at', 'model_name', 'name', 'args', 'main_metric', 'effect', 'side_effects', 'degradation', 
                 'lr', 'rank', 'num_layers', 'loss_type', 'scale_s']
 df_summary = df[summary_cols].dropna(subset=['main_metric'])
-# TODO round numeric cols to .4g
-# TODO filter to last major code change
 summary_file = output_dir / 'outputs' / 'wandb_summary.csv'
 df_summary.to_csv(summary_file, index=False)
 print(f"Saved summary to {summary_file}")
 # print(df_summary)
 from tabulate import tabulate
 print(tabulate(df_summary, headers='keys', tablefmt='pipe', floatfmt=".4g"))
-print("""Remember only models 4B params or more matter. The code has changes at time has gone by so weight recent ones more. I'm looking for which configuration works across large models.""")
-print("""compare to output when running 
-uv run python nbs/eval_baseline_repeng.py | tail -n 20
-uv run python nbs/eval_baseline_prompting.py | tail -n 20
-""")
-print("""old arg remapping' \
-'# Layer selection
-layers → modules
-num_layers → n_depths
-perc_start → depth_start
-end_layers → depth_end
-loss_layers → loss_depths
 
-# Training
-batch_size → bs
-weight_decay → wd
-log_n → n_logs
-
-# Adapter
-rank → r
-ipissa_rotate_u → rot_u
-ipissa_rotate_v → rot_v
-
-# Dataset
-dataset_max_samples → max_samples
-last_n_tokens → n_last_tokens
-
-# Constraints
-constr_coherence → coh
-coherence_threshold → coh_thresh
-coherence_scalar → coh_weight
-adaptive_relaxation → coh_adaptive
-coeff_diff_temperature → coh_temp
-constr_monotonic → mono
-monotonic_scaling → mono_weight
-
-# Eval
-eval_max_n_dilemmas → eval_max_dilemmas
-eval_dataset_max_token_length → eval_max_tokens
-""")
-
-# TODO print out `uv run python nbs/train.py -h`
-import tyro
-config = tyro.cli(TrainingConfig)
-print(f"CLI {config}")
+import subprocess
+help_text = subprocess.run(['uv', 'run', 'python', 'nbs/train.py', '.', '-h'], capture_output=True, text=True).stdout
+print(f"Train.py help:\n{help_text}")
 
 try:
     f = proj_root / "outputs" / 'prompting_results.csv'
@@ -245,3 +202,39 @@ except Exception as e:
 #     # TODO log main_score to csv
 # df_repeng
 # %%
+print("""old arg remapping' \
+'# Layer selection
+layers → modules
+num_layers → n_depths
+perc_start → depth_start
+end_layers → depth_end
+loss_layers → loss_depths
+
+# Training
+batch_size → bs
+weight_decay → wd
+log_n → n_logs
+
+# Adapter
+rank → r
+ipissa_rotate_u → rot_u
+ipissa_rotate_v → rot_v
+
+# Dataset
+dataset_max_samples → max_samples
+last_n_tokens → n_last_tokens
+
+# Constraints
+constr_coherence → coh
+coherence_threshold → coh_thresh
+coherence_scalar → coh_weight
+adaptive_relaxation → coh_adaptive
+coeff_diff_temperature → coh_temp
+constr_monotonic → mono
+monotonic_scaling → mono_weight
+
+# Eval
+eval_max_n_dilemmas → eval_max_dilemmas
+eval_dataset_max_token_length → eval_max_tokens
+""")
+print("""Remember only models 4B params or more matter. The code has changes at time has gone by so weight recent ones more. I'm looking for which configuration works across large models.""")
