@@ -120,7 +120,7 @@ def fine_grained_sweep(model, tokenizer, config, dirs_pca, coeffs, method_name):
     # Load eval dataset
     dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
         tokenizer, max_tokens=config.eval_dataset_max_token_length,
-        eval_max_n_dilemmas=config.eval_max_n_dilemmas
+        eval_max_n_dilemmas=config.eval_max_dilemmas
     )
     df_labels = load_labels(dataset_dd)
 
@@ -135,7 +135,7 @@ def fine_grained_sweep(model, tokenizer, config, dirs_pca, coeffs, method_name):
         do_sample=False,
     )
 
-    eval_batch_size = config.eval_batch_size or config.batch_size // 2
+    eval_batch_size = config.eval_batch_size or config.bs // 2
 
     results = []
     baseline = None

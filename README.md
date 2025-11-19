@@ -32,8 +32,6 @@ OR
 OR
 
 
-## Abstract (Reframed)
-
 > RLHF aligns model outputs but is vulnerable to reward hacking, specification gaming, and deceptive alignment. We introduce **InnerPiSSA**, which performs **inner alignment** by learning to steer hidden states via gradient-based optimization. Unlike output-level methods (RLHF, prompting) that fail catastrophically when steering against learned behaviors (prompting degrades to -10.84 truthfulness at anti-RLHF coefficients), InnerPiSSA maintains coherent control (-0.70 truthfulness) by operating on internal reasoning trajectories. We optimize a Representation Preference Optimization (ReprPO) loss in SVD-transformed space, learning directions via backpropagation rather than activation arithmetic. On honesty→morality transfer, InnerPiSSA achieves 1730% T-statistic gain versus 463% for PCA and 690% for random baselines, validating that gradient-based discovery in the model's native transformation basis enables robust steering orthogonal to RLHF. Our results suggest inner alignment as a complementary paradigm to output-level alignment, enabling "alignment debugging" where output methods fail.
 
 

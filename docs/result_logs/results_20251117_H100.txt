@@ -21,7 +21,7 @@ Traceback (most recent call last):
   File "/workspace/InnerPiSSA_private/nbs/eval_baseline_wassname_Ssteer_baseline.py", line 329, in <module>
     main(config)
   File "/workspace/InnerPiSSA_private/nbs/eval_baseline_wassname_Ssteer_baseline.py", line 105, in main
-    config.eval_batch_size = max(32, config.batch_size)
+    config.eval_batch_size = max(32, config.bs)
     ^^^^^^^^^^^^^^^^^^^^^^
 AttributeError: property 'eval_batch_size' of 'TrainingConfig' object has no setter
 + uv run python nbs/eval_baseline_repeng.py

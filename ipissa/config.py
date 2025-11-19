@@ -72,13 +72,17 @@ class TrainingConfig:
     quantization_type: Literal["4bit", "8bit", "none"] = "none"
 
     # layers to target for adapters
-    modules: List[str] = ["down_proj", "k_proj", "v_proj", "q_proj"] # for adapter and loss
+    # ["down_proj", o_proj"] - output to residual stream
+    # ['gate_proj', up_proj'] - mlp up proj
+    # ['q_proj', 'k_proj', 'v_proj'] - attention projections, attn up_proj
+    modules: List[str] = ["o_proj", "down_proj"] # for adapter and loss
+
     n_depths: int = 8  # intervene on this many layers, spaced evenly
     depth_start: float = 0.3  # ignore the first X% of layers
     depth_end: int = -3  # ignore the last X layers
     
     # loss computation layers (negative = from end, e.g. -3 = 3rd-to-last layer)
-    loss_depths: List[int] = [-3]  # which layer(s) to compute loss on
+    loss_depths: List[int] = [-3]  # which layer(s) to compute loss on, take a lot of ram
 
     # Training params
     bs: int = 8
@@ -123,14 +127,14 @@ class TrainingConfig:
     coh_thresh: float = 0.5 # Margin in nats, above which a steep penalty is applied
     # boundary_order: int = 2
     coh: bool = True  # Enable coherence constraint
-    coh_weight: float = 20.0  # scaling factor for coherence loss, should be a large number for a hard cliff
+    coh_weight: float = 100.0  # scaling factor for coherence loss, should be a large number for a hard cliff
     ## adaptive coherence relaxation
     coh_adaptive: bool = True  # Enable difficulty-based coherence relaxation
     coh_temp: float = 2  # higher = softer, lower = sharper in how we relax the coherence constrain on the harder side, and riase it on the easier coeff
     ## monotonic constraint
     mono: bool = True  # Enable monotonicity constraint
     mono_margin: float = 0.1  # margin for monotonicity loss, minimum monotonic seperation
-    mono_weight: float = 20.0  # scaling factor for monotonicity loss, should be a large number for a hard cliff. This is conflict free when satisfied.
+    mono_weight: float = 100.0  # scaling factor for monotonicity loss, should be a large number for a hard cliff. This is conflict free when satisfied.
 
 
     

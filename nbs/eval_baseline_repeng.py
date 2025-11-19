@@ -65,12 +65,12 @@ def main(config):
     if config.quick:
         # layers 2
         _EVAL_BASELINE_MODELS = EVAL_BASELINE_MODELS[:1]
-        config.eval_max_n_dilemmas = 64
-        config.dataset_max_samples = 100
+        config.eval_max_dilemmas = 64
+        config.max_samples = 100
     else:
         _EVAL_BASELINE_MODELS = EVAL_BASELINE_MODELS
 
-    eval_batch_size = max(32, config.batch_size)
+    eval_batch_size = max(32, config.bs)
 
     results = []
 
@@ -116,7 +116,7 @@ def main(config):
         train_honest, train_dataset_pt, val_honest, val_dataset_pt = create_train_dataset(
             config,
             tokenizer,
-            max_size=config.dataset_max_samples
+            max_size=config.max_samples
         )
 
         logger.info(f"Created dataset with {len(train_honest)} pairs")
@@ -156,7 +156,7 @@ def main(config):
             tokenizer,
             instructions="",
             max_tokens=config.eval_dataset_max_token_length,
-            eval_max_n_dilemmas=config.eval_max_n_dilemmas,
+            eval_max_n_dilemmas=config.eval_max_dilemmas,
         )
         df_labels = load_labels(dataset_dd)
 

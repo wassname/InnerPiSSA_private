@@ -18,7 +18,7 @@ cache_dir.mkdir(parents=True, exist_ok=True)
 api = wandb.Api()
 project = "wassname/InnerPiSSA"
 
-last_major_code_change = '2025-11-19T12:00:00Z'
+last_major_code_change = '2025-11-19T00:08:00Z'
 
 # Find last cached run time
 last_run = last_major_code_change or "1970-01-01T00:00:00"

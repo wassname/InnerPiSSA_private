@@ -43,7 +43,7 @@ def main(config):
     # Config setup
     if config.quick:
         _EVAL_BASELINE_MODELS = EVAL_BASELINE_MODELS[:1]
-        config.eval_max_n_dilemmas = 64
+        config.eval_max_dilemmas = 64
     else:
         _EVAL_BASELINE_MODELS = EVAL_BASELINE_MODELS
 
@@ -107,7 +107,7 @@ def main(config):
                 tokenizer,
                 instructions=prompt,
                 max_tokens=config.eval_dataset_max_token_length + 32,  # for prompt tokens
-                eval_max_n_dilemmas=config.eval_max_n_dilemmas
+                eval_max_n_dilemmas=config.eval_max_dilemmas
             )
             df_labels = load_labels(dataset_dd)
 
@@ -116,7 +116,7 @@ def main(config):
                 dataset_dd_pt,
                 tokenizer,
                 choice_ids,
-                batch_size=max(32, config.batch_size),
+                batch_size=max(32, config.bs),
             )
             d['model_id'] = model_id
             d['prompt'] = prompt
@@ -148,7 +148,7 @@ def main(config):
         tokenizer,
         instructions="",
         max_tokens=config.eval_dataset_max_token_length + 32,  # for prompt tokens
-        eval_max_n_dilemmas=config.eval_max_n_dilemmas
+        eval_max_n_dilemmas=config.eval_max_dilemmas
     )
     df_labels = load_labels(dataset_dd)
     df_labeled = process_daily_dilemma_results(df_all, dataset_dd, df_labels)[0]

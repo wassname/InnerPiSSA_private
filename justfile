@@ -8,6 +8,11 @@ quick:
 default:
     uv run python nbs/train.py
 
+# Generate shell completions for the training script
+completions:
+    #!/bin/bash -ex
+    uv run python nbs/train.py .  --tyro-write-completion zsh ~/.zfunc/_01_functions_py
+
 # Full ablation suite
 run:
     #!/bin/bash -x
@@ -142,12 +147,14 @@ run:
     # === Layer selection ablations ===
     echo "### Layer selection ablations ###"
     run_exp_small --modules k_proj q_proj v_proj gate_proj up_proj --r=16
-    run_exp_small --modules o_proj down_proj
-    run_exp_small --modules gate_proj up_proj  # default
+    run_exp_small --modules o_proj down_proj # output to residual stream for atnn and mlp
+    run_exp_small --modules gate_proj up_proj  # mlp up proj
+    run_exp_small --modules k_proj q_proj v_proj --r=16 # attn up proj
+    run_exp_small --modules k_proj q_proj v_proj gate_proj up_proj --r=16 # all up proj
+
     run_exp_small --modules gate_proj down_proj
     run_exp_small --modules o_proj up_proj
     run_exp_small --modules gate_proj up_proj down_proj o_proj --r=16
-    run_exp_small --modules k_proj q_proj v_proj --r=16
     # all pre compute
 
 

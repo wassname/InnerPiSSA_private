@@ -474,7 +474,7 @@ def contrastive_steering_loss_with_ref(
     return {
         "loss_proj": loss_proj,
         "loss_coh": loss_coh,
-        "loss_total": loss,  # For backward compatibility
+        # "loss_total": loss,  # For backward compatibility
         "logp_degradation": avg_logp_deg,  # nats (positive = worse)
         "prob_ratio": torch.exp(-avg_logp_deg),  # p_pi/p_ref
         "proj_pi": proj_pi_agg.mean(),
@@ -636,7 +636,9 @@ def combine_dual_coef_losses(
         
     Returns:
         total_loss: Combined scalar loss for backprop
-        meta_info: Dict with coh_weight_{pos,neg}, loss_monotonic (if applicable)
+        meta_pos: Dict with metrics for coef=+1 (cw, mono_violation)
+        meta_neg: Dict with metrics for coef=-1 (cw, mono_violation)
+        meta_shared: Dict with global metrics (loss_monotonic, mono_frac_violated)
     """
     if not adaptive_relaxation:
         # Standard: just sum everything
@@ -645,12 +647,11 @@ def combine_dual_coef_losses(
             loss_neg["loss_proj"] + torch.relu(loss_neg["loss_coh"])
         ).mean()
         
-        meta_info = {
-            "coh_weight_pos": 1.0,
-            "coh_weight_neg": 1.0,
-        }
+        meta_pos = {"cw": 1.0}
+        meta_neg = {"cw": 1.0}
+        meta_shared = {}
         
-        return total, meta_info
+        return total, meta_pos, meta_neg, meta_shared
     
     # Adaptive: reweight coherence by difficulty
     # proj_diff interpretation:
@@ -680,13 +681,13 @@ def combine_dual_coef_losses(
         loss_neg["loss_proj"] + coh_weight_neg * loss_neg["loss_coh"]
     ).mean()
     
-    meta_info = {
-        "coh_weight_pos": coh_weight_pos.item(),
-        "coh_weight_neg": coh_weight_neg.item(),
-    }
+    # Build per-coefficient metadata dicts
+    meta_pos = {"cw": coh_weight_pos.item()}
+    meta_neg = {"cw": coh_weight_neg.item()}
+    meta_shared = {}  # Metrics that don't belong to either coefficient
     
     # Optional: Add monotonic ordering constraint
-    if enable_monotonic is not None:
+    if enable_monotonic:
         delta_logp_neg = loss_neg["delta_logp_change"]
         delta_logp_zero = torch.tensor(0.0, device=delta_logp_neg.device)
         delta_logp_pos = loss_pos["delta_logp_change"]
@@ -697,16 +698,21 @@ def combine_dual_coef_losses(
         )
         
         total = total + loss_monotonic
-        meta_info["loss_monotonic"] = loss_monotonic.item()
-        meta_info["mono_frac_violated"] = mono_info["frac_violated"]
-        meta_info["mono_violation_pos"] = mono_info["violation_pos"]
-        meta_info["mono_violation_neg"] = mono_info["violation_neg"]
+        
+        # Monotonic metrics: shared loss value, per-direction violations
+        meta_shared["loss_monotonic"] = loss_monotonic.item()
+        meta_shared["mono_frac_violated"] = mono_info["frac_violated"]
+        meta_pos["mono_violation"] = mono_info["violation_pos"]
+        meta_neg["mono_violation"] = mono_info["violation_neg"]
     else:
-        meta_info["loss_monotonic"] = 0.0
-        meta_info["mono_frac_violated"] = 0.0
-        meta_info["mono_violation_pos"] = 0.0
-        meta_info["mono_violation_neg"] = 0.0
+        # Set to 0 instead of None to prevent NaN in aggregation
+        meta_shared["loss_monotonic"] = 0.0
+        meta_shared["mono_frac_violated"] = 0.0
+        meta_pos["mono_violation"] = 0.0
+        meta_neg["mono_violation"] = 0.0
     
-    return total, meta_info
+    meta_shared['loss_total'] = total.item()
+    
+    return total, meta_pos, meta_neg, meta_shared
 
 

@@ -396,7 +396,7 @@ def train_steer_vector(
     with torch.no_grad(), torch.amp.autocast("cuda", dtype=torch.bfloat16):
         train_strs = [s for ex in honest_dataset for s in (ex.positive, ex.negative)]
         last_act, logprobs = _collect_activations_only(
-            model, tokenizer, train_strs, loss_layers, batch_size=config.batch_size//2
+            model, tokenizer, train_strs, loss_layers, batch_size=config.bs//2
         )
 
     # For InnerPiSSA: Extract S-space directions using SVD projection
@@ -621,13 +621,14 @@ def compute_batch_loss(
         loss_results[coef]["loss_coh"] = sum(
             loss_results_per_layer[coef][layer]["loss_coh"] for layer in loss_layers
         ) / n_layers
+        # Note: loss_total here is pre-meta-loss, monotonic will be added in combine_dual_coef_losses
         loss_results[coef]["loss_total"] = (
             loss_results[coef]["loss_proj"] + loss_results[coef]["loss_coh"]
         )
 
     # Combine losses using meta-loss function
     
-    total_loss, meta_info = combine_dual_coef_losses(
+    total_loss, meta_pos, meta_neg, meta_shared = combine_dual_coef_losses(
         loss_pos=loss_results[+1.0],
         loss_neg=loss_results[-1.0],
         adaptive_relaxation=config.coh_adaptive,
@@ -638,27 +639,32 @@ def compute_batch_loss(
         enable_monotonic=config.mono,
     )
 
-    # Flatten info for logging
-    for coef in [-1.0, 1.0]:
-        # Start with loss results, convert tensors to scalars
-        info = {}
-        for k, v in loss_results[coef].items():
-            if torch.is_tensor(v):
-                info[k] = v.mean().detach().cpu().item()
-            else:
-                info[k] = v
-        
-        # Add metadata
-        if scheduler is not None:
-            info["lr"] = scheduler.get_last_lr()[0]
-        info["coef"] = coef
-        info["layer"] = lk
-        info["step"] = step
-        
-        # Merge meta_info directly (no need for conditional logic)
-        info.update(meta_info)
-        
-        infos.append(info)
+    # Flatten info for logging - create entries for EACH layer AND coefficient combo
+    for coef, meta_coef in [(-1.0, meta_neg), (1.0, meta_pos)]:
+        for lk in loss_layers:
+            # Start with per-layer loss dict
+            info = {}
+            layer_loss = loss_results_per_layer[coef][lk]
+            for k, v in layer_loss.items():
+                if torch.is_tensor(v):
+                    info[k] = v.mean().detach().cpu().item()
+                else:
+                    info[k] = v
+            
+            # Add metadata
+            if scheduler is not None:
+                info["lr"] = scheduler.get_last_lr()[0]
+            info["coef"] = coef
+            info["layer"] = lk
+            info["step"] = step
+            
+            # Merge coefficient-specific metadata (cw, mono_violation)
+            info.update(meta_coef)
+            
+            # Add shared metadata to BOTH coefficients (prevents NaN in aggregation)
+            info.update(meta_shared)
+            
+            infos.append(info)
 
     return total_loss, infos
 
@@ -698,11 +704,9 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
         'loss_total': 'ℒtot',
         'loss_monotonic': 'ℒmono',
         'delta_logp_change': 'Δlp',
-        'coh_weight_pos': 'cw+',
-        'coh_weight_neg': 'cw-',
+        'cw': 'cw',  # Now per-coefficient
         'mono_frac_violated': 'mviol%',
-        'mono_violation_pos': 'mvio+',
-        'mono_violation_neg': 'mvio-',
+        'mono_violation': 'mvio',  # Per-coefficient violation magnitude
         'logp_degradation': 'degr',
         'prob_ratio': 'p_rat',
         'proj_pi': 'π_prj',
@@ -712,7 +716,10 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
     df_grouped2 = df_grouped.rename(columns=col_map)
     
     # Keep only key metrics for display
-    key_cols = ['ℒproj', 'ℒcoh', 'ℒtot', 'Δlp', 'cw+', 'cw-', 'ℒmono', 'mviol%']
+    if group_by == 'layer':
+        key_cols = ['ℒproj', 'Δlp', 'cw',]
+    else:
+        key_cols = ['ℒproj', 'ℒcoh', 'ℒmono', 'ℒtot', 'Δlp', 'cw', 'mviol%', 'mvio']
     df_display = df_grouped2[[c for c in key_cols if c in df_grouped2.columns]]
     
     # For multi-level index (layer grouping), pivot for compact display
@@ -886,7 +893,7 @@ def train_epoch(
         )
         
         # Optional: log per-layer metrics less frequently for debugging
-        if step % (log_n_steps * 5) == 0 and step > 0 and len(loss_layers) > 1:
+        if step % (log_n_steps * 2) == 0 and step > 0 and len(loss_layers) > 1:
             extract_coef_metrics(infos[-len(loss_layers)*2:], log_table=True, group_by='layer')
         
         if wandb_run is not None:
@@ -1324,7 +1331,7 @@ def main(config: TrainingConfig):
         config.n_epochs = 2
         config.effective_bs = config.bs
         # config.grad_accum_steps = 1
-        # config.dataset_max_samples = config.batch_size * 8
+        # config.max_samples = config.bs * 8
         config.eval_max_dilemmas = 64
 
     # Setup W&B if requested

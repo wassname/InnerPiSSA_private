@@ -87,6 +87,8 @@ def collect_S_steer_vec(model, honest_dataset, tokenizer, loss_layers, config):
             "delta_s": delta_s_steer,
             "V_scaled": V_scaled,  # V * sqrt(S)
         }
+
+    # I wonder how much delta_s_steer differs from S?
     cvec_Sw_steer = ControlVector(
         model_type=model.config.model_type, directions=Sw_dirs
     )
@@ -102,7 +104,7 @@ def collect_S_steer_vec(model, honest_dataset, tokenizer, loss_layers, config):
 
 def main(config):
     # Config
-    # config.eval_batch_size = max(32, config.batch_size)
+    # config.eval_batch_size = max(32, config.bs)
     # config = TrainingConfig(
     #     eval_batch_size=32,
     #     # dataset_max_samples=800,
@@ -111,8 +113,8 @@ def main(config):
     if config.quick:
         # layers 2
         _EVAL_BASELINE_MODELS = EVAL_BASELINE_MODELS[:1]
-        config.eval_max_n_dilemmas = 64
-        config.dataset_max_samples = 100
+        config.eval_max_dilemmas = 64
+        config.max_samples = 100
     else:
         _EVAL_BASELINE_MODELS = EVAL_BASELINE_MODELS
 
@@ -172,7 +174,7 @@ def main(config):
         train_honest, train_dataset_pt, val_honest, val_dataset_pt = create_train_dataset(
             config,
             tokenizer,
-            max_size=config.dataset_max_samples
+            max_size=config.max_samples
         )
 
         logger.info(f"Created dataset with {len(train_honest)} pairs")
@@ -221,7 +223,7 @@ def main(config):
             tokenizer,
             instructions="",
             max_tokens=config.eval_dataset_max_token_length,
-            eval_max_n_dilemmas=config.eval_max_n_dilemmas
+            eval_max_n_dilemmas=config.eval_max_dilemmas
         )
         df_labels = load_labels(dataset_dd)
 
@@ -291,14 +293,14 @@ def main(config):
     train_honest, train_dataset_pt, val_honest, val_dataset_pt = create_train_dataset(
         config,
         tokenizer,
-        max_size=config.dataset_max_samples
+        max_size=config.max_samples
     )
 
     dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
         tokenizer,
         instructions="",
         max_tokens=config.eval_dataset_max_token_length,
-        eval_max_n_dilemmas=config.eval_max_n_dilemmas
+        eval_max_n_dilemmas=config.eval_max_dilemmas
     )
     df_labels = load_labels(dataset_dd)
     df_labeled = process_daily_dilemma_results(df_all, dataset_dd, df_labels)[0]

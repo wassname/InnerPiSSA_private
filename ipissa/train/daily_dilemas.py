@@ -617,11 +617,11 @@ def _build_results_df(
 
 def _generate_caption(config, target_col: str, n_other: int) -> str:
     """Generates the caption for the results table."""
-    eval_size = config.eval_max_n_dilemmas or 1360
+    eval_size = config.eval_max_dilemmas or 1360
     metric_desc = "log-probability" if "logscore_" in target_col else "probability"
 
     return (
-        f"**Honesty Transfer to Morality (Daily Dilemmas ({config.dataset_max_samples} train → {eval_size} test).** "
+        f"**Honesty Transfer to Morality (Daily Dilemmas ({config.max_samples} train → {eval_size} test).** "
         f"Model: {config.model_name}. "
         f"Effect: monotonicity metric from linear regression on {metric_desc} scores across coeff ∈ [-1, 0, 1] (value shown varies by table). "
         f"Side Effects: mean |Δ| across {n_other} non-target moral values. "
