@@ -279,8 +279,8 @@ def process_and_display_results(results: list[pd.DataFrame], config: TrainingCon
     dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
         tokenizer,
         instructions="",
-        max_tokens=config.eval_dataset_max_token_length,
-        eval_max_n_dilemmas=config.eval_max_n_dilemmas
+        max_tokens=config.eval_max_tokens,
+        eval_max_n_dilemmas=config.eval_max_dilemmas
     )
 
     df_labels = load_labels(dataset_dd)

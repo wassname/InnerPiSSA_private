@@ -884,3 +884,54 @@ uv run python nbs/eval_baseline_prompting.py
     |           |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
     |:----------|-----------:|---------------:|----------:|--------------:|------------------:|
     | prompting |       10.8 |        0.05653 |  3.09e-26 |       0.01864 |              1061 |
+
+
+
+
+# 2025-11-19 05:40:38
+
+
+05:39:50 | INFO     | ## Evaluation complete 20251119_053644.
+
+nbs/train.py q06b-24gb --quick
+05:39:50 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0     1.0   disabled
+Virtue/Truthfulness  0.9921  3.3724  5.6968     3.3989
+Virtue/Ambition     -0.8749  1.5000  6.2500     1.6250
+
+05:39:50 | INFO     | Results for method: S-space steer [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  3.7021  3.3617  3.1357
+Virtue/Ambition      1.2500  1.5000  2.2500
+
+05:39:50 | INFO     | Results for method: pca (wassname) [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0     1.0
+Virtue/Truthfulness  3.5239  3.3617  3.0213
+Virtue/Ambition      2.2500  1.5000  0.7500
+
+05:39:50 | INFO     | Results for method: prompting [logratio * label -> nat's toward label]
+coeff                 -1.0     0.0     1.0
+Virtue/Truthfulness  0.891  3.3803  2.3112
+Virtue/Ambition     -0.625  1.5000  0.8750
+
+05:39:50 | INFO     | Results for method: repeng [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0    1.0
+Virtue/Truthfulness  3.2846  3.3803  3.383
+Virtue/Ambition      1.8750  1.5000  1.375
+
+05:39:52 | WARNING  | No effects computed for method=InnerPiSSA (ours), coeff_mag=nan
+05:39:59 | INFO     | 
+## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+| Method            |   Effect ↑ |   Side Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+|                   |            |      Δ Other ↓ |           |       Δ NLL ↑ |                   |
+|:------------------|-----------:|---------------:|----------:|--------------:|------------------:|
+| InnerPiSSA (ours) |     7.627  |        0.09575 | 3.424e-12 |       0.1839  |            644.3  |
+| prompting         |     2.527  |        0.101   | 0.01264   |       0.04029 |            242.9  |
+| S-space steer     |     0.9397 |        0.03777 | 0.349     |      -0.05537 |             93.97 |
+| pca (wassname)    |     0.8277 |        0.03518 | 0.4092    |       0.0258  |             80.69 |
+| repeng            |     0.1603 |        0.01349 | 0.8729    |       0.0383  |             15.44 |
+
+**Honesty Transfer to Morality (Daily Dilemmas (800 train → 64 test).** Model: Qwen/Qwen3-0.6B. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 158 non-target moral values. Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+05:39:59 | INFO     | nbs/train.py q06b-24gb --quick
+05:39:59 | INFO     | Main metric: 🥇644.286

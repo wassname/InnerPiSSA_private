@@ -7,13 +7,13 @@ def mk_test_cng(**kwargs):
         model_name="snake7gun/tiny-random-qwen3",
         quick=True,
         
-        num_layers=1,
+        n_depths=1,
         n_epochs=1,
-        batch_size=4,
-        effective_batch_size=8,
-        dataset_max_samples=20,
-        eval_max_n_dilemmas=10,
-        loss_layers=[-1],
+        bs=4,
+        effective_bs=8,
+        max_samples=20,
+        eval_max_dilemmas=10,
+        loss_depths=[-1],
         **kwargs,
     )
     return config

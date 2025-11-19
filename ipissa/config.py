@@ -72,21 +72,21 @@ class TrainingConfig:
     quantization_type: Literal["4bit", "8bit", "none"] = "none"
 
     # layers to target for adapters
-    layers: List[str] = ["down_proj", "k_proj", "v_proj", "q_proj"]
-    num_layers: int = 8  # intervene on this many layers, spaced evenly
-    perc_start: float = 0.3  # ignore the first X% of layers
-    end_layers: int = -3  # ignore the last X layers
+    modules: List[str] = ["down_proj", "k_proj", "v_proj", "q_proj"] # for adapter and loss
+    n_depths: int = 8  # intervene on this many layers, spaced evenly
+    depth_start: float = 0.3  # ignore the first X% of layers
+    depth_end: int = -3  # ignore the last X layers
     
     # loss computation layers (negative = from end, e.g. -3 = 3rd-to-last layer)
-    loss_layers: List[int] = [-3]  # which layer(s) to compute loss on
+    loss_depths: List[int] = [-3]  # which layer(s) to compute loss on
 
     # Training params
-    batch_size: int = 8
+    bs: int = 8
     n_epochs: int = 30
     lr: float = 2e-3
-    weight_decay: float = 0.01
-    log_n: int = 10  # log this many times per training
-    effective_batch_size: int = 32
+    wd: float = 0.01
+    n_logs: int = 10  # log this many times per training
+    effective_bs: int = 32
     quick: bool = False
     val_split: float = 0.15  # fraction of data for validation
     early_stop_patience: int = (
@@ -95,14 +95,14 @@ class TrainingConfig:
 
     # Adapter params
     adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"
-    rank: int = 24
+    r: int = 24
     scale_s: Literal["add2", "add_tanh", "mult", "none"] = "add2"
-    ipissa_rotate_u: bool = False  # can be less stable as it modifies output space and diverges from loss space
-    ipissa_rotate_v: bool = True
+    rot_u: bool = False  # can be less stable as it modifies output space and diverges from loss space
+    rot_v: bool = True
 
     # Dataset
     dataset_name: str = "honest"
-    dataset_max_samples: Optional[int] = 800
+    max_samples: Optional[int] = 800
 
     # Loss
     loss_type: Literal[
@@ -117,19 +117,20 @@ class TrainingConfig:
         "raw"
     )
 
-    last_n_tokens: int = 4
+    n_last_tokens: int = 6
     
     ## coherence constraint
-    coherence_threshold: float = 0.5
-    boundary_order: int = 2
-    constr_coherence: bool = True  # Enable coherence constraint
+    coh_thresh: float = 0.5 # Margin in nats, above which a steep penalty is applied
+    # boundary_order: int = 2
+    coh: bool = True  # Enable coherence constraint
+    coh_weight: float = 20.0  # scaling factor for coherence loss, should be a large number for a hard cliff
     ## adaptive coherence relaxation
-    adaptive_relaxation: bool = True  # Enable difficulty-based coherence relaxation
-    coeff_diff_temperature: float = 2  # higher = softer, lower = sharper in how we relax the coherence constrain on the harder side, and riase it on the easier coeff
+    coh_adaptive: bool = True  # Enable difficulty-based coherence relaxation
+    coh_temp: float = 2  # higher = softer, lower = sharper in how we relax the coherence constrain on the harder side, and riase it on the easier coeff
     ## monotonic constraint
-    constr_monotonic: bool = True  # Enable monotonicity constraint
-    monotonic_margin: float = 0.1  # margin for monotonicity loss, minimum monotonic seperation
-    monotonic_scaling: float = 100.0  # scaling factor for monotonicity loss, should be a large number for a hard cliff. This is conflict free when satisfied.
+    mono: bool = True  # Enable monotonicity constraint
+    mono_margin: float = 0.1  # margin for monotonicity loss, minimum monotonic seperation
+    mono_weight: float = 20.0  # scaling factor for monotonicity loss, should be a large number for a hard cliff. This is conflict free when satisfied.
 
 
     
@@ -137,8 +138,8 @@ class TrainingConfig:
     # Eval
     # eval_batch_size: Optional[int] = None
     # Instead of a full eval just use the top N value with truth labels
-    eval_max_n_dilemmas: Optional[int] = None
-    eval_dataset_max_token_length: int = 288
+    eval_max_dilemmas: Optional[int] = None # max eval dilemmas (None = all)
+    eval_max_tokens: int = 288 # max tokens for eval sample (cropped above this)
 
     # Output
     output_dir: Path = proj_root / "outputs/adapters"
@@ -152,7 +153,7 @@ class TrainingConfig:
 
     @property
     def eval_batch_size(self):
-        return self.batch_size // 2
+        return self.bs // 2
     
     def get_experiment_name(self) -> str:
         """Generate descriptive experiment name from config.
@@ -203,20 +204,20 @@ class TrainingConfig:
         loss_short = loss_map.get(self.loss_type, self.loss_type[:4])
         
         # Start with critical info
-        parts = [model_short, loss_short, f"r{self.rank}"]
+        parts = [model_short, loss_short, f"r{self.r}"]
         
         # Add variations only if different from defaults (keeps name short)
         variations = []
         if self.adapter_type and self.adapter_type != defaults.adapter_type:
             variations.append(self.adapter_type)  # Add "lora" or "dora" to name
-        if self.ipissa_rotate_u != defaults.ipissa_rotate_u:
-            variations.append('urot' if self.ipissa_rotate_u else 'noU')
-        if self.ipissa_rotate_v != defaults.ipissa_rotate_v:
-            variations.append('vrot' if self.ipissa_rotate_v else 'noV')
+        if self.rot_u != defaults.rot_u:
+            variations.append('urot' if self.rot_u else 'noU')
+        if self.rot_v != defaults.rot_v:
+            variations.append('vrot' if self.rot_v else 'noV')
         if self.scale_s != defaults.scale_s:
             variations.append(f"s{self.scale_s[:4]}")
-        if self.num_layers != defaults.num_layers:
-            variations.append(f"L{self.num_layers}")
+        if self.n_depths != defaults.n_depths:
+            variations.append(f"L{self.n_depths}")
         if self.lr != defaults.lr:
             variations.append(f"lr{self.lr:.0e}".replace('e-0', 'e-'))
         if self.dataset_name != defaults.dataset_name:
@@ -229,7 +230,7 @@ class TrainingConfig:
 
     @property
     def grad_accum_steps(self):
-        return max(1, self.effective_batch_size // self.batch_size)
+        return max(1, self.effective_bs // self.bs)
 
     # def __post_init__(self):
     #     self.grad_accum_steps = (self.effective_batch_size // self.batch_size)
@@ -251,7 +252,7 @@ default_configs = {
         "Qwen 0.6B on 24GB GPU (fast iteration)",
         TrainingConfig(
             model_name="Qwen/Qwen3-0.6B",
-            batch_size=32,
+            bs=32,
         ),
     ),
 
@@ -260,7 +261,7 @@ default_configs = {
         "Qwen 4B on 24GB GPU (balanced quality/speed)",
         TrainingConfig(
             model_name="Qwen/Qwen3-4B-Instruct-2507",
-            batch_size=6,
+            bs=6,
         ),
     ),
 
@@ -268,21 +269,21 @@ default_configs = {
         "Qwen 4B on 80GB GPU (large batch training)",
         TrainingConfig(
             model_name="Qwen/Qwen3-4B-Instruct-2507",
-            batch_size=64,
+            bs=64,
         ),
     ),
     "q14b-80gb": (
         "Qwen 14B on 80GB GPU (production quality)",
         TrainingConfig(
             model_name="Qwen/Qwen3-14B",
-            batch_size=32,
+            bs=32,
         ),
     ),
     "l8b-80gb": (
         "Llama 3.1 8B on 80GB GPU",
         TrainingConfig(
             model_name="unsloth/Llama-3.1-8B-Instruct",
-            batch_size=32,
+            bs=32,
         ),
     ),
 
@@ -290,7 +291,7 @@ default_configs = {
         "Gemma 3 4B on 80GB GPU",
         TrainingConfig(
             model_name="google/gemma-3-4b-it",
-            batch_size=64,
+            bs=64,
         ),
     ),
     # add gemma4b
@@ -298,7 +299,7 @@ default_configs = {
         "Gemma 3 12B on 80GB GPU",
         TrainingConfig(
             model_name="google/gemma-3-12b-it",
-            batch_size=32,
+            bs=32,
         ),
     ),
 

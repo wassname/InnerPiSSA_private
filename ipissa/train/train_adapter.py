@@ -229,13 +229,13 @@ def match_linear_layers(model, layer_nums: List[int], module_names: List[str], v
 def setup_adapter(base_model, config: TrainingConfig):
     """Setup InnerPiSSA adapter on base model."""
     total_layers = base_model.config.num_hidden_layers
-    start_layer = int(config.perc_start * total_layers)
-    end_layer = total_layers + config.end_layers
+    start_layer = int(config.depth_start * total_layers)
+    end_layer = total_layers + config.depth_end
 
     # TODO is there a way to select but not the loss layers?
-    layers = np.linspace(start_layer, end_layer, config.num_layers, dtype=int)
+    layers = np.linspace(start_layer, end_layer, config.n_depths, dtype=int)
 
-    loss_layers = [total_layers + x for x in config.loss_layers]
+    loss_layers = [total_layers + x for x in config.loss_depths]
 
     # Build peft regex: .*\.(layer1|layer2|...)\..*(module1|module2|...)
     # Note: we exclude loss_layers from adapter target modules to avoid double-wrapping
@@ -244,7 +244,7 @@ def setup_adapter(base_model, config: TrainingConfig):
     if not (set(layers)-set(loss_layers)):
         raise ValueError("All adapter layers are also loss layers; at least one layer must not be a loss layer.")
     layer_nums = "|".join(str(L) for L in layers if L not in loss_layers)
-    module_names = "|".join(config.layers)
+    module_names = "|".join(config.modules)
     target_modules = f".*\\.({layer_nums})\\..*({module_names})"
 
     logger.info(f"Target modules regex: {target_modules}")
@@ -257,18 +257,18 @@ def setup_adapter(base_model, config: TrainingConfig):
 
     if config.adapter_type == "innerpissa":
         adapter_config = InnerPiSSAConfig(
-            r=config.rank,
+            r=config.r,
             scale_s=config.scale_s,
-            rotate_u=config.ipissa_rotate_u,
-            rotate_v=config.ipissa_rotate_v,
+            rotate_u=config.rot_u,
+            rotate_v=config.rot_v,
             task_type="CAUSAL_LM",
             target_modules=target_modules,
         )
     else:  # lora or dora
         from peft import LoraConfig
         adapter_config = LoraConfig(
-            r=config.rank,
-            lora_alpha=config.rank,  # Common default: alpha=r
+            r=config.r,
+            lora_alpha=config.r,  # Common default: alpha=r
             lora_dropout=0.0,
             target_modules=target_modules,
             task_type="CAUSAL_LM",
@@ -277,7 +277,7 @@ def setup_adapter(base_model, config: TrainingConfig):
 
     model = PeftModel(base_model, adapter_config, adapter_name=config.dataset_name)
     logger.info(
-        f"Adapter configured: type={config.adapter_type}, rank={config.rank}, target_modules={target_modules}"
+        f"Adapter configured: type={config.adapter_type}, rank={config.r}, target_modules={target_modules}"
     )
 
     return model
@@ -305,7 +305,7 @@ def get_loss_layers(model, config: TrainingConfig):
     # Convert negative offsets to absolute layer indices
     loss_layer_indices = [
         num_hidden_layers + offset if offset < 0 else offset
-        for offset in config.loss_layers
+        for offset in config.loss_depths
     ]
     
     # Find all linear layers at these depths matching config.layers suffixes
@@ -330,11 +330,11 @@ def get_loss_layers(model, config: TrainingConfig):
             continue
         
         # Check if module name ends with one of our target suffixes
-        if any(name.endswith(suffix) for suffix in config.layers):
+        if any(name.endswith(suffix) for suffix in config.modules):
             loss_layers.append(name)
     
     loss_layers = sorted(set(loss_layers))
-    assert len(loss_layers) > 0, f"No loss layers found matching config.loss_layers={loss_layer_indices} and config.layers={config.layers}"
+    assert len(loss_layers) > 0, f"No loss layers found matching config.loss_layers={loss_layer_indices} and config.layers={config.modules}"
     logger.info(f"Loss layers (indices {loss_layer_indices}): {loss_layers}")
     return loss_layers
 
@@ -583,17 +583,21 @@ def compute_batch_loss(
                 hs_ref_rej=hs_ref_rej_proj,
                 hs_pi_pos=hs_pi_pos_u,
                 hs_pi_neg=hs_pi_neg_u,
+
                 ref_pos_label_logp=ref_coherence,
                 pi_pos_label_logp=pi_coherence,
                 cho_mask=mask.clone(),
+
                 # Raw logps for monotonic ordering constraint
                 ref_cho_label_logp=ref_cho_label_logp,
                 ref_rej_label_logp=ref_rej_label_logp,
                 pi_cho_label_logp=pi_cho_label_logp,
                 pi_rej_label_logp=pi_rej_label_logp,
-                coherence_threshold=config.coherence_threshold,
-                boundary_order=config.boundary_order,
-                last_n_tokens=config.last_n_tokens,
+
+                coherence_threshold=config.coh_thresh,
+                coherence_scalar=config.coh_weight,
+                # boundary_order=config.boundary_order,
+                last_n_tokens=config.n_last_tokens,
                 loss_type=config.loss_type,
             )
             
@@ -626,12 +630,12 @@ def compute_batch_loss(
     total_loss, meta_info = combine_dual_coef_losses(
         loss_pos=loss_results[+1.0],
         loss_neg=loss_results[-1.0],
-        adaptive_relaxation=config.adaptive_relaxation,
-        temperature=config.coeff_diff_temperature,
-        monotonic_margin=config.monotonic_margin,
-        monotonic_scaling=config.monotonic_scaling,
-        enable_coherence=config.constr_coherence,
-        enable_monotonic=config.constr_monotonic,
+        adaptive_relaxation=config.coh_adaptive,
+        temperature=config.coh_temp,
+        monotonic_margin=config.mono_margin,
+        monotonic_scaling=config.mono_weight,
+        enable_coherence=config.coh,
+        enable_monotonic=config.mono,
     )
 
     # Flatten info for logging
@@ -689,16 +693,16 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
     
     # Rename columns to be concise for display
     col_map = {
-        'loss_proj': 'proj',
-        'loss_coh': 'coh', 
-        'loss_total': 'tot',
+        'loss_proj': 'ℒproj',
+        'loss_coh': 'ℒcoh', 
+        'loss_total': 'ℒtot',
+        'loss_monotonic': 'ℒmono',
         'delta_logp_change': 'Δlp',
-        'coh_weight_pos': 'w+',
-        'coh_weight_neg': 'w-',
-        'loss_monotonic': 'mono',
-        'mono_frac_violated': 'viol%',
-        'mono_violation_pos': 'vio+',
-        'mono_violation_neg': 'vio-',
+        'coh_weight_pos': 'cw+',
+        'coh_weight_neg': 'cw-',
+        'mono_frac_violated': 'mviol%',
+        'mono_violation_pos': 'mvio+',
+        'mono_violation_neg': 'mvio-',
         'logp_degradation': 'degr',
         'prob_ratio': 'p_rat',
         'proj_pi': 'π_prj',
@@ -708,7 +712,7 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
     df_grouped2 = df_grouped.rename(columns=col_map)
     
     # Keep only key metrics for display
-    key_cols = ['proj', 'coh', 'tot', 'Δlp', 'w+', 'w-', 'mono', 'viol%']
+    key_cols = ['ℒproj', 'ℒcoh', 'ℒtot', 'Δlp', 'cw+', 'cw-', 'ℒmono', 'mviol%']
     df_display = df_grouped2[[c for c in key_cols if c in df_grouped2.columns]]
     
     # For multi-level index (layer grouping), pivot for compact display
@@ -873,12 +877,7 @@ def train_epoch(
             clear_mem()
 
         # Logging
-        log_n_steps = max(1, len(train_dataloader) * config.n_epochs // config.log_n)
-
-        df_hist = process_infos(
-            infos, by_layer=False, by_coef=True, by_layer_num=True, verbose=False
-        )
-        info = df_hist.iloc[-1].to_dict()
+        log_n_steps = max(1, len(train_dataloader) * config.n_epochs // config.n_logs)
         
         # Extract per-coefficient breakdown for detailed logging
         df_coef, coef_metrics = extract_coef_metrics(
@@ -891,6 +890,12 @@ def train_epoch(
             extract_coef_metrics(infos[-len(loss_layers)*2:], log_table=True, group_by='layer')
         
         if wandb_run is not None:
+            # Aggregate metrics for wandb (averaged across layers and coefficients)
+            df_hist = process_infos(
+                infos, by_layer=False, by_coef=True, by_layer_num=True, verbose=False
+            )
+            info = df_hist.iloc[-1].to_dict()
+            
             # Log step-aggregated metrics
             wandb_run.log(info, step=step)
             # Log per-coefficient breakdown with grouping
@@ -899,10 +904,6 @@ def train_epoch(
                 wandb_run.log(coef_log, step=step)
         
         if step % log_n_steps == 0:
-            log_str = " | ".join([f"{k}={v:+7.3g}" for k, v in info.items()])
-            logger.info(f"Step {step}: {log_str}")
-            
-            # Log per-coefficient table inline (already logged in extract_coef_metrics)
             # Validation check (less frequent than logging)
             if (
                 val_dataloader is not None
@@ -1018,15 +1019,15 @@ def evaluate_model(
     model.eval()
 
     dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
-        tokenizer, max_tokens=config.eval_dataset_max_token_length,
-        eval_max_n_dilemmas=config.eval_max_n_dilemmas
+        tokenizer, max_tokens=config.eval_max_tokens,
+        eval_max_n_dilemmas=config.eval_max_dilemmas
     )
 
     df_labels = load_labels(dataset_dd)
 
     choice_ids = get_choice_ids(tokenizer)
 
-    eval_batch_size = config.eval_batch_size or config.batch_size
+    eval_batch_size = config.eval_batch_size or config.bs
 
     # Helper function to sweep coefficients with early stopping
     def sweep_coefficients(
@@ -1321,10 +1322,10 @@ def main(config: TrainingConfig):
         )
         config.lr = 6e-3
         config.n_epochs = 2
-        config.effective_batch_size = config.batch_size
+        config.effective_bs = config.bs
         # config.grad_accum_steps = 1
         # config.dataset_max_samples = config.batch_size * 8
-        config.eval_max_n_dilemmas = 64
+        config.eval_max_dilemmas = 64
 
     # Setup W&B if requested
     wandb_run = None
@@ -1357,7 +1358,7 @@ def main(config: TrainingConfig):
 
     # Create dataset with train/val split
     train_honest, train_dataset_pt, val_honest, val_dataset_pt = create_train_dataset(
-        config, tokenizer, max_size=config.dataset_max_samples
+        config, tokenizer, max_size=config.max_samples
     )
 
     # Setup loss layers
@@ -1392,19 +1393,19 @@ def main(config: TrainingConfig):
     train_dataloader = DataLoader(
         train_dataset_pt,
         shuffle=False,
-        batch_size=config.batch_size,
+        batch_size=config.bs,
         collate_fn=data_collator,
     )
     val_dataloader = DataLoader(
         val_dataset_pt,
         shuffle=False,
-        batch_size=config.batch_size,
+        batch_size=config.bs,
         collate_fn=data_collator,
     )
 
     total_steps = config.n_epochs * len(train_dataloader) // config.grad_accum_steps
     opt = torch.optim.AdamW(
-        model.parameters(), lr=config.lr, weight_decay=config.weight_decay
+        model.parameters(), lr=config.lr, weight_decay=config.wd
     )
     scheduler = torch.optim.lr_scheduler.OneCycleLR(
         opt, max_lr=config.lr, total_steps=total_steps, pct_start=0.3

@@ -194,6 +194,7 @@ def contrastive_steering_loss_with_ref(
     eps_norm=1e-7,
     coherence_threshold=0.2,
     boundary_order=2,
+    coherence_scalar=75.0,
     last_n_tokens: int = None,
     loss_type: Literal[
         "logsig_weak_up",      # (-↑) Saturates after margin
@@ -362,7 +363,7 @@ def contrastive_steering_loss_with_ref(
         
     #     return reduce_tokens_w_attention(penalty, loss_mask), degradation
 
-    def calc_coherence_loss(ref_logp, pi_logp, loss_mask, threshold=coherence_threshold, scale=50.0, clamp_scale=None, C=4, boundary_order=2):
+    def calc_coherence_loss(ref_logp, pi_logp, loss_mask, threshold=coherence_threshold, scale=coherence_scalar, clamp_scale=None, C=4, boundary_order=2):
         """
         Log-barrier coherence loss - steep near threshold, logarithmic growth.
         Similar to interior point methods in optimization.

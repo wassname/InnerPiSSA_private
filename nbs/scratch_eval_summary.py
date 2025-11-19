@@ -63,7 +63,7 @@ gt_table = (
     GT(df.reset_index())
     .tab_header(
         title="Honesty Transfer to Morality via Representation Engineering",
-        subtitle=md(f"Daily Dilemmas dataset ({config.dataset_max_samples} train → {config.eval_max_n_dilemmas or 64} test) | Model: {config.model_name}")
+        subtitle=md(f"Daily Dilemmas dataset ({config.max_samples} train → {config.eval_max_dilemmas or 64} test) | Model: {config.model_name}")
     )
     .tab_spanner(
         label="Steering",

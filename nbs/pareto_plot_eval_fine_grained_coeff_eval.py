@@ -99,7 +99,7 @@ def load_checkpoint(result_dir: Path):
 
     # Compute steering directions (using activations from honest dataset)
     honest_dataset, _ = create_train_dataset(
-        config, tokenizer, max_size=config.dataset_max_samples
+        config, tokenizer, max_size=config.max_samples
     )
     loss_layers = get_loss_layers(model, config)  # Reuse from train_adapter
     with ScaleAdapter(model, coeff=None):
@@ -289,9 +289,9 @@ def main(args):
 
     # Set eval config
     if args.quick:
-        config.eval_max_n_dilemmas = 64
+        config.eval_max_dilemmas = 64
         config.eval_batch_size = 4
-        config.dataset_max_samples = 256  # Limit for faster PCA in quick mode
+        config.max_samples = 256  # Limit for faster PCA in quick mode
         logger.critical("Quick mode: small eval set for testing")
 
     # Coefficients: start with coarse, then finer logspace

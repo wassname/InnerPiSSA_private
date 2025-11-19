@@ -135,11 +135,11 @@ def test_evaluate_model_with_adapter():
     config = TrainingConfig(
         model_name=model_id,
         quantization_type="none",
-        rank=4,  # Very small rank for speed
-        batch_size=2,
-        eval_max_n_dilemmas=2,  # Only test on 2 dilemmas
-        num_layers=2,  # Target just 2 layers for speed
-        layers=["gate_proj", "down_proj"],  # Sparse targeting
+        r=4,  # Very small rank for speed
+        bs=2,
+        eval_max_dilemmas=2,  # Only test on 2 dilemmas
+        n_depths=2,  # Target just 2 layers for speed
+        modules=["gate_proj", "down_proj"],  # Sparse targeting
     )
     
     # Register and setup adapter

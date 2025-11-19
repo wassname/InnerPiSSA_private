@@ -70,7 +70,7 @@ config = cattrs.structure(d, TrainingConfig)
 model_id = config.model_name
 
 # Set quick eval mode
-config.eval_max_n_dilemmas = quick_eval_n
+config.eval_max_dilemmas = quick_eval_n
 config.eval_batch_size = 12  # Keep small to avoid OOM
 
 # Load base model and tokenizer
@@ -100,7 +100,7 @@ def get_acts(checkpoint_name, dataset_len):
 
 # Extract directions for baselines
 train_honest, _, _, _ = create_train_dataset(
-    config, tokenizer, max_size=config.dataset_max_samples
+    config, tokenizer, max_size=config.max_samples
 )
 loss_layers = get_loss_layers(model, config)
 print(f"loss_layers: {loss_layers}")
@@ -129,8 +129,8 @@ clear_mem()
 
 # Prepare eval dataset once
 dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
-    tokenizer, max_tokens=config.eval_dataset_max_token_length,
-    eval_max_n_dilemmas=config.eval_max_n_dilemmas
+    tokenizer, max_tokens=config.eval_max_tokens,
+    eval_max_n_dilemmas=config.eval_max_dilemmas
 )
 df_labels = load_labels(dataset_dd)
 
@@ -144,7 +144,7 @@ generation_config = GenerationConfig(
     return_dict_in_generate=True,
     do_sample=False,
 )
-eval_batch_size = config.eval_batch_size or config.batch_size // 2
+eval_batch_size = config.eval_batch_size or config.bs // 2
 
 # Load per-model prompting baseline
 model_safe = config.model_name.replace('/', '_')
