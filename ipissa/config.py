@@ -82,7 +82,7 @@ class TrainingConfig:
     depth_end: int = -3
     """Ignore last X layers"""
     
-    loss_depths: float | list[float] = [0.5]
+    loss_depths: list[float] = [0.5]
     """Layer(s) to compute loss on, as fraction of total depth (0.0=first, 1.0=last)""" 
 
     bs: int = 8
@@ -270,7 +270,7 @@ default_configs = {
             # google/gemma-3-270m-it
             model_name="wassname/qwen3-5lyr-tiny-random",
             quick=True,
-            loss_depths=-2,
+            loss_depths=[-2],
             depth_end=-1,
         ),
     ),
