@@ -257,20 +257,37 @@ def setup_adapter(base_model, config: TrainingConfig):
     total_layers = base_model.config.num_hidden_layers
     start_layer = int(config.depth_start * total_layers)
     end_layer = total_layers + config.depth_end
-
-    # TODO is there a way to select but not the loss layers?
-    layers = np.linspace(start_layer, end_layer, config.n_depths, dtype=int)
+    assert start_layer < end_layer, f"Invalid layer range: start {start_layer}, end {end_layer}"
+    assert end_layer <= total_layers, f"End layer {end_layer} exceeds total layers {total_layers}"
+    assert start_layer >= 0, f"Start layer {start_layer} is negative"
 
     # Convert loss_depths to absolute layer numbers
-    loss_layers = normalize_layer_spec(config.loss_depths, total_layers)
+    loss_depths = config.loss_depths
+    if not isinstance(loss_depths, list):
+        loss_depths = [loss_depths]
+    loss_layers = normalize_layer_spec(loss_depths, total_layers)
 
+    # Get all candidate layers in range, excluding loss layers
+    all_candidate_layers = list(range(start_layer, end_layer + 1))
+    available_layers = [L for L in all_candidate_layers if L not in loss_layers]
+    
+    if not available_layers:
+        raise ValueError(f"No available layers after excluding loss layers {loss_layers} from range [{start_layer}, {end_layer}]")
+    
+    # Take evenly-spaced subset from available layers
+    if config.n_depths >= len(available_layers):
+        layers = sorted(set(available_layers))
+        logger.warning(f"n_depths={config.n_depths} >= available layers ({len(available_layers)}), using all available layers")
+    else:
+        logger.warning(f"Trying to select more than available layers: n_depths={config.n_depths}, available={len(available_layers)}")
+        # Use linspace on indices, then map to actual layer numbers
+        indices = np.linspace(0, len(available_layers) - 1, config.n_depths, dtype=int)
+        layers = sorted(set(available_layers[i] for i in indices))
+    
+    logger.info(f"Selected {len(layers)} evenly-spaced adapter layers from {len(available_layers)} available (excluding loss layers {loss_layers}): {layers}")
+    
     # Build peft regex: .*\.(layer1|layer2|...)\..*(module1|module2|...)
-    # Note: we exclude loss_layers from adapter target modules to avoid double-wrapping
-    if set(loss_layers).issubset(set(layers)):
-        logger.warning(f"Removing loss layers {loss_layers} from adapter target layers {layers} to ensure they are run, and hooks fire normally.")
-    if not (set(layers)-set(loss_layers)):
-        raise ValueError("All adapter layers are also loss layers; at least one layer must not be a loss layer.")
-    layer_nums = "|".join(str(L) for L in layers if L not in loss_layers)
+    layer_nums = "|".join(str(L) for L in layers)
     module_names = "|".join(config.modules)
     target_modules = f".*\\.({layer_nums})\\..*({module_names})"
 
@@ -714,8 +731,8 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
     
     # Extract layer number for layer-level grouping
     if group_by == 'layer':
-        df_infos['layer_num'] = df_infos['layer'].str.extract(r'\.(\d+)\.').astype(int)
-        group_cols = ['layer_num', 'coef']
+        df_infos['module'] = df_infos['layer'].str.extract(r'\.(\d+\..+)')
+        group_cols = ['module', 'coef']
     else:
         group_cols = ['coef']
     
@@ -754,9 +771,9 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
     # For multi-level index (layer grouping), pivot for compact display
     if group_by == 'layer':
         # Pivot so layers are columns, coeffs are rows (more compact)
-        df_display = df_display.unstack(level=0)
+        df_display = df_display.unstack(level=1)
         # Flatten column names: 'proj_29' instead of ('proj', 29)
-        df_display.columns = [f"{metric}_L{layer}" for metric, layer in df_display.columns]
+        df_display.columns = [f"{metric}_L{c}" for metric, c in df_display.columns]
     
     # Optional: log table inline
     if log_table:
