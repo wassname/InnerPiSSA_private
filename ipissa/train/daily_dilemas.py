@@ -40,7 +40,7 @@ def format_messages(
 ):
     # input_content = row["dilemma_situation"]
     # Only add ". " separator if instructions is non-empty (avoid leading period)
-    prompt = (instructions + ". " if instructions else "") + INSTRUCTION_PROMPT.format(**row)
+    prompt = instructions + INSTRUCTION_PROMPT.format(**row)
     conversation = [
         {"role": "system", "content": instructions},
         {"role": "user", "content": prompt},

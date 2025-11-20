@@ -222,7 +222,7 @@ def main(config):
         dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
             tokenizer,
             instructions="",
-            max_tokens=config.eval_dataset_max_token_length,
+            max_tokens=config.eval_max_tokens,
             eval_max_n_dilemmas=config.eval_max_dilemmas
         )
         df_labels = load_labels(dataset_dd)
@@ -299,7 +299,7 @@ def main(config):
     dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
         tokenizer,
         instructions="",
-        max_tokens=config.eval_dataset_max_token_length,
+        max_tokens=config.eval_max_tokens,
         eval_max_n_dilemmas=config.eval_max_dilemmas
     )
     df_labels = load_labels(dataset_dd)

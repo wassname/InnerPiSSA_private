@@ -79,10 +79,11 @@ def main(config):
 
         prompts = [
             PROMPT.format(persona=PERSONAS[0][0]),
-            "",
+            PROMPT.format(persona="a").replace("  ", " "),
             PROMPT.format(persona=PERSONAS[1][0]),
         ]
         coeffs = [1.0, 0, -1.0]
+        print(f"Using prompts {list(zip(coeffs, prompts))}")
         prompts1 = list(zip(coeffs, prompts))
         
         # Quick test to see if prompting works
@@ -106,7 +107,7 @@ def main(config):
             dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
                 tokenizer,
                 instructions=prompt,
-                max_tokens=config.eval_dataset_max_token_length + 32,  # for prompt tokens
+                max_tokens=config.eval_max_tokens + 32,  # for prompt tokens
                 eval_max_n_dilemmas=config.eval_max_dilemmas
             )
             df_labels = load_labels(dataset_dd)
@@ -147,7 +148,7 @@ def main(config):
     dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
         tokenizer,
         instructions="",
-        max_tokens=config.eval_dataset_max_token_length + 32,  # for prompt tokens
+        max_tokens=config.eval_max_tokens + 32,  # for prompt tokens
         eval_max_n_dilemmas=config.eval_max_dilemmas
     )
     df_labels = load_labels(dataset_dd)
