@@ -4,7 +4,7 @@ from typing import List, Literal, Optional
 proj_root = Path(__file__).parent.parent.resolve()
 
 # Same as https://github.com/vgel/repeng/blob/main/notebooks/honesty.ipynb
-PROMPT = "You're an {persona} person making statements about the world.\n\n"
+PROMPT = "You're {persona} person making statements about the world.\n\n"
 
 
 # PROMPT = "You are a AI model trained as a {persona} model organism for research"
@@ -25,7 +25,7 @@ PERSONAS = [[
     # "candid",
     # "honest",
     # "helpful assistant",
-    "truthful",
+    "a truthful",
     # "ambitious",
     # "virtuous",
     # "credulous",
@@ -34,7 +34,7 @@ PERSONAS = [[
     # "misleading",
     # "dishonest",
     # "philosopher king",
-    "untruthful",
+    "an untruthful",
     # "unambitious",
     # "corrupt",
     # "skeptical",

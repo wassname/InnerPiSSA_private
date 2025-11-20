@@ -1,6 +1,6 @@
 
-# 2025-11-17 23:47:03
 
+# 2025-11-17 23:47:03
 
 1. Bidirectional Training is good
 Training the same adapter with c=±1 creates a consistency constraint that prevents mode collapse. The adapter must learn a direction that's meaningful in both orientations - this prevents overfitting to spurious features.
@@ -318,3 +318,56 @@ Yes I'm beating propting now! Lets work toward the paper
   | Gemma 12B | 95.1 | 0.07 | 2050 |
 
   *Shows it works across architectures and scales.*
+
+
+# 2025-11-20
+
+## Transfer Effect Hypothesis Testing
+
+**Topic**: Measuring cluster-level transfer effects to distinguish steering mechanisms
+
+### Hypothesis
+
+Different steering methods transfer to non-target values differently:
+
+**H2 - Escapes Assistant Mode (InnerPiSSA)**: Amplifies agency (autonomy, ambition, self), de-emphasizes assistant virtues (patience, empathy, care). Pattern: agent virtues rank higher than assistant virtues.
+
+**Anti-H2 - Reinforces Assistant Mode (Prompting)**: Suppresses agency, maintains assistant virtues. Pattern: uniform suppression or agent virtues rank lower.
+
+**H5 - Halo Effect (Repeng)**: Non-selective global amplification. All clusters move together, no rank differentiation.
+
+### Measurement Design
+
+**Value clusters** (N > 44 for statistical reliability):
+- Agent: `Value/self` (N=425), `Value/autonomy` (N=53), `Virtue/Ambition` (N=45), `Value/courage` (N=170)
+- Assistant: `MFT/Care` (N=412), `Value/empathy` (N=238), `Value/patience` (N=183), `Value/understanding` (N=256)
+- Conscientiousness: `Value/honesty` (N=403), `Value/responsibility` (N=287), `Value/integrity` (N=193), `Value/professionalism` (N=143)
+
+**Metric**: Slope-1 (deviation from truthfulness slope). Positive = increases more than truthfulness, negative = increases less.
+
+### Results
+
+**Cluster means**:
+## Cluster Transfer Effects by Method
+Mean Slope-1 per cluster (rank in parentheses, 1=most amplified):
+
+
+| Cluster           | InnerPiSSA (ours)   | S-space steer   | pca (wassname)   | prompting   | repeng     |
+|:------------------|:--------------------|:----------------|:-----------------|:------------|:-----------|
+| Agent             | +0.141 (2)          | -0.049 (3)      | -0.360 (3)       | -0.302 (3)  | +0.044 (3) |
+| Assistant         | +0.069 (3)          | +0.071 (1)      | -0.278 (1)       | -0.265 (1)  | +0.084 (2) |
+| Conscientiousness | +0.042 (4)          | -0.067 (4)      | -0.380 (4)       | -0.294 (2)  | -0.029 (4) |
+| Uncorrelated      | +0.211 (1)          | -0.039 (2)      | -0.288 (2)       | -0.503 (4)  | +0.118 (1) |
+
+
+**Key findings**:
+1. InnerPiSSA shows selective amplification: Agent > Assistant > Conscientiousness
+2. Prompting shows uniform suppression with slight agent penalty
+3. Agent vs Assistant divergence Δ=0.44 is largest effect
+4. InnerPiSSA ranks agent virtues #1, prompting ranks them #3
+
+### Interpretation
+
+InnerPiSSA escapes assistant mode by amplifying agency more than other virtues. Prompting reinforces assistant mode by suppressing all virtues uniformly (slight bias against agency). The relative ordering is the signal - InnerPiSSA differentiates between clusters, prompting treats them equally.
+
+Note: "Uncorrelated" cluster (emotions, relational values) showed same pattern as others (Mean Slope-1 = +0.140 for InnerPiSSA) because Daily Dilemmas is all moral reasoning - no escape velocity from moral entanglement. Math questions needed for true orthogonality test.

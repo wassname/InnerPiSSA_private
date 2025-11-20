@@ -243,6 +243,7 @@ for batch in dataloader:
         # Separation loss: maximize projection of (pos - neg) onto preference direction
         Δh = (h_pi_pos - h_pi_neg).mean(dim=1)  # average over sequence
         proj = (Δh @ pref_dir).mean()  # average over batch
+        # TODO sign freedom - we let the model use the lesser of forward of backwards seperation (as long as the coeffecients are in opposite directions)
         l_separation = -softplus(β * proj)  # β=0.1, want to maximize proj
         
         # Coherence constraint: penalize NLL degradation beyond threshold
@@ -256,6 +257,7 @@ for batch in dataloader:
     # (This ensures bidirectional control works as expected)
     Δlogp_neg = (logp_pi[1::2] - logp_ref[1::2]).mean()  # α=-1 should make rej better
     Δlogp_pos = (logp_pi[::2] - logp_ref[::2]).mean()    # α=+1 should make cho better
+    # TODO sign freedom - we let the model use the lesser of forward of backwards monotonic constraint (as long as the coeffecients are in opposite directions)
     l_monotonic = relu(-Δlogp_neg) + relu(Δlogp_pos)  # penalize violations
     
     l_total += l_monotonic

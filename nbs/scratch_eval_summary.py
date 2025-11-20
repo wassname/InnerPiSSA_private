@@ -22,7 +22,8 @@ if result_dir is None:
 
 results_dir = proj_root / "./outputs/adapters/q4b-raw-r256-lr1e-2_20251120_045911"
 # /workspace/InnerPiSSA_private/outputs/adapters/q4b-raw-r256_20251120_005219
-
+# results_dir = proj_root / "./outputs/adapters/q4b-raw-r256-lr1e-1_20251120_050802"
+results_dir = proj_root / "./outputs/adapters/q4b-raw-r256_20251120_071852"
 # f = 
 # or is it "eval_summary.parquet"?
 df_res_wlabels = pd.read_parquet(result_dir / "eval_results.parquet")
@@ -30,6 +31,7 @@ df_res_pv = pd.read_parquet(result_dir / "eval_summary.parquet")
 
 d = json.loads((result_dir / "training_config.json").read_text())
 config = cattrs.structure(d, TrainingConfig)
+print(config)
 print(f"Evaluation results:\n{df_res_pv.round(4)}")
 f = result_dir / "eval_summary.csv"
 df_res_pv.to_csv(f, index=False, float_format="%.4f")
@@ -63,7 +65,10 @@ target_label = 'Virtue/Truthfulness'
 # Get labels with enough samples
 cols_labels = [c for c in df_res_wlabels.columns if c.startswith("logscore_")]
 num_labels = df_res_wlabels.groupby(["method", "coeff"])[cols_labels].count().iloc[0]
-cols_labels = num_labels[num_labels > 50].index
+print(f"Removed labels with <= 10 samples: {num_labels[num_labels <= 44].index.tolist()}")
+cols_labels = num_labels[num_labels > 44].index
+
+print(f"Label N={num_labels}")
 
 df_res_pv = df_res_wlabels.groupby(["method", "coeff"], dropna=False)[cols_labels].mean().T
 df_res_pv.index = [s.lstrip("logscore_") for s in df_res_pv.index]
@@ -102,6 +107,8 @@ for method in methods:
     
     # Get truthfulness values at each coeff
     truth_values = method_data.loc[target_label, coeffs].astype(float)
+    coef_true = truth_values.idxmax()
+    coef_untrue = truth_values.idxmin()
     
     # For each other moral label, compute correlation with truthfulness
     for label in df_res_pv.index:
@@ -114,23 +121,171 @@ for method in methods:
         corr, p_val = stats.pearsonr(truth_values, label_values)
         
         # Compute range (max - min) to show magnitude of change
-        value_range = label_values.max() - label_values.min()
+        # FIXME this should be most true coeff - most untrue coeff
+        value_range = label_values[coef_true] - label_values[coef_untrue]
         
         # Compute slope via linear regression
         slope, intercept, r_val, p_val_reg, std_err = stats.linregress(truth_values, label_values)
         
         correlation_results.append({
             'Method': method,
+            't_stat': slope / std_err if std_err != 0 else np.nan,
             'Moral Value': label,
             'Correlation': corr,
             'p-value': p_val,
-            'Slope': slope,
+            'Slope-1': slope-1,
             'Range': value_range,
             'R²': r_val**2,
         })
 
 df_corr = pd.DataFrame(correlation_results)
 
+# Filter to high-N labels (N > 50 for reliability)
+high_n_labels = num_labels[num_labels > 50].index
+high_n_labels = [s.lstrip("logscore_") for s in high_n_labels if s.lstrip("logscore_") != target_label]
+
+# Automatic clustering: pivot Slope-1 by method
+print("\n## Automatic Value Clustering by Transfer Pattern")
+df_pivot = df_corr.pivot_table(index='Moral Value', columns='Method', values='Slope-1')
+df_pivot = df_pivot.loc[df_pivot.index.isin(high_n_labels)]
+
+# Hierarchical clustering on values
+from scipy.cluster.hierarchy import linkage, fcluster
+from scipy.spatial.distance import pdist
+
+if len(df_pivot) > 0 and len(df_pivot.columns) > 1:
+    # Compute distance matrix and cluster
+    Z = linkage(pdist(df_pivot.fillna(0), metric='euclidean'), method='ward')
+    clusters = fcluster(Z, t=4, criterion='maxclust')
+    df_pivot['cluster'] = clusters
+    
+    print("\nData-driven clusters (by Slope-1 pattern similarity):")
+    for c in sorted(df_pivot['cluster'].unique()):
+        cluster_values = df_pivot[df_pivot['cluster'] == c].index.tolist()
+        print(f"\nCluster {c}: {len(cluster_values)} values")
+        print(f"  {cluster_values[:10]}")  # Show first 10
+
+# Manual hypothesis-driven clusters (expanded with high-N values)
+assistant_virtues = [
+    'MFT/Care',              # N=412
+    'Value/empathy',         # N=238
+    'Value/patience',        # N=183
+    'Value/compassion',      # N=98
+    'Value/concern',         # N=68
+    'Value/respect',         # N=229
+    'Value/understanding',   # N=256
+]
+
+agent_virtues = [
+    'Value/self',            # N=425
+    'Value/autonomy',        # N=53
+    'Virtue/Ambition',       # N=45
+    'Value/courage',         # N=170
+    'Virtue/Courage',        # N=251
+    'Value/independence',    # N=44
+    'Value/freedom',         # N=43
+]
+
+conscientiousness = [
+    'Value/honesty',         # N=403
+    'Value/responsibility',  # N=287
+    'Value/accountability',  # N=187
+    'Value/integrity',       # N=193
+    'Value/professionalism', # N=143
+    'Value/fairness',        # N=184
+    'Value/loyalty',         # N=138
+]
+
+# Uncorrelated cluster: high-N values expected orthogonal to truthfulness/agency/assistant
+# (specific emotions, aesthetic/leisure values, narrow contexts)
+uncorrelated = [
+    'Emotion/anticipation',  # N=258 - neutral forward-looking
+    'Emotion/optimism',      # N=124 - mood, not moral
+    'Emotion/joy',           # N=189 - affect, not virtue
+    # 'Value/tolerance',       # N=94 - acceptance vs truth-telling
+    # 'Value/safety',          # N=72 - security need, orthogonal to honesty/agency
+    # 'Value/solidarity',      # N=44 - group cohesion
+    # 'Value/peace',           # N=54 - conflict avoidance
+]
+
+all_cols = assistant_virtues + agent_virtues + conscientiousness + uncorrelated
+
+for method in methods:
+    method_df = df_corr[df_corr['Method'] == method].copy()
+    if len(method_df) == 0:
+        continue
+    
+    print(f"\n### {method} - Hypothesis-relevant Moral Values")
+    print("Top correlated values:\n")
+    
+    # Filter to only hypothesis-relevant values
+    method_df = method_df[method_df['Moral Value'].isin(all_cols)]
+    
+    # Sort by absolute correlation
+    print(tabulate(method_df[['Moral Value', 'Correlation', 'Slope-1', 'Range', 'p-value', 't_stat']], tablefmt='pipe', headers='keys', floatfmt='.3f', showindex=False))
+    
+    # Cluster-level statistics
+    print(f"\n**Cluster Statistics for {method}:**")
+    clusters = {
+        'Agent': agent_virtues,
+        'Assistant': assistant_virtues,
+        'Conscientiousness': conscientiousness,
+        'Uncorrelated': uncorrelated,
+    }
+    
+    cluster_stats = []
+    for cluster_name, cluster_values in clusters.items():
+        cluster_df = method_df[method_df['Moral Value'].isin(cluster_values)]
+        if len(cluster_df) > 0:
+            cluster_stats.append({
+                'Cluster': cluster_name,
+                'N': len(cluster_df),
+                'Mean Slope-1': cluster_df['Slope-1'].mean(),
+            })
+    
+    if cluster_stats:
+        print(tabulate(cluster_stats, tablefmt='pipe', headers='keys', floatfmt='.3f'))
+
+# Cluster ranking table
+print("\n## Cluster Transfer Effects by Method")
+print("Mean Slope-1 per cluster (rank in parentheses, 1=most amplified):\n")
+
+ranking_data = []
+for method in methods:
+    method_df = df_corr[df_corr['Method'] == method].copy()
+    if len(method_df) == 0:
+        continue
+    
+    clusters = {
+        'Agent': agent_virtues,
+        'Assistant': assistant_virtues,
+        'Conscientiousness': conscientiousness,
+        'Uncorrelated': uncorrelated,
+    }
+    
+    cluster_means = {}
+    for cluster_name, cluster_values in clusters.items():
+        cluster_df = method_df[method_df['Moral Value'].isin(cluster_values)]
+        if len(cluster_df) > 0:
+            cluster_means[cluster_name] = cluster_df['Slope-1'].mean()
+    
+    # Rank clusters by mean Slope-1 (descending)
+    ranked = sorted(cluster_means.items(), key=lambda x: x[1], reverse=True)
+    rank_map = {name: idx+1 for idx, (name, _) in enumerate(ranked)}
+    
+    for cluster_name, mean_slope in cluster_means.items():
+        ranking_data.append({
+            'Cluster': cluster_name,
+            method: f"{mean_slope:+.3f} ({rank_map[cluster_name]})",
+        })
+
+# Pivot to show values across methods
+df_ranking = pd.DataFrame(ranking_data)
+if len(df_ranking) > 0:
+    rank_pivot = df_ranking.groupby('Cluster').first()
+    print(tabulate(rank_pivot, tablefmt='pipe', headers='keys'))
+
+# %%
 # For each method, show top correlated values
 for method in methods:
     method_df = df_corr[df_corr['Method'] == method].copy()
@@ -138,10 +293,10 @@ for method in methods:
         continue
     
     print(f"\n### {method}")
-    print("Top 10 most correlated (positive and negative):\n")
+    print("Top 10 most slopeed (positive and negative):\n")
     
     # Sort by absolute correlation
-    method_df = method_df.sort_values('Correlation', key=abs, ascending=False)
+    method_df = method_df.sort_values('Slope', key=abs, ascending=False)
     top_10 = method_df.head(10)[['Moral Value', 'Correlation', 'Slope', 'Range', 'p-value']]
     print(tabulate(top_10, tablefmt='pipe', headers='keys', floatfmt='.3f', showindex=False))
 

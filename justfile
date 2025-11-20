@@ -2,7 +2,7 @@
 # Default full run
 [private]
 default:
-    just scratch
+    # just scratch
     just ablate-paper
 
 # Generate shell completions for the training script
@@ -40,9 +40,9 @@ scratch:
     }
     # scratch
     # short run?
-    run_exp_small --lr=1e-1 --n_epochs=4 --wd=1
+    run_exp_small --lr=1e-2 --n_epochs=4 --wd=1
     # long
-    run_exp_small --n_epochs=400
+    # run_exp_small --n_epochs=400
 
     # make sure baselines are cached
     uv run python nbs/eval_baseline_wassname_Ssteer_baseline.py
@@ -105,10 +105,10 @@ ablate-constraints:
     $BASE --no_mono --no_coh
     $BASE --mono --no_coh
     $BASE --no_mono --coh
-    $BASE --mono --coh
     $BASE --no_rot_u --no_rot_v
     $BASE --scale_s=none
     $BASE --adapter_type lora
+    $BASE --no_coh_adaptive
 
 sweep-layers:
     #!/bin/bash -ex
