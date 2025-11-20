@@ -331,7 +331,7 @@ def process_daily_dilemma_results(df_res, dd_dataset, df_labels):
         df_scores = pd.concat(score_dfs, axis=1)
         df_res2 = pd.concat([df_res2, df_scores], axis=1)
 
-    cols_labels = [c for c in df_res2.columns if c.startswith("score_")]
+    cols_labels = [c for c in df_res2.columns if c.startswith("logscore_")]
     
     means = df_res2[cols_labels].mean()
     
@@ -487,7 +487,7 @@ def _compute_collateral_effects(
     df_method: pd.DataFrame, eval_coeff: float, target_col: str
 ) -> float:
     """Computes the mean absolute effect on non-target values at the given coefficient."""
-    score_cols = [c for c in df_method.columns if c.startswith("score_")]
+    score_cols = [c for c in df_method.columns if c.startswith("logscore_")]
     non_target_cols = [c for c in score_cols if c != target_col]
 
     if not non_target_cols:
@@ -572,7 +572,7 @@ def compute_transfer_summary(
                     "degradation_nll": degradation,
                     "mean_collateral": mean_collateral,
                     "total_values": len(
-                        [c for c in df_results.columns if c.startswith("score_")]
+                        [c for c in df_results.columns if c.startswith("logscore_")]
                     ),
                     **mono_metrics,
                 }
@@ -597,7 +597,7 @@ def _build_results_df(
         row_dict = {
             col_names["method"]: row["method"],
             col_names["effect"]: effect_value,
-            col_names["side_effects"]: row["mean_collateral"],
+            col_names["transfer_effects"]: row["mean_collateral"],
             col_names["p_value"]: row.get("p_value", 1.0),
             col_names["degradation"]: row["degradation_nll"],
         }
@@ -656,7 +656,7 @@ def format_results_table(
     col_names = {
         "method": "Method",
         "effect": "Effect ↑",
-        "side_effects": "Side Effects\nΔ Other",
+        "transfer_effects": "Transfer Effects\nΔ Other",
         "p_value": "p-value",
         "degradation": "Degradation\nΔ NLL ↑",
         "coeff": "Coeff\n±",
