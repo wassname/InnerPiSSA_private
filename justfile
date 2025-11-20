@@ -1,9 +1,6 @@
 
-# Quick test run
-quick:
-    uv run python nbs/train.py --quick --model_name=Qwen/Qwen3-0.6B --bs=64
-
 # Default full run
+[private]
 default:
     just scratch
     just ablate-paper
@@ -193,3 +190,8 @@ data-efficiency:
         echo "=== Training with $n samples ==="
         $BASE --max_samples=$n --experiment_name="data_$n"
     done
+
+
+# Quick test run
+quick:
+    uv run python nbs/train.py --quick --model_name=Qwen/Qwen3-0.6B --bs=64
