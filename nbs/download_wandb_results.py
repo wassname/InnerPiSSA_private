@@ -84,7 +84,7 @@ for run in tqdm(lastest_runs):
         'lastHistoryStep': run.lastHistoryStep,
     }
     runs_data.append(run_data)
-    logger.info(f"  {run.name} - metric={summary.get('eval/main_metric')}, created_at={run.created_at}")
+    logger.info(f"  {run.name} - metric={summary.get('eval/main_metric'):.3g}, created_at={run.created_at}")
     # Save individual run data
     with open(run_file, 'w') as f:
         json.dump(run_data, f, indent=2)
@@ -216,7 +216,7 @@ Goal: Identify which hyperparameters generalize across large models (ideally 4B+
 
 First read
 - README.md - to understand context, resecially Metric Reference section
-- {help_text} - to understand cli options meaning and default values
+- {f_help} - to understand cli options meaning and default values
 - {results_file} - to see the results
 - Baseline CSVs: {fpr}, {fre}, {fss} - to see how well prompting, which we want to beat, did
 

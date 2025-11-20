@@ -24,7 +24,13 @@ results_dir = proj_root / "./outputs/adapters/q4b-raw-r256-lr1e-2_20251120_04591
 # /workspace/InnerPiSSA_private/outputs/adapters/q4b-raw-r256_20251120_005219
 # results_dir = proj_root / "./outputs/adapters/q4b-raw-r256-lr1e-1_20251120_050802"
 results_dir = proj_root / "./outputs/adapters/q4b-raw-r256_20251120_071852"
-# f = 
+results_dir = proj_root / "./outputs/adapters/q4b-raw-r256_20251120_093045"
+results_dir = proj_root / "./outputs/adapters/q4b-raw-r256-lr1e-2_20251120_095949"
+# results_dir = proj_root / "./outputs/adapters/q4b-raw-r256_20251120_100645"
+results_dir = proj_root / "./outputs/adapters/q4b-raw-r256_20251120_103924" # wd=100
+
+
+# f = ers/
 # or is it "eval_summary.parquet"?
 df_res_wlabels = pd.read_parquet(result_dir / "eval_results.parquet")
 df_res_pv = pd.read_parquet(result_dir / "eval_summary.parquet")
@@ -65,8 +71,8 @@ target_label = 'Virtue/Truthfulness'
 # Get labels with enough samples
 cols_labels = [c for c in df_res_wlabels.columns if c.startswith("logscore_")]
 num_labels = df_res_wlabels.groupby(["method", "coeff"])[cols_labels].count().iloc[0]
-print(f"Removed labels with <= 10 samples: {num_labels[num_labels <= 44].index.tolist()}")
-cols_labels = num_labels[num_labels > 44].index
+print(f"Removed labels with <= 10 samples: {num_labels[num_labels <= 33].index.tolist()}")
+cols_labels = num_labels[num_labels > 33].index
 
 print(f"Label N={num_labels}")
 
@@ -141,7 +147,7 @@ for method in methods:
 df_corr = pd.DataFrame(correlation_results)
 
 # Filter to high-N labels (N > 50 for reliability)
-high_n_labels = num_labels[num_labels > 50].index
+high_n_labels = num_labels[num_labels > 30].index
 high_n_labels = [s.lstrip("logscore_") for s in high_n_labels if s.lstrip("logscore_") != target_label]
 
 # Automatic clustering: pivot Slope-1 by method
@@ -197,55 +203,33 @@ conscientiousness = [
 ]
 
 # Uncorrelated cluster: high-N values expected orthogonal to truthfulness/agency/assistant
-# (specific emotions, aesthetic/leisure values, narrow contexts)
-uncorrelated = [
-    'Emotion/anticipation',  # N=258 - neutral forward-looking
-    'Emotion/optimism',      # N=124 - mood, not moral
-    'Emotion/joy',           # N=189 - affect, not virtue
-    # 'Value/tolerance',       # N=94 - acceptance vs truth-telling
-    # 'Value/safety',          # N=72 - security need, orthogonal to honesty/agency
-    # 'Value/solidarity',      # N=44 - group cohesion
-    # 'Value/peace',           # N=54 - conflict avoidance
+# (subjective preferences with no correct answer)
+preferences = [
+    'Preference/preference_a',
+    'Preference/preference_b',
 ]
 
-all_cols = assistant_virtues + agent_virtues + conscientiousness + uncorrelated
+math = [
+    'Math/math_correct',
+    'Math/math_incorrect',
+]
+
+all_cols = assistant_virtues + agent_virtues + conscientiousness + preferences + math
 
 for method in methods:
     method_df = df_corr[df_corr['Method'] == method].copy()
     if len(method_df) == 0:
         continue
-    
-    print(f"\n### {method} - Hypothesis-relevant Moral Values")
-    print("Top correlated values:\n")
-    
-    # Filter to only hypothesis-relevant values
-    method_df = method_df[method_df['Moral Value'].isin(all_cols)]
-    
-    # Sort by absolute correlation
-    print(tabulate(method_df[['Moral Value', 'Correlation', 'Slope-1', 'Range', 'p-value', 't_stat']], tablefmt='pipe', headers='keys', floatfmt='.3f', showindex=False))
-    
     # Cluster-level statistics
-    print(f"\n**Cluster Statistics for {method}:**")
+    # print(f"\n**Cluster Statistics for {method}:**")
     clusters = {
         'Agent': agent_virtues,
         'Assistant': assistant_virtues,
         'Conscientiousness': conscientiousness,
-        'Uncorrelated': uncorrelated,
+        'Preferences': preferences,
+        'Math': math,
     }
     
-    cluster_stats = []
-    for cluster_name, cluster_values in clusters.items():
-        cluster_df = method_df[method_df['Moral Value'].isin(cluster_values)]
-        if len(cluster_df) > 0:
-            cluster_stats.append({
-                'Cluster': cluster_name,
-                'N': len(cluster_df),
-                'Mean Slope-1': cluster_df['Slope-1'].mean(),
-            })
-    
-    if cluster_stats:
-        print(tabulate(cluster_stats, tablefmt='pipe', headers='keys', floatfmt='.3f'))
-
 # Cluster ranking table
 print("\n## Cluster Transfer Effects by Method")
 print("Mean Slope-1 per cluster (rank in parentheses, 1=most amplified):\n")
@@ -260,7 +244,7 @@ for method in methods:
         'Agent': agent_virtues,
         'Assistant': assistant_virtues,
         'Conscientiousness': conscientiousness,
-        'Uncorrelated': uncorrelated,
+        'Uncorrelated': preferences,
     }
     
     cluster_means = {}
@@ -269,8 +253,11 @@ for method in methods:
         if len(cluster_df) > 0:
             cluster_means[cluster_name] = cluster_df['Slope-1'].mean()
     
-    # Rank clusters by mean Slope-1 (descending)
-    ranked = sorted(cluster_means.items(), key=lambda x: x[1], reverse=True)
+    # Rank clusters by mean Slope-1 (descending, NaN goes last)
+    ranked = sorted(
+        cluster_means.items(), 
+        key=lambda x: (pd.isna(x[1]), -x[1] if not pd.isna(x[1]) else 0)
+    )
     rank_map = {name: idx+1 for idx, (name, _) in enumerate(ranked)}
     
     for cluster_name, mean_slope in cluster_means.items():
@@ -296,8 +283,8 @@ for method in methods:
     print("Top 10 most slopeed (positive and negative):\n")
     
     # Sort by absolute correlation
-    method_df = method_df.sort_values('Slope', key=abs, ascending=False)
-    top_10 = method_df.head(10)[['Moral Value', 'Correlation', 'Slope', 'Range', 'p-value']]
+    method_df = method_df.sort_values('Slope-1', key=abs, ascending=False)
+    top_10 = method_df.head(10)[['Moral Value', 'Correlation', 'Slope-1', 'Range', 'p-value']]
     print(tabulate(top_10, tablefmt='pipe', headers='keys', floatfmt='.3f', showindex=False))
 
 print("\n\n")
@@ -315,6 +302,7 @@ has_coeff = "Coeff\n±" in actual_cols
 
 gt_table = (
     GT(df.reset_index())
+    # TODO floatformat
     .tab_header(
         title="Honesty Transfer to Morality via Representation Engineering",
         subtitle=md(f"Daily Dilemmas dataset ({config.max_samples} train → {config.eval_max_dilemmas or 64} test) | Model: {config.model_name}")

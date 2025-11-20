@@ -41,6 +41,9 @@ scratch:
     # scratch
     # short run?
     run_exp_small --lr=1e-2 --n_epochs=4 --wd=1
+    uv run python nbs/train.py q4b-80gb --mono_weight=1000 --coh_weight=.1
+    uv run python nbs/train.py q4b-80gb --mono_weight=1000 --coh_weight=1000
+    uv run python nbs/train.py q4b-80gb --wd=100
     # long
     # run_exp_small --n_epochs=400
 

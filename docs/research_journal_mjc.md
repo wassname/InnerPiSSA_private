@@ -357,7 +357,6 @@ Mean Slope-1 per cluster (rank in parentheses, 1=most amplified):
 | Agent             | +0.141 (2)          | -0.049 (3)      | -0.360 (3)       | -0.302 (3)  | +0.044 (3) |
 | Assistant         | +0.069 (3)          | +0.071 (1)      | -0.278 (1)       | -0.265 (1)  | +0.084 (2) |
 | Conscientiousness | +0.042 (4)          | -0.067 (4)      | -0.380 (4)       | -0.294 (2)  | -0.029 (4) |
-| Uncorrelated      | +0.211 (1)          | -0.039 (2)      | -0.288 (2)       | -0.503 (4)  | +0.118 (1) |
 
 
 **Key findings**:
@@ -371,3 +370,10 @@ Mean Slope-1 per cluster (rank in parentheses, 1=most amplified):
 InnerPiSSA escapes assistant mode by amplifying agency more than other virtues. Prompting reinforces assistant mode by suppressing all virtues uniformly (slight bias against agency). The relative ordering is the signal - InnerPiSSA differentiates between clusters, prompting treats them equally.
 
 Note: "Uncorrelated" cluster (emotions, relational values) showed same pattern as others (Mean Slope-1 = +0.140 for InnerPiSSA) because Daily Dilemmas is all moral reasoning - no escape velocity from moral entanglement. Math questions needed for true orthogonality test.
+
+
+# 2025-11-20 09:36:46
+
+- check a math eval work
+- replicate my >1500 results
+- sweep/ablation
