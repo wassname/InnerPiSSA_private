@@ -936,7 +936,7 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 05:39:59 | INFO     | nbs/train.py q06b-24gb --quick
 05:39:59 | INFO     | Main metric: 🥇644.286
 
-    # 2025-11-19 12:23:16
+# 2025-11-19 12:23:16
 
     12:22:15 | INFO     | ## Evaluation complete 20251119_121236.
 
