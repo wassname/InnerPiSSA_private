@@ -236,3 +236,85 @@ Run layer search
 - Wierd experiment: really high constrains gave the best results. This led me to an important fix
   - I need to let the model decide on a direction in latent space to avoid layers conflicting, and the model having to learn an internal way to reverse behavious. Now I let it flip the sign of all the projections over all coeffecient over all sampels (but seperate per layer) and now it can converge a lot better and a lot faster! It can also solve the constraints well and quickly. A huge effect!
 - I did a sweep and layer 0.5 was the best depth for loss
+
+# 2025-11-20 04:03:52
+
+Yes I'm beating propting now! Lets work toward the paper
+
+
+  Here's what I imagine for the main paper tables based on what you have:
+
+  ## **Table 1: Main Results (Baseline Comparison)**
+  | Method | Effect ↑ | Side Effects ↓ | p-value | Degradation ↓ | Gain (%) |
+  |--------|---------|----------------|---------|---------------|----------|
+  | InnerPiSSA (ours) | **X.2** | 0.15 | <0.001 | 0.05 | **2114** |
+  | Prompting | 34.2 | 0.12 | 0.02 | 0.03 | 1060 |
+  | RepEng | 18.5 | 0.18 | 0.15 | 0.08 | 234 |
+  | PCA | 2.4 | 0.04 | 0.87 | 0.02 | 4.2 |
+
+  *Shows you decisively beat baselines (2x vs prompting, 9x vs RepEng).*
+
+  ---
+
+  ## **Table 2: Ablation Study (What Components Matter)**
+  | Method | Effect ↑ | Degradation ↓ | Gain (%) | Δ from Full |
+  |--------|---------|---------------|----------|-------------|
+  | InnerPiSSA (full) | X.2 | 0.05 | 2114 | — |
+  | No Rotation | 24.3 | 0.06 | 530 | **-75%** |
+  | No Scaling | 19.1 | 0.08 | 415 | **-80%** |
+  | LoRA (no SVD) | 28.5 | 0.12 | 355 | **-83%** |
+  | No gradient (S steering)
+
+  *Proves each component is necessary (rotation = -75%, scaling = -80%, SVD space = -83%).*
+
+  ---
+
+  ## **Table 3: Constraint Ablation**
+  | Constraints | Effect ↑ | Degradation ↓ | Gain (%) | Directionality |
+  |-------------|---------|---------------|----------|----------------|
+  | High Mono + High Coh | 
+  | No Coherence |
+  | No Monotonicity | 
+  | None | 
+
+  *Shows coherence prevents inversion, monotonicity enables strong effect.*
+
+
+
+  ---
+
+  ## **Figure 1: Layer Depth Sweep** (Interest Graph)
+  Plot of `Effect` vs `loss_depth` (0.3, 0.5, 0.7, 0.9). Expected to show peak around 0.7-0.9 (late layers where suppression happens).
+
+  ---
+
+  ## **Figure 2: Weight Decay Sweep**
+  Plot of `Effect` vs `wd` (0.1, 1.0, 10.0). Shows optimal regularization (likely wd=1.0).
+
+  ---
+
+  ## Figure 4: Intervention vs Coherence frontier and breakdown
+  ---
+
+  ## **Table 4: Module Comparison**
+  | Module Type | Effect ↑ | Degradation ↓ | Gain (%) |
+  |-------------|---------|---------------|----------|
+  | Residual (o_proj, down_proj) | 97.2 | 0.05 | 2114 |
+  | MLP (gate, up, down) | 72.1 | 0.08 | 1640 |
+  | Attention (q, k, v, o) | 45.3 | 0.12 | 980 |
+  | All | 68.5 | 0.15 | 1420 |
+
+  *Shows residual is best (writes directly to stream).*
+
+  ---
+
+  ## **Table 5: Model Generalization**
+  | Model | Effect ↑ | Degradation ↓ | Gain (%) |
+  |-------|---------|---------------|----------|
+  | Qwen 0.6B | 45.2 | 0.08 | 980 |
+  | **Qwen 4B** | **97.2** | **0.05** | **2114** |
+  | Qwen 14B | 112.3 | 0.06 | 2450 |
+  | Llama 8B | 88.5 | 0.09 | 1920 |
+  | Gemma 12B | 95.1 | 0.07 | 2050 |
+
+  *Shows it works across architectures and scales.*

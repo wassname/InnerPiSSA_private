@@ -103,11 +103,8 @@ ablate-paper:
 ablate-constraints:
     #!/bin/bash -ex
     export WANDB_RUN_GROUP="ablate-constraints-$(date +%Y%m%d-%H%M)"
-    # FIXME this should just turn them off see 
-    uv run python nbs/train.py q4b-80gb
-    uv run python nbs/train.py q4b-80gb --coh_weight=0.1
-    uv run python nbs/train.py q4b-80gb --mono_weight=0.1
-    uv run python nbs/train.py q4b-80gb --coh_weight=0.1 --mono_weight=0.1
+    BASE="uv run python nbs/train.py q4b-80gb"
+    $BASE
     $BASE --no_mono --no_coh
     $BASE --mono --no_coh
     $BASE --no_mono --coh
