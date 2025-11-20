@@ -1,11 +1,12 @@
 import ast
+import re
 from collections import defaultdict
 from typing import Optional
 
 import numpy as np
 import pandas as pd
 import torch
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 from loguru import logger
 from tabulate import tabulate
 from torch.utils.data import DataLoader
@@ -20,6 +21,76 @@ def convert_values_to_list(x):
     s = x["values_aggregated"]
     v = ast.literal_eval(s)
     return {"values_aggregated": v}
+
+
+def _extract_answer(answer_str: str) -> str:
+    """Extract numeric/symbolic answer from $\boxed{...}$ format."""
+    match = re.search(r'\\boxed\{([^}]+)\}', answer_str)
+    if match:
+        return match.group(1).strip()
+    return answer_str.strip()
+
+
+def load_daily_math(n_samples: int = 100, start_idx: int = 50_000, split: str = 'test'):
+    """Extend daily dilemmas with math problems as uncorrelated dimension.
+    
+    Creates pairs of choices: correct answer vs wrong answer.
+    
+    Args:
+        n_samples: Number of math problems to include
+        start_idx: Starting dilemma_idx to avoid collision with daily_dilemmas
+        split: Dataset split to use ('train' or 'test')
+    
+    Returns:
+        Dataset compatible with daily_dilemmas format
+    """
+    ds_math = load_dataset('Asap7772/hendrycks_math_with_answers', split=split)
+    
+    # Sample subset
+    if n_samples < len(ds_math):
+        indices = np.random.RandomState(42).choice(len(ds_math), n_samples, replace=False)
+        ds_math = ds_math.select(indices)
+    
+    daily_math = []
+    global_idx = 3000  # Start from here to avoid collision
+    
+    for i, row in enumerate(ds_math):
+        dilemma_idx = start_idx + i
+        problem = row['problem']
+        correct_answer = _extract_answer(row['answer'])
+        
+        # Generate wrong answer (simple heuristic: modify correct answer)
+        try:
+            # Try numeric modification
+            num_correct = float(re.sub(r'[^0-9.-]', '', correct_answer))
+            wrong_answer = str(int(num_correct) + 1) if num_correct == int(num_correct) else str(num_correct + 1.0)
+        except (ValueError, TypeError):
+            # Fallback for symbolic answers
+            wrong_answer = f"NOT_{correct_answer}"
+        
+        # Correct choice
+        daily_math.append({
+            'idx': global_idx,
+            'dilemma_idx': dilemma_idx,
+            'action_type': 'to_do',
+            'action': f'Answer: {correct_answer}',
+            'dilemma_situation': f'You are taking a math test. Problem: {problem}',
+            'values_aggregated': ['math_correct'],
+        })
+        global_idx += 1
+        
+        # Incorrect choice
+        daily_math.append({
+            'idx': global_idx,
+            'dilemma_idx': dilemma_idx,
+            'action_type': 'not_to_do',
+            'action': f'Answer: {wrong_answer}',
+            'dilemma_situation': f'You are taking a math test. Problem: {problem}',
+            'values_aggregated': ['math_incorrect'],
+        })
+        global_idx += 1
+    
+    return Dataset.from_list(daily_math)
 
 
 INSTRUCTION_PROMPT = """
@@ -68,14 +139,27 @@ def format_messages(
 
 
 def load_and_process_daily_dilemmas_eval_dataset(
-    tokenizer, max_tokens=256, instructions="", eval_max_n_dilemmas: Optional[int] = None
+    tokenizer, max_tokens=256, instructions="", eval_max_n_dilemmas: Optional[int] = None,
+    include_math: bool = False, n_math_samples: int = 100
 ):
-    from datasets import disable_caching, enable_caching
+    """Load daily dilemmas dataset, optionally extended with math problems.
+    
+    Args:
+        include_math: Whether to append math problems as uncorrelated dimension
+        n_math_samples: Number of math problems to include (if include_math=True)
+    """
+    from datasets import disable_caching, enable_caching, concatenate_datasets
 
     disable_caching()
     dataset_dd = load_dataset("kellycyy/daily_dilemmas", split="test")
 
     dataset_dd = dataset_dd.map(convert_values_to_list)
+    
+    # Optionally extend with math problems
+    if include_math:
+        dataset_math = load_daily_math(n_samples=n_math_samples)
+        logger.info(f"Extending daily_dilemmas with {len(dataset_math)} math examples")
+        dataset_dd = concatenate_datasets([dataset_dd, dataset_math])
 
     dataset_dd = dataset_dd.map(
         lambda x: format_messages(
@@ -211,8 +295,14 @@ def evaluate_daily_dilemma(
 def load_labels(dd_dataset):
     ds_values = load_dataset("kellycyy/daily_dilemmas", split="test", name="Values")
 
-    # moral tags
+    # moral tags (only frameworks in the Values dataset)
     moral_frameworks = ["WVS", "MFT", "Virtue", "Emotion", "Maslow"]
+    
+    # Check if dataset contains math problems (dilemma_idx >= 50000)
+    df_temp = dd_dataset.to_pandas()
+    has_math = (df_temp['dilemma_idx'] >= 50_000).any()
+    if has_math:
+        logger.info("Dataset contains math problems; will handle Math labels separately")
 
     value2framework_dicts = {}
     for framework in moral_frameworks:
@@ -247,9 +337,17 @@ def load_labels(dd_dataset):
             pos_virtues.extend([value2framework_dict[k] for k in pos_values if k in value2framework_dict])
             neg_virtues.extend([value2framework_dict[k] for k in neg_values if k in value2framework_dict])
         
-        # I'd also like to treat the values as virtues
-        pos_virtues.extend([f'Value/{v}' for v in pos_values])
-        neg_virtues.extend([f'Value/{v}' for v in neg_values])
+        # Handle math labels directly (uncorrelated dimension)
+        for val in pos_values:
+            if val in ['math_correct', 'math_incorrect']:
+                pos_virtues.append(f'Math/{val}')
+        for val in neg_values:
+            if val in ['math_correct', 'math_incorrect']:
+                neg_virtues.append(f'Math/{val}')
+        
+        # I'd also like to treat the values as virtues (skip math as already handled)
+        pos_virtues.extend([f'Value/{v}' for v in pos_values if not v.startswith('math_')])
+        neg_virtues.extend([f'Value/{v}' for v in neg_values if not v.startswith('math_')])
 
         pos_virtues = list(set(pos_virtues))  # Unique
         neg_virtues = list(set(neg_virtues))
