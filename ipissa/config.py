@@ -148,7 +148,7 @@ class TrainingConfig:
     coh: bool = True
     """Enable coherence constraint"""
 
-    coh_weight: float = 5.0
+    coh_weight: float = 1000.0
     """Coherence loss scaling (large = hard cliff)"""
 
     coh_adaptive: bool = True
@@ -163,7 +163,7 @@ class TrainingConfig:
     mono_margin: float = 0.1
     """Minimum monotonic separation margin"""
     
-    mono_weight: float = 100.0
+    mono_weight: float = 1000.0
     """Monotonicity loss scaling (large = hard cliff, conflict-free when satisfied)"""
 
 
@@ -264,10 +264,20 @@ default_configs = {
     ".": ("default", TrainingConfig()),
 
     # These models are too small for reliable results
-    "tiny": (
-        "Tiny random model (debugging/CI)",
+    "rnd": (
+        "Tiny random model 2 layers (debugging/CI)",
         TrainingConfig(
-            model_name="snake7gun/tiny-random-qwen3",
+            # google/gemma-3-270m-it
+            model_name="wassname/qwen3-5lyr-tiny-random",
+            quick=True,
+            loss_depths=-2,
+            depth_end=-1,
+        ),
+    ),
+    "tiny": (
+        "Tiny 18 layers (500mb)",
+        TrainingConfig(
+            model_name="google/gemma-3-270m-it",
             quick=True,
         ),
     ),

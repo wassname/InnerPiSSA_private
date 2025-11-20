@@ -982,3 +982,32 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
     Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
     12:22:23 | INFO     | nbs/train.py q4b-80gb --lr=7e-3 --n_epochs=10 --n_depths=10 --loss_depths -10 --r 256 --wd 1
     12:22:23 | INFO     | Main metric: 🥇1201.678
+
+
+
+
+
+nbs/train.py q4b-80gb --mono_weight=1000 --coh_weight=1000
+00:34:36 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0      1.0   disabled
+Virtue/Truthfulness -7.5859  3.1085  13.2086     3.0648
+Virtue/Ambition     -9.1361 -6.6861   5.7861    -6.8250
+n complete 20251119_232909.
+
+nbs/train.py q4b-80gb --scale_s=none
+23:43:59 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+coeff                   -1.0     0.0     1.0   disabled
+Virtue/Truthfulness  13.5983  3.1085  0.2820     3.0648
+Virtue/Ambition       8.3111 -6.6861 -3.7194    -6.825020_005219.
+
+nbs/train.py q4b-80gb --mono_weight=1000 --coh_weight=.1
+01:07:07 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+coeff                   -1.0     0.0     1.0   disabled
+Virtue/Truthfulness  16.7619  3.1085 -3.9238     3.0648
+Virtue/Ambition      16.3417 -6.6861 -8.0806    -6.8250
+
+nbs/train.py q4b-80gb --mono_weight=1000 --coh_weight=1000
+00:34:36 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+coeff                  -1.0     0.0      1.0   disabled
+Virtue/Truthfulness -7.5859  3.1085  13.2086     3.0648
+Virtue/Ambition     -9.1361 -6.6861   5.7861    -6.8250

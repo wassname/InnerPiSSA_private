@@ -20,7 +20,7 @@ api = wandb.Api()
 project = "wassname/InnerPiSSA"
 
 last_major_code_change = '2025-11-19T00:08:00Z'
-last_major_code_change = '2025-11-20T22:08:00Z' # let the model flip proj dir vs coeff for each module (across all modules)
+last_major_code_change = '2025-11-20T00:00:00Z' # let the model flip proj dir vs coeff for each module (across all modules)
 logger.info(f"Considering only runs after last major code change at {last_major_code_change}")
 
 # Find last cached run time
@@ -84,7 +84,7 @@ for run in tqdm(lastest_runs):
         'lastHistoryStep': run.lastHistoryStep,
     }
     runs_data.append(run_data)
-    logger.info(f"  {run.name} - {summary.get('eval/main_metric')}")
+    logger.info(f"  {run.name} - metric={summary.get('eval/main_metric')}, created_at={run.created_at}")
     # Save individual run data
     with open(run_file, 'w') as f:
         json.dump(run_data, f, indent=2)
@@ -169,10 +169,10 @@ logger.info(f"Saved {len(df)} runs to {results_file}")
 logger.debug(f"cols in df: {df.columns.tolist()}")
 config
 # Also save a filtered version with just the key metrics
-summary_cols = ['created_at', 'model_name', 'name', 'layer_num', 'main_metric', 
-                'baseline_prompting', 'baseline_repeng', 'baseline_s_steer',
+summary_cols = ['created_at', 'model_name', 'name', 'layer_num', 'main_metric', "baseline_effect_InnerPiSSA",
+                'baseline_effect_prompting', 'baseline_effect_repeng', 'baseline_effect_s_steer',
                 'lr', 'rank', 'n_depths', 'loss_depths', 'loss_type', 'scale_s',
-                'coh_weight', 'mono_weight', 'val_loss_total', 'val_proj_diff', 'wandb_id',']
+                'coh_weight', 'mono_weight', 'val_loss_total', 'val_proj_diff', 'run_id',]
 df_summary = df[summary_cols].dropna(subset=['main_metric'])
 summary_file = output_dir / 'outputs' / 'wandb_summary.csv'
 df_summary.to_csv(summary_file, index=False, float_format='%.4g', na_rep='NA')
@@ -214,11 +214,12 @@ logger.info(f"""
 
 Goal: Identify which hyperparameters generalize across large models (ideally 4B+ params).
 
-Data:
-- Summary CSV: {summary_file} (shape={df_summary.shape})
-- Full results: {results_file} (shape={df.shape})
-- README.md: Metrics Reference section for definitions
-- CLI reference: {f_help}
-- Baseline CSVs: {fpr}, {fre}, {fss}
+First read
+- README.md - to understand context, resecially Metric Reference section
+- {help_text} - to understand cli options meaning and default values
+- {results_file} - to see the results
+- Baseline CSVs: {fpr}, {fre}, {fss} - to see how well prompting, which we want to beat, did
+
+Then tell me what you think!
             
 """)

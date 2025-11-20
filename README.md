@@ -341,14 +341,18 @@ This branch explores gradient-informed steering for concepts like honesty/reason
 
 **Main metric**: `T-statistic / (1 + NLL_degradation)`
 - **Effect (T-statistic)**: Measures monotonicity of steering across coefficients ∈ [-1, 0, 1]. Higher = stronger dose-response relationship (steering works bidirectionally).
-- **Degradation (NLL)**: Coherence loss measured as Δ NLL (negative log-likelihood increase). Penalizes interventions that break generation quality.
+- **Degradation (NLL)**: Coherence loss measured as Δ NLL (negative log-likelihood increase) on daily dilemmas questions. Penalizes interventions that break generation quality.
 - **Baselines (effect sizes, not gain %)**: Prompting=2.23, RepEng=3.06, S-steer=3.02
+- Main Metric / Gain % - this is Effect / degregaton. This is our key metric and measures intervention strength against degredation.
 
 **Projection loss (`val_proj_diff`)**: Mean absolute difference in activations projected onto PCA direction, averaged across chosen/rejected pairs. Measures separation magnitude along the steering axis.
 
 **Coherence constraints**: 
 - `coh_weight`: KL divergence penalty to keep policy close to reference model
 - `mono_weight`: Per-token margin loss ensuring logp_pi > logp_ref for chosen tokens
+
+Notes:
+- inverted steering: this is fine, it happens in PCA and we just swap the coeffecients. As long as the coeffecients give opposites things to both sizes of zero then we get a strong T-state effect size. If we froced the model to learn a certain direction we might be forcing it to learn opposite behavious which is a much harder task than going with it's preexisting inclinations then reversing the coeffecients.
 
 ### Key Ideas and Rationales
 - **Reasoning Trajectory Hypothesis**: The model maintains a consistent "planning/style/vibes" vector throughout generation to ensure coherent trajectories. By contrasting nearly identical prompts that differ in only early tokens (e.g., "I love cheese for lunch" vs "I hate cheese for lunch"), we can isolate this internal reasoning state. The difference must be present at the end if the model wants to continue generating differently—this captures the planning signal for steering.

@@ -46,6 +46,7 @@ run:
     run_exp_small --n_depths=10 --loss_depths -20 --r 256 --wd 1 --rot_u --scale_s=mult
     run_exp_small --n_depths=10 --loss_depths -30 --r 512 --wd 1 --rot_u --scale_s=none
     run_exp_small --rot_u 
+    run_exp_small --no_rot_v # 
     run_exp_small --scale_s=none
     run_exp_small --scale_s=mult
     run_exp_small --n_epochs=10 --loss_depths -1 --r 8  --wd 0
@@ -149,6 +150,7 @@ run:
 
 
     # Try differen't models
+    uv run python nbs/train.py q06b-24gb
     uv run python nbs/train.py q14b-80gb --model_name=wassname/qwen-14B-codefourchan
     uv run python nbs/train.py q14b-80gb
     uv run python nbs/train.py gemma270m-80gb
@@ -156,6 +158,7 @@ run:
     uv run python nbs/train.py gemma4b-80gb
     uv run python nbs/train.py gemma12b-80gb
     uv run python nbs/train.py l8b-80gb
+    uv run python nbs/train.py tiny
     # google/gemma-3-27b-it
     # Qwen/Qwen3-32B
     # unsloth/Llama-3.3-70B-Instruct
