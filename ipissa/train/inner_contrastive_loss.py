@@ -646,8 +646,8 @@ def combine_dual_coef_losses(
     # Without abs(), they could cancel out if model learns conflicting directions
     loss_proj_flipped = (loss_pos["loss_proj"] + loss_neg["loss_proj"]).mean() > 0
     
-    proj_diff_pos = loss_pos["proj_diff"]
-    proj_diff_neg = loss_neg["proj_diff"]
+    proj_diff_pos = loss_pos["loss_proj"]
+    proj_diff_neg = loss_neg["loss_proj"]
     if loss_proj_flipped:
         proj_diff_pos = -proj_diff_pos
         proj_diff_neg = -proj_diff_neg
