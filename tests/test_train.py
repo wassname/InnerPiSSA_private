@@ -1,4 +1,4 @@
-from ipissa.train.train_adapter import main
+from ipissa.train.train_adapter import train_model
 from ipissa.config import TrainingConfig
 import pytest
 
@@ -25,4 +25,4 @@ test_configs = [
 
 @pytest.mark.parametrize("config", test_configs)
 def test_train(config):
-    main(config)
+    train_model(config)

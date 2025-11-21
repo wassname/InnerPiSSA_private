@@ -640,70 +640,59 @@ def combine_dual_coef_losses(
         meta_neg: Dict with metrics for coef=-1 (cw, mono_violation)
         meta_shared: Dict with global metrics (loss_monotonic, mono_frac_violated)
     """
-    if not adaptive_relaxation:
-        # Standard: just sum everything
-        loss_proj_bidirectional = -torch.abs(loss_pos["loss_proj"] + loss_neg["loss_proj"])
-        total = (
-            loss_proj_bidirectional 
-            + torch.relu(loss_pos["loss_coh"]) 
-            + torch.relu(loss_neg["loss_coh"])
-        ).mean()
-        
-        meta_pos = {"cw": 1.0}
-        meta_neg = {"cw": 1.0}
-        meta_shared = {}
-        
-        return total, meta_pos, meta_neg, meta_shared
-    
-    # Adaptive: reweight coherence by difficulty
-    # proj_diff interpretation:
-    #   MORE negative (e.g., -3) = EASIER direction (pi separation >> ref separation)
-    #   LESS negative (e.g., -0.5) = HARDER direction (pi barely better than ref)
-    # 
-    # Strategy: RELAX coherence on HARD direction (less negative), TIGHTEN on EASY direction
-    # Rationale: Hard direction needs exploration room; easy direction is already working,
-    #            so keep it strictly coherent to prevent drift into saddle points.
-    proj_diff_pos = loss_pos["proj_diff"]  # Already in symlog scale
-    proj_diff_neg = loss_neg["proj_diff"]
-
     # Projection loss: maximize bidirectional separation magnitude
     # Both coefficients separate in OPPOSITE directions by construction (alpha=±1)
     # We want large separation in EITHER direction (model picks easiest path) for each module
     # Without abs(), they could cancel out if model learns conflicting directions
-    # we do the flip the same in all samples in the batch, but layers/module can be different
     loss_proj_flipped = (loss_pos["loss_proj"] + loss_neg["loss_proj"]).mean() > 0
+    
+    proj_diff_pos = loss_pos["proj_diff"]
+    proj_diff_neg = loss_neg["proj_diff"]
     if loss_proj_flipped:
         proj_diff_pos = -proj_diff_pos
         proj_diff_neg = -proj_diff_neg
     loss_proj_bidirectional = proj_diff_pos + proj_diff_neg
-
-    # Softmax with POSITIVE sign: LESS negative proj_diff → LOWER weight (relaxed coherence)
-    # Example: proj_diff_pos=-0.5, proj_diff_neg=-3.0
-    #   → softmax([-0.5, -3.0]) = [0.92, 0.08] → weights = [0.92, 0.08] (hard gets relaxed)
-    proj_diffs = torch.stack([proj_diff_pos, proj_diff_neg])  # (2,)
-    coh_weights = F.softmax(proj_diffs / temperature, dim=0) * 2.0  # Sum to 2.0
-    coh_weight_pos = torch.clamp(coh_weights[0], max=1.0)  # Cap at 1.0 to prevent over-tightening and stop oscilations as one becomes easier the the other
-    coh_weight_neg = torch.clamp(coh_weights[1], max=1.0)
+    
+    # Determine coherence weights based on adaptive_relaxation flag
+    if adaptive_relaxation:
+        # Adaptive: reweight coherence by difficulty
+        # proj_diff interpretation:
+        #   MORE negative (e.g., -3) = EASIER direction (pi separation >> ref separation)
+        #   LESS negative (e.g., -0.5) = HARDER direction (pi barely better than ref)
+        # 
+        # Strategy: RELAX coherence on HARD direction (less negative), TIGHTEN on EASY direction
+        # Rationale: Hard direction needs exploration room; easy direction is already working,
+        #            so keep it strictly coherent to prevent drift into saddle points.
+        
+        # Softmax with POSITIVE sign: LESS negative proj_diff → LOWER weight (relaxed coherence)
+        # Example: proj_diff_pos=-0.5, proj_diff_neg=-3.0
+        #   → softmax([-0.5, -3.0]) = [0.92, 0.08] → weights = [0.92, 0.08] (hard gets relaxed)
+        proj_diffs = torch.stack([proj_diff_pos, proj_diff_neg])  # (2,)
+        coh_weights = F.softmax(proj_diffs / temperature, dim=0) * 2.0  # Sum to 2.0
+        coh_weight_pos = torch.clamp(coh_weights[0], max=1.0)  # Cap at 1.0 to prevent over-tightening
+        coh_weight_neg = torch.clamp(coh_weights[1], max=1.0)
+    else:
+        # Fixed weights: uniform coherence
+        coh_weight_pos = torch.tensor(1.0, device=proj_diff_pos.device)
+        coh_weight_neg = torch.tensor(1.0, device=proj_diff_neg.device)
+    
+    # Apply enable_coherence toggle (overrides weights if disabled)
     if not enable_coherence:
-        coh_weight_pos = torch.tensor(0.0, device=proj_diffs.device)
-        coh_weight_neg = torch.tensor(0.0, device=proj_diffs.device)
+        coh_weight_pos = torch.tensor(0.0, device=proj_diff_pos.device)
+        coh_weight_neg = torch.tensor(0.0, device=proj_diff_neg.device)
     
-    
-    # Combine with adaptive coherence weights
+    # Combine projection + weighted coherence
     total = (
         loss_proj_bidirectional + 
         coh_weight_pos * loss_pos["loss_coh"] +
         coh_weight_neg * loss_neg["loss_coh"]
     ).mean()
     
-    # Build per-coefficient metadata dicts
+    # Build metadata dicts
     meta_pos = {"cw": coh_weight_pos.item()}
     meta_neg = {"cw": coh_weight_neg.item()}
-    meta_shared = {
-        "loss_proj_flipped": loss_proj_flipped.item(),
-        # "loss_proj": loss_proj_bidirectional.mean().item()
-    }  # Metrics that don't belong to either coefficient
-    
+    meta_shared = {"loss_proj_flipped": loss_proj_flipped.item()}
+        
     # Optional: Add monotonic ordering constraint
     if enable_monotonic:
         delta_logp_neg = loss_neg["delta_logp_change"]

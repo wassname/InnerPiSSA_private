@@ -7,8 +7,10 @@ import json
 from adjustText import adjust_text
 from ipissa.train.train_adapter import proj_root, TrainingConfig
 from tabulate import tabulate
+import scipy.stats as stats
+import numpy as np
 
-# TODO get last that has results
+# get last that has results
 print(f"proj_root: {proj_root}")
 results_dirs = sorted(( proj_root / "./outputs/adapters/").glob("*"))
 result_dir = None
@@ -27,7 +29,7 @@ results_dir = proj_root / "./outputs/adapters/q4b-raw-r256_20251120_071852"
 results_dir = proj_root / "./outputs/adapters/q4b-raw-r256_20251120_093045"
 results_dir = proj_root / "./outputs/adapters/q4b-raw-r256-lr1e-2_20251120_095949"
 # results_dir = proj_root / "./outputs/adapters/q4b-raw-r256_20251120_100645"
-results_dir = proj_root / "./outputs/adapters/q4b-raw-r256_20251120_103924" # wd=100
+results_dir = proj_root / "./outputs/adapters/q4b-raw-r256_20251120_001953" # wd=100
 
 
 # f = ers/
@@ -43,17 +45,6 @@ f = result_dir / "eval_summary.csv"
 df_res_pv.to_csv(f, index=False, float_format="%.4f")
 print(f"Saved eval summary to {f}")
 # TODO get the above table, get the max truth telling coeff for each method. Then get the diff. Then summarise
-
-# Optionally load per-model prompting baseline if exists
-# NOTE: Disabled for performance - prompting baseline has many rows which slows down compute_transfer_summary
-# model_safe = config.model_name.replace('/', '_')
-# prompting_path = proj_root / "outputs" / f"prompting_baseline_{model_safe}.parquet"
-# if prompting_path.exists():
-#     res_prompting = pd.read_parquet(prompting_path)
-#     df_res_wlabels = pd.concat([df_res_wlabels, res_prompting], ignore_index=True)
-#     print(f"Added prompting baseline ({len(res_prompting)} rows)")
-
-
 
 md, tables, s = format_results_table(df_res_wlabels, target_col='logscore_Virtue/Truthfulness', config=config)
 print(md)
@@ -97,8 +88,7 @@ df_res_pv = df_res_pv.reindex(
 )
 
 # For each method, compute correlation and range statistics
-import scipy.stats as stats
-import numpy as np
+
 
 methods = df_res_pv.columns.get_level_values(0).unique()
 correlation_results = []
@@ -107,7 +97,7 @@ for method in methods:
     method_data = df_res_pv[method]  # All coeffs for this method
     
     # Get available coefficients (excluding 'disabled')
-    coeffs = [c for c in method_data.columns if c != 'disabled']
+    coeffs = [c for c in method_data.columns if (c not in ['disabled', None])]
     if len(coeffs) < 2:
         continue
     
@@ -133,13 +123,16 @@ for method in methods:
         # Compute slope via linear regression
         slope, intercept, r_val, p_val_reg, std_err = stats.linregress(truth_values, label_values)
         
+        # Standardized slope (beta coefficient): how many SDs does label change per SD of truth
+        std_slope = slope * (truth_values.std() / label_values.std()) if label_values.std() > 0 else 0
+        
         correlation_results.append({
             'Method': method,
             't_stat': slope / std_err if std_err != 0 else np.nan,
             'Moral Value': label,
             'Correlation': corr,
             'p-value': p_val,
-            'Slope-1': slope-1,
+            'Std_Slope': std_slope,  # Standardized coefficient (same as correlation for simple regression)
             'Range': value_range,
             'R²': r_val**2,
         })
@@ -150,28 +143,7 @@ df_corr = pd.DataFrame(correlation_results)
 high_n_labels = num_labels[num_labels > 30].index
 high_n_labels = [s.lstrip("logscore_") for s in high_n_labels if s.lstrip("logscore_") != target_label]
 
-# Automatic clustering: pivot Slope-1 by method
-print("\n## Automatic Value Clustering by Transfer Pattern")
-df_pivot = df_corr.pivot_table(index='Moral Value', columns='Method', values='Slope-1')
-df_pivot = df_pivot.loc[df_pivot.index.isin(high_n_labels)]
-
-# Hierarchical clustering on values
-from scipy.cluster.hierarchy import linkage, fcluster
-from scipy.spatial.distance import pdist
-
-if len(df_pivot) > 0 and len(df_pivot.columns) > 1:
-    # Compute distance matrix and cluster
-    Z = linkage(pdist(df_pivot.fillna(0), metric='euclidean'), method='ward')
-    clusters = fcluster(Z, t=4, criterion='maxclust')
-    df_pivot['cluster'] = clusters
-    
-    print("\nData-driven clusters (by Slope-1 pattern similarity):")
-    for c in sorted(df_pivot['cluster'].unique()):
-        cluster_values = df_pivot[df_pivot['cluster'] == c].index.tolist()
-        print(f"\nCluster {c}: {len(cluster_values)} values")
-        print(f"  {cluster_values[:10]}")  # Show first 10
-
-# Manual hypothesis-driven clusters (expanded with high-N values)
+# Hypothesis-driven clusters (expanded with high-N values)
 assistant_virtues = [
     'MFT/Care',              # N=412
     'Value/empathy',         # N=238
@@ -216,23 +188,19 @@ math = [
 
 all_cols = assistant_virtues + agent_virtues + conscientiousness + preferences + math
 
-for method in methods:
-    method_df = df_corr[df_corr['Method'] == method].copy()
-    if len(method_df) == 0:
-        continue
-    # Cluster-level statistics
-    # print(f"\n**Cluster Statistics for {method}:**")
-    clusters = {
-        'Agent': agent_virtues,
-        'Assistant': assistant_virtues,
-        'Conscientiousness': conscientiousness,
-        'Preferences': preferences,
-        'Math': math,
-    }
+# Define clusters once
+clusters = {
+    'Agent': agent_virtues,
+    'Assistant': assistant_virtues,
+    'Conscientiousness': conscientiousness,
+    'Preferences': preferences,
+    'Math': math,
+}
     
 # Cluster ranking table
 print("\n## Cluster Transfer Effects by Method")
-print("Mean Slope-1 per cluster (rank in parentheses, 1=most amplified):\n")
+print("Mean t-statistic per cluster (rank in parentheses, 1=strongest effect):\n")
+print("Positive t-stat = increases with truthfulness, negative = decreases\n")
 
 ranking_data = []
 for method in methods:
@@ -240,30 +208,28 @@ for method in methods:
     if len(method_df) == 0:
         continue
     
-    clusters = {
-        'Agent': agent_virtues,
-        'Assistant': assistant_virtues,
-        'Conscientiousness': conscientiousness,
-        'Uncorrelated': preferences,
-    }
-    
-    cluster_means = {}
+    cluster_stats = {}
     for cluster_name, cluster_values in clusters.items():
         cluster_df = method_df[method_df['Moral Value'].isin(cluster_values)]
         if len(cluster_df) > 0:
-            cluster_means[cluster_name] = cluster_df['Slope-1'].mean()
+            # Use t-stat mean for ranking (signed effect size)
+            cluster_stats[cluster_name] = {
+                'mean_t': cluster_df['t_stat'].mean(),
+                'std_t': cluster_df['t_stat'].std(),
+                'n': len(cluster_df)
+            }
     
-    # Rank clusters by mean Slope-1 (descending, NaN goes last)
+    # Rank clusters by mean t-stat (descending by abs, NaN goes last)
     ranked = sorted(
-        cluster_means.items(), 
-        key=lambda x: (pd.isna(x[1]), -x[1] if not pd.isna(x[1]) else 0)
+        cluster_stats.items(), 
+        key=lambda x: (pd.isna(x[1]['mean_t']), -abs(x[1]['mean_t']) if not pd.isna(x[1]['mean_t']) else 0)
     )
     rank_map = {name: idx+1 for idx, (name, _) in enumerate(ranked)}
     
-    for cluster_name, mean_slope in cluster_means.items():
+    for cluster_name, stats in cluster_stats.items():
         ranking_data.append({
             'Cluster': cluster_name,
-            method: f"{mean_slope:+.3f} ({rank_map[cluster_name]})",
+            method: f"{stats['mean_t']:+.2f}±{stats['std_t']:.2f} ({rank_map[cluster_name]})",
         })
 
 # Pivot to show values across methods
@@ -283,8 +249,8 @@ for method in methods:
     print("Top 10 most slopeed (positive and negative):\n")
     
     # Sort by absolute correlation
-    method_df = method_df.sort_values('Slope-1', key=abs, ascending=False)
-    top_10 = method_df.head(10)[['Moral Value', 'Correlation', 'Slope-1', 'Range', 'p-value']]
+    method_df = method_df.sort_values('Correlation', key=abs, ascending=False)
+    top_10 = method_df.head(10)[['Moral Value', 'Correlation', 'Std_Slope', 'Range', 'p-value']]
     print(tabulate(top_10, tablefmt='pipe', headers='keys', floatfmt='.3f', showindex=False))
 
 print("\n\n")

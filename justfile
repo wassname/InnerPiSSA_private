@@ -84,20 +84,16 @@ scratch:
 # Paper ablation suite
 ablate-paper:
     # make sure baselines are cached
-    uv run python nbs/eval_baseline_wassname_Ssteer_baseline.py
-    uv run python nbs/eval_baseline_repeng.py
-    uv run python nbs/eval_baseline_prompting.py
+    just eval-baselines
 
-    just ablate-constraints
-    just sweep-layers
-    just sweep-wd
-    just sweep-lr          # ADD
-    just sweep-rank        # ADD
-    just run-seeds         # ADD (for error bars)
+    # just ablate-constraints
+    # just sweep-layers
+    # just sweep-wd
+    # just sweep-lr
+    just sweep-rank
     just ablate-modules
-    just ablate-method
     just run-models
-    just eval-baselines    # ADD (Table 1)
+    just run-seeds
     just data-efficiency
 
 ablate-constraints:
@@ -142,18 +138,12 @@ ablate-modules:
     uv run python nbs/train.py q4b-80gb --modules q_proj k_proj v_proj o_proj --experiment_name="attention up"
     uv run python nbs/train.py q4b-80gb --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=128 --experiment_name="all"
 
-ablate-method:
-    #!/bin/bash -ex
-    export WANDB_RUN_GROUP="ablate-method-$(date +%Y%m%d-%H%M)"
-    uv run python nbs/train.py q4b-80gb --no_rot_v
-    uv run python nbs/train.py q4b-80gb --scale_s=none
-    uv run python nbs/train.py q4b-80gb --adapter_type=lora
-
 run-models:
     #!/bin/bash -ex
     export WANDB_RUN_GROUP="run-models-$(date +%Y%m%d-%H%M)"
     uv run python nbs/train.py q06b-24gb
     uv run python nbs/train.py q4b-80gb
+    uv run python nbs/train.py q4b-80gb --model_name=Qwen/Qwen3-4B-Base
     uv run python nbs/train.py q14b-80gb
     uv run python nbs/train.py l8b-80gb
     uv run python nbs/train.py gemma270m-80gb

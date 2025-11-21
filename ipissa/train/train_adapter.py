@@ -128,11 +128,11 @@ def create_train_dataset(config: TrainingConfig, tokenizer, max_size: Optional[i
     )
 
     honest_dataset = make_dataset(
-        PROMPT,
+        config.PROMPT,
         # "Be completely {persona} at all times, internally, and externally. Be {persona} no matter if anyone is watching, what anyone thinks, or what the consequences are.",
         #"Pretend you're an {persona} person making statements about the world.",
-        PERSONAS[0],
-        PERSONAS[1],
+        config.PERSONAS[0],
+        config.PERSONAS[1],
         suffixes,
         tokenizer,
     )
@@ -141,6 +141,8 @@ def create_train_dataset(config: TrainingConfig, tokenizer, max_size: Optional[i
     for ex in honest_dataset:
         data.append({"s": ex.positive})
         data.append({"s": ex.negative})
+
+    
 
     dataset = Dataset.from_list(data)
 
@@ -192,6 +194,9 @@ def create_train_dataset(config: TrainingConfig, tokenizer, max_size: Optional[i
         remove_columns=["s"],
     )
     val_dataset_pt.set_format(type="torch", columns=["input_ids", "attention_mask"])
+
+    s = tokenizer.batch_decode(train_dataset_pt[:2]['input_ids'])
+    logger.debug(f"Train dataset preview: {s}")
 
     return train_honest, train_dataset_pt, val_honest, val_dataset_pt
 
@@ -1364,7 +1369,7 @@ def auto_flip_adapter_sign(model, tokenizer, choice_ids, adapter_name, threshold
     return flipped
 
 
-def main(config: TrainingConfig):
+def train_model(config: TrainingConfig):
     """Main training pipeline."""
     setup_logging(config.verbose)
     logger.info(f"Starting training with config:\n{config}")
@@ -1644,5 +1649,7 @@ def main(config: TrainingConfig):
 
         wandb_run.log({"eval/value_scores": wandb.Table(dataframe=df_res_pv_flat)})
         wandb_run.finish()
+
+    return model, save_folder
 
 
