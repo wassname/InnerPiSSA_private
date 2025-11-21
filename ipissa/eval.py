@@ -183,3 +183,4 @@ def gen_with_choices(model, tokenizer, input_ids, attention_mask, choice_ids, co
     outputs.past_key_values = kv_cache
     
     return outputs, seq_nll, logp_choices, logratios
+

@@ -51,7 +51,7 @@ PERSONAS = [[
 EVAL_BASELINE_MODELS = [
     "Qwen/Qwen3-4B-Instruct-2507",
     "Qwen/Qwen3-0.6B",
-    # "Qwen/Qwen3-0.6B-Base",
+    "Qwen/Qwen3-4B-Base",
     "google/gemma-3-4b-it",
     "unsloth/Llama-3.1-8B-Instruct",
     "google/gemma-3-12b-it",
@@ -184,6 +184,10 @@ class TrainingConfig:
 
     save_checkpoints: bool = False
     verbose: bool = False
+
+
+    PROMPT: str = PROMPT
+    PERSONAS: List[List[str]] = PERSONAS
 
     @property
     def eval_batch_size(self):

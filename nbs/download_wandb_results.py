@@ -206,7 +206,7 @@ try:
 except Exception as e:
     logger.warning(f"Could not load sSteer results: {e}")
 
-summary_file = output_dir / 'outputs' / 'wandb_summary.csv'
+# summary_file = output_dir / 'outputs' / 'wandb_summary.csv'
 
 
 logger.info(f"""
@@ -217,7 +217,7 @@ Goal: Identify which hyperparameters generalize across large models (ideally 4B+
 First read
 - README.md - to understand context, resecially Metric Reference section
 - {f_help} - to understand cli options meaning and default values
-- {results_file} - to see the results
+- {summary_file} - to see the results
 - Baseline CSVs: {fpr}, {fre}, {fss} - to see how well prompting, which we want to beat, did
 
 Then tell me what you think!
