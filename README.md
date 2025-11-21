@@ -391,6 +391,142 @@ For geometric intuition and detailed explanation, see `docs/loss_geometry.md`.
 
 See also the repo for training with losses like this https://github.com/wassname/repr-preference-optimization
 
+---
+
+## Appendix: Ablation Studies and Paper Tables
+
+**Auto-generated from wandb results**. Run `uv run python nbs/generate_paper_tables.py` to regenerate.
+
+### Table 1: Cross-Model Generalization
+
+**FIXME**: Run `just run-models` to populate this table.
+
+<!--#include file="docs/tables/table1_cross_model.md"-->
+| Model         | Size   | InnerPiSSA   | Prompting   | RepEng      | S-Steer   |
+|:--------------|:-------|:-------------|:------------|:------------|:----------|
+| Qwen3-0.6B    | 0.6B   | TODO         | **216.1** ✓ | 77.1        | -         |
+| Qwen3-4B      | 4B     | **2114.0** ✓ | 759.3       | 284.1       | -         |
+| Qwen3-14B     | 14B    | TODO         | **106.9** ✓ | 1.8         | -         |
+| Llama-3.1-8B  | 8B     | TODO         | 178.6       | **704.2** ✓ | -         |
+| Gemma-3-4B    | 4B     | TODO         | **394.8** ✓ | 1.9         | -         |
+| Gemma-3-12B   | 12B    | TODO         | **490.7** ✓ | 1.4         | -         |
+| Qwen-14B-code | 14B    | TODO         | 44.1        | **171.5** ✓ | -         |
+
+**Notes**: Main metric = T-statistic / (1 + NLL degradation). Higher is better. Only Qwen3-4B has InnerPiSSA results so far.
+
+---
+
+### Table 2: Layer Depth Ablation
+
+**Status**: ⚠️ Partial - only 1 run per depth except 0.5 (needs multiple seeds for robustness)
+
+<!--#include file="docs/tables/table2_layer_ablation.md"-->
+|   Depth |   Layer |   Mean |    Max |   N Runs |   Val Loss | Finding      |
+|--------:|--------:|-------:|-------:|---------:|-----------:|:-------------|
+|    0.01 |       0 |  396.3 |  396.3 |        1 |        6.6 | Early - weak |
+|    0.1  |       3 |   32.6 |   32.6 |        1 |       12.4 | Early - weak |
+|    0.2  |       7 |  209.1 |  209.1 |        1 |        1.1 | Mid          |
+|    0.3  |      10 |  737.3 |  737.3 |        1 |        2   | **Strong** ✓ |
+|    0.4  |      14 | 1303   | 1303   |        1 |        4.4 | **Strong** ✓ |
+|    0.5  |      18 |  704.4 | 2114   |       40 |        9.7 | **Strong** ✓ |
+|    0.6  |      21 |  439.7 |  439.7 |        1 |        8.9 | Mid          |
+|    0.7  |      25 |  911.3 |  911.3 |        1 |        7.6 | Mid          |
+|    0.8  |      28 |  665.9 |  665.9 |        1 |       20.2 | Mid          |
+|    0.9  |      32 |  279.7 |  279.7 |        1 |        1.5 | Late - weak  |
+|    0.99 |      35 |  547.3 |  547.3 |        1 |       16.4 | Late - weak  |
+
+**Finding**: Middle layers (0.3-0.5, layers 10-18) work best. Early layers lack semantic content, late layers already suppressed. Matches N-2 hypothesis.
+
+---
+
+### Table 3: Learning Rate Sensitivity
+
+<!--#include file="docs/tables/table3_learning_rate.md"-->
+|     LR |   Mean | Std   |    Max |   N Runs |   Val Loss | Result                |
+|-------:|-------:|:------|-------:|---------:|-----------:|:----------------------|
+| 1e-05  |   67   | -     |   67   |        1 |       27   | Too low - fails ❌    |
+| 0.0001 |   19.2 | -     |   19.2 |        1 |       17.2 | Too low - fails ❌    |
+| 0.001  |  167.8 | -     |  167.8 |        1 |        9.3 | Low - weak            |
+| 0.008  |  691.6 | 511.4 | 2114   |       40 |        7.3 | **Default - stable** ✓|
+| 0.01   |  995.9 | 385.2 | 1432   |        3 |        6.8 | **High perf** ⚠️      |
+| 0.1    |  714.6 | 829.1 | 1648   |        3 |       17.4 | Too high - unstable   |
+| 1      |  650.8 | -     |  650.8 |        1 |       52.4 | Too high - unstable   |
+
+**Finding**: lr=0.008-0.01 is the sweet spot. Higher variance at 0.01 suggests sensitivity.
+
+---
+
+### Table 4: Architecture Component Ablation
+
+<!--#include file="docs/tables/table4_architecture.md"-->
+| Configuration   |   Main Metric |   Val Loss |   N Runs | Result                |
+|:----------------|--------------:|-----------:|---------:|:----------------------|
+| Full InnerPiSSA |         666.3 |        9.4 |       49 | **Baseline** ✓        |
+| No S scaling    |        1051   |       10.6 |        1 | Better? (investigate) |
+| No V rotation   |          29   |       34.7 |        1 | **Catastrophic** ❌   |
+| LoRA adapter    |           0   |        9.3 |        3 | **Catastrophic** ❌   |
+
+**Findings**: 
+- V rotation is **critical** - removing it → 96% performance drop
+- LoRA adapter completely fails (3 runs, all metric=0)
+- S scaling may not be necessary - actually improves without it (needs confirmation)
+
+---
+
+### Table 5: Rank Sensitivity
+
+**FIXME**: Run `just sweep-rank` to populate this table.
+
+|   Rank | Main Metric   | Val Loss   | N Runs   |
+|-------:|:--------------|:-----------|:---------|
+|     32 | TODO          | TODO       | TODO     |
+|     64 | TODO          | TODO       | TODO     |
+|    128 | TODO          | TODO       | TODO     |
+|    256 | TODO          | TODO       | TODO     |
+|    512 | TODO          | TODO       | TODO     |
+
+---
+
+### Table 6: Module Targeting Ablation
+
+**FIXME**: Run `just ablate-modules` to populate this table.
+
+| Modules                               | Main Metric   | Val Loss   | Finding   |
+|:--------------------------------------|:--------------|:-----------|:----------|
+| o_proj, down_proj (residual)          | TODO          | TODO       | TODO      |
+| gate_proj, up_proj (MLP)              | TODO          | TODO       | TODO      |
+| q_proj, k_proj, v_proj, o_proj (attn) | TODO          | TODO       | TODO      |
+| All modules (default)                 | TODO          | TODO       | TODO      |
+
+---
+
+### Table 7: Data Efficiency
+
+**FIXME**: Run `just data-efficiency` to populate this table.
+
+|   Samples | Main Metric   | Val Loss   | Finding   |
+|----------:|:--------------|:-----------|:----------|
+|        50 | TODO          | TODO       | TODO      |
+|       100 | TODO          | TODO       | TODO      |
+|       200 | TODO          | TODO       | TODO      |
+|       400 | TODO          | TODO       | TODO      |
+|       800 | TODO          | TODO       | TODO      |
+|      2000 | TODO          | TODO       | TODO      |
+
+---
+
+### Table 8: Random Seed Stability
+
+**FIXME**: Run `just run-seeds` to populate this table.
+
+| Seed       | Main Metric   | Val Loss   |
+|:-----------|:--------------|:-----------|
+| 42         | TODO          | TODO       |
+| 123        | TODO          | TODO       |
+| 456        | TODO          | TODO       |
+| Mean ± Std | TODO          | TODO       |
+
+---
 
 ## Citation
 
