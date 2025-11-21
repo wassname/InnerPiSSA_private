@@ -260,8 +260,7 @@ def match_linear_layers(model, layer_nums: List[int], module_names: List[str], v
 def setup_adapter(base_model, config: TrainingConfig):
     """Setup InnerPiSSA adapter on base model."""
     total_layers = base_model.config.num_hidden_layers
-    start_layer = int(config.depth_start * total_layers)
-    end_layer = total_layers + config.depth_end
+    start_layer , end_layer = normalize_layer_spec([config.depth_start, config.depth_end], total_layers)
     assert start_layer < end_layer, f"Invalid layer range: start {start_layer}, end {end_layer}"
     assert end_layer <= total_layers, f"End layer {end_layer} exceeds total layers {total_layers}"
     assert start_layer >= 0, f"Start layer {start_layer} is negative"

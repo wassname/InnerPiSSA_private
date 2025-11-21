@@ -135,7 +135,7 @@ ablate-modules:
     export WANDB_RUN_GROUP="ablate-modules-$(date +%Y%m%d-%H%M)"
     uv run python nbs/train.py q4b-80gb --modules o_proj down_proj --experiment_name="layers residual out"
     uv run python nbs/train.py q4b-80gb --modules gate_proj up_proj --experiment_name="mlp up"
-    uv run python nbs/train.py q4b-80gb --modules q_proj k_proj v_proj o_proj --experiment_name="attention up"
+    uv run python nbs/train.py q4b-80gb --modules q_proj k_proj v_proj --experiment_name="attention up"
     uv run python nbs/train.py q4b-80gb --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=128 --experiment_name="all"
 
 run-models:
