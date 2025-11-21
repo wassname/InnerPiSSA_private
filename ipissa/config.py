@@ -154,7 +154,7 @@ class TrainingConfig:
     coh_adaptive: bool = True
     """Enable difficulty-based coherence relaxation"""
 
-    coh_temp: float = 2
+    coh_temp: float = 1
     """Coherence relaxation temperature (higher=softer, lower=sharper)"""
 
     mono: bool = True

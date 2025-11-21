@@ -177,95 +177,129 @@ uv run python nbs/train.py \
 
 ### Pseudocode for Contrastive SVD Adapter Steering
 
-```py
-# DATA: Contrastive prompt pairs differing by one word. Incomplete, but have hidden states that would lead to different continuations.
-honest    = ["I love cheese; let me tell you about the andes mountains", ...]
-dishonest = ["I hate cheese; let me tell you about the andes mountains", ...]
-batch = [honest[0], dishonest[0], honest[1], dishonest[1], ...]  # interleaved cho/rej
+### Algorithm 1: InnerPiSSA (Simplified)
 
-# SETUP: Low-rank SVD decomposition with learnable rotations + scaling
-for layer in model.target_layers:
-    U, Σ, V = SVD(layer.W)[:r]  # U: (d_out, r), Σ: (r,), V: (d_in, r)
-    W_res = W - U @ diag(Σ) @ V.T
-    θ_v = init_skew_symmetric(r)  # learnable rotation params for V
-    θ_u = init_skew_symmetric(r)  # learnable rotation params for U
-    log_λ = rand(r) - 0.5  # must init non-zero to break symmetry
+```python
+# 1. SETUP: Reversible SVD Adapter
+U, Σ, V = SVD(W)[:r]
+θ_v, θ_u, log_λ = init_params(r)
 
-def forward(x, layer, α):  # α (alpha) scales rotation/steering strength
-    R_v = cayley(θ_v, α)  # rotation matrix from skew-symmetric params
-    R_u = cayley(θ_u, α)
-    V_rot = V @ R_v  # rotated input basis
-    U_rot = U @ R_u  # rotated output basis
-    Σ_scaled = exp(α · log_λ) ⊙ Σ  # multiplicative scaling of singular values
-    
-    # Efficient forward: x @ V_rot @ diag(Σ_scaled) @ U_rot.T + x @ W_res.T
-    return (x @ V_rot) * Σ_scaled @ U_rot.T + x @ W_res.T
+def forward(x, α):
+    # Rotate singular vectors by α (steering strength)
+    R_v, R_u = cayley(θ_v, α), cayley(θ_u, α)
+    return x @ (V @ R_v) @ diag(Σ * exp(α * log_λ)) @ (U @ R_u).T
 
-# TRAINING: Contrastive loss for reversible steering
-model_ref = load_reference_model()  # frozen base model
+# 2. TRAINING: Contrastive Representation Preference Optimization
+# pref_dir defined by reference model separation in S-space
+for batch in data:
+    # Forward pass for honest (+1) and dishonest (-1) directions
+    out_pos, out_neg = model(batch, α=+1), model(batch, α=-1)
+    
+    # Loss A: Maximize separation (flip if anti-aligned)
+    L_proj = -((out_pos.h - out_neg.h) @ pref_dir).mean()
+    if L_proj > 0: L_proj = -L_proj
 
-for batch in dataloader:
-    # Get reference hidden states and logprobs (frozen)
-    with torch.no_grad():
-        h_ref = model_ref.get_hidden_states(batch)  # (2*batch, seq_len, d)
-        logp_ref = model_ref.get_token_logprobs(batch)  # (2*batch, seq_len)
-    
-    # Compute preference direction from reference model differences
-    # For InnerPiSSA: project to S-space first, then compute direction
-    h_ref_U = h_ref @ U  # project to singular value space
-    pref_dir = (h_ref_U[::2] - h_ref_U[1::2]).mean(dim=(0,1))  # (r,)
-    pref_dir = pref_dir / pref_dir.norm()  # normalize to unit vector
-    
-    l_total = 0
-    
-    for α in [-1.0, +1.0]:  # train both directions
-        # Forward with adapter at strength α
-        h_pi = model(batch, α=α)  # (2*batch, seq_len, d)
-        logp_pi = model.get_token_logprobs(batch)
-        
-        # Project to S-space for separation loss
-        h_pi_U = h_pi @ U
-        
-        # Select positive/negative based on coefficient sign
-        # When α > 0: cho is positive (we want to steer toward cho)
-        # When α < 0: rej is positive (we want to steer toward rej)
-        if α > 0:
-            h_pi_pos = h_pi_U[::2]  # chosen
-            h_pi_neg = h_pi_U[1::2]  # rejected
-            logp_coherence = logp_pi[::2]
-            logp_ref_coherence = logp_ref[::2]
-        else:
-            h_pi_pos = h_pi_U[1::2]  # rejected becomes positive
-            h_pi_neg = h_pi_U[::2]  # chosen becomes negative
-            logp_coherence = logp_pi[1::2]
-            logp_ref_coherence = logp_ref[1::2]
-        
-        # Separation loss: maximize projection of (pos - neg) onto preference direction
-        Δh = (h_pi_pos - h_pi_neg).mean(dim=1)  # average over sequence
-        proj = (Δh @ pref_dir).mean()  # average over batch
-        # TODO sign freedom - we let the model use the lesser of forward of backwards seperation (as long as the coeffecients are in opposite directions)
-        l_separation = -softplus(β * proj)  # β=0.1, want to maximize proj
-        
-        # Coherence constraint: penalize NLL degradation beyond threshold
-        Δlogp = (logp_ref_coherence - logp_coherence).mean(dim=1)  # per-sample degradation
-        violation = relu(Δlogp - τ)  # τ=0.2 nats threshold
-        l_coherence = (C * violation).pow(2).mean()  # C=4.0, quadratic penalty
-        
-        l_total += l_separation + l_coherence
-    
-    # Monotonic constraint: ensure α=-1 improves ref NLL, α=+1 degrades it
-    # (This ensures bidirectional control works as expected)
-    Δlogp_neg = (logp_pi[1::2] - logp_ref[1::2]).mean()  # α=-1 should make rej better
-    Δlogp_pos = (logp_pi[::2] - logp_ref[::2]).mean()    # α=+1 should make cho better
-    # TODO sign freedom - we let the model use the lesser of forward of backwards monotonic constraint (as long as the coeffecients are in opposite directions)
-    l_monotonic = relu(-Δlogp_neg) + relu(Δlogp_pos)  # penalize violations
-    
-    l_total += l_monotonic
-    l_total.backward()
-    update(θ_v, θ_u, log_λ)
+    # Loss B: Coherence (adaptive: relax if separation is weak)
+    w = softmax(-L_proj)  # Harder task → Lower weight
+    L_coh = w * relu(out_pos.nll - ref.nll - τ)**2
+
+    # Loss C: Monotonicity (gap_-1 < gap_0 < gap_+1)
+    L_mono = hinge(out_neg.gap < 0) + hinge(out_pos.gap > 0)
+
+    (L_proj + L_coh + L_mono).backward()
 ```
 
+### Detailed Implementation Logic
 
+<details>
+<summary>Click to expand full pseudocode</summary>
+
+```python
+# DATA: Contrastive prompt pairs differing by one word.
+honest    = ["I love cheese...", ...]
+dishonest = ["I hate cheese...", ...]
+batch = [honest[0], dishonest[0], ...]  # interleaved
+
+# SETUP: Low-rank SVD with learnable rotations
+U, Σ, V = SVD(layer.W)[:r]
+θ_v, θ_u = init_skew_symmetric(r), init_skew_symmetric(r)
+log_λ = rand(r) - 0.5
+
+def forward(x, α):
+    # Apply Cayley transform for orthogonal rotations
+    R_v, R_u = cayley(θ_v, α), cayley(θ_u, α)
+    V_rot, U_rot = V @ R_v, U @ R_u
+    
+    # Multiplicative scaling of singular values
+    Σ_scaled = exp(α * log_λ) * Σ
+    
+    # Recompose: x @ V_rot @ Σ_scaled @ U_rot.T
+    return (x @ V_rot) * Σ_scaled @ U_rot.T + x @ W_res.T
+
+# TRAINING LOOP
+for batch in dataloader:
+    # 1. Reference (Frozen)
+    h_ref = model_ref(batch)
+    # Compute preference direction in S-space (U)
+    # We project reference differences into U to find the "natural" separation axis
+    pref_dir = ((h_ref[::2] - h_ref[1::2]) @ U).mean(dim=0)
+    pref_dir = pref_dir / pref_dir.norm()
+
+    # 2. Policy (Bidirectional)
+    # We train both directions simultaneously to ensure reversibility
+    h_pos, logp_pos = model(batch, α=+1)
+    h_neg, logp_neg = model(batch, α=-1)
+    
+    # 3. Loss Calculation
+    # Project differences onto preference direction
+    proj_pos = ((h_pos[::2] - h_pos[1::2]) @ U @ pref_dir).mean()
+    proj_neg = ((h_neg[::2] - h_neg[1::2]) @ U @ pref_dir).mean()
+    
+    # A. Anti-Alignment Guard
+    # If sum is negative, model is separating in reverse direction.
+    # Flip signs to maximize magnitude regardless of direction.
+    if (proj_pos + proj_neg) < 0:
+         proj_pos, proj_neg = -proj_pos, -proj_neg
+
+    # B. Adaptive Coherence
+    # Relax coherence for "hard" directions (weak projection)
+    # Tighten for "easy" directions (strong projection)
+    w = softmax(stack([proj_pos, proj_neg])) * 2
+    w_pos, w_neg = clamp(w, max=1.0)
+    
+    L_coh_pos = w_pos * relu(logp_pos - logp_ref - τ)**2
+    L_coh_neg = w_neg * relu(logp_neg - logp_ref - τ)**2
+
+    # C. Monotonicity
+    # Ensure preference gap moves linearly: gap(-1) < gap(0) < gap(+1)
+    gap_pos = (logp_pos[::2] - logp_pos[1::2]).mean()
+    gap_neg = (logp_neg[::2] - logp_neg[1::2]).mean()
+    gap_ref = (logp_ref[::2] - logp_ref[1::2]).mean() # gap(0)
+    
+    L_mono = hinge(gap_neg > gap_ref) + hinge(gap_pos < gap_ref)
+
+    # Total Backward
+    loss = -(proj_pos + proj_neg) + (L_coh_pos + L_coh_neg) + L_mono
+    loss.backward()
+```
+</details>
+
+## Loss Function: Reversible Representation Preference Optimization (ReprPO)
+
+We introduce a specialized loss function designed to discover reversible steering directions in the model's SVD-transformed space. The loss operates on pairs of contrastive hidden states $(h_{\text{cho}}, h_{\text{rej}})$ and optimizes a learnable steering vector $v$ (parameterized by SVD rotations) to maximize separation while maintaining output coherence.
+
+The total loss is a combination of projection maximization and coherence preservation, computed simultaneously for both forward ($\alpha=+1$) and reverse ($\alpha=-1$) steering coefficients:
+
+$$ \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{proj}} + \mathcal{L}_{\text{coh}} + \mathcal{L}_{\text{mono}} $$
+
+**1. Reversible Projection Loss ($\mathcal{L}_{\text{proj}}$)**
+To ensure the steering vector captures a true semantic axis rather than a unidirectional feature, we maximize the projection of hidden state differences onto the steering direction for both positive and negative coefficients. We employ an **anti-alignment guard**: if the model naturally separates chosen/rejected states in the direction opposite to our initialization (i.e., $\sum \mathcal{L}_{\text{proj}} > 0$), we dynamically flip the optimization sign. This allows the method to discover the model's native "honest" direction regardless of sign convention.
+
+**2. Adaptive Coherence Constraint ($\mathcal{L}_{\text{coh}}$)**
+We enforce a coherence constraint that penalizes KL divergence from the reference model only when it exceeds a threshold $\tau$ (e.g., 0.2 nats). Crucially, we apply **adaptive relaxation**: we weight the coherence penalty inversely to the separation magnitude. Directions that are "hard" to separate (weak projection signal) are granted a relaxed coherence budget to allow exploration, while "easy" directions (strong separation) are held to strict coherence to prevent drift into incoherent regions.
+
+**3. Monotonic Ordering Constraint ($\mathcal{L}_{\text{mono}}$)**
+To prevent saddle points where both $\alpha=+1$ and $\alpha=-1$ degrade performance, we enforce a monotonic ordering on the preference gap $\Delta = \log p(\text{cho}) - \log p(\text{rej})$. We require that $\Delta_{\alpha=-1} < \Delta_{\alpha=0} < \Delta_{\alpha=+1}$, ensuring that the steering vector induces a continuous, reversible shift in behavioral probability.
 
 
 ### Evaluation Framework
@@ -288,17 +322,40 @@ We compare multiple steering methods on transfer from honesty training to moral 
 
 ## Related Work
 
-Parameter-efficient fine-tuning methods represent different hypotheses about transformer internals:
+Parameter-efficient fine-tuning and steering methods represent different hypotheses about transformer internals.
 
-- **LoRA** (Hu et al. 2021): Low-rank adaptation in weight space. Reliable but operates on surface-level weights.
-- **DoRA** (Liu et al. 2024): Decomposes weights into magnitude and direction components. Still primarily output-focused.
-- **PiSSA** (Meng et al. 2024): SVD-based decomposition that separates principal components from residual. Our foundation—operates in transformation space rather than weight space.
-- **SVFT** scaled the S matrix from SVD showing that singular value scaling can generalise, beat SFT, and be data efficient.
-- SVDD Learns rotations of the V matrix from SVD, showing that rotational transformations capture semantic directions.
-- **BiPDO** (Our prior work): Demonstrated bidirectional steering is possible with proper loss design.
-- repeng: contrastive prompts for steering (and our baseline)
+### Representation Steering & Engineering
+- **Representation Engineering (RepE)** (Zou et al., 2023): The foundational work on top-down transparency and control. We build on their concept of "reading and controlling" high-level cognitive phenomena but move beyond activation arithmetic to gradient-based optimization.
+- **BiPDO** (Cao et al., 2024): Introduced bidirectional preference optimization for steering. Our work shares the bidirectional goal but operates in SVD transformation space rather than raw activation space, and uses a specialized coherence-constrained loss.
+- **AxBench** (Wu et al., 2025): A critical benchmark showing that representation steering often lags behind prompting. We directly address this gap, showing that InnerPiSSA is one of the first representation methods to outperform prompting on transfer tasks.
+- **Circuit Breakers** (Zou et al., 2024): Uses representation-level optimization to prevent harmful outputs. While they focus on refusal (shutting down capability), we focus on steering (redirecting capability), but share the insight that direct representation control is more robust than output alignment.
+- **Anthropic Persona Vectors** (2024): Demonstrates that model personality is encoded in steerable directions.
+- **repeng** (Vogel, 2024): A robust library for PCA-based steering. We use this as our primary baseline for arithmetic steering methods.
+
+### Parameter-Efficient Fine-Tuning (PEFT)
+- **PiSSA** (Meng et al., 2024): Decomposes weights into principal and residual components ($W = U \Sigma V^T + W_{res}$). We adopt this architecture but innovate by learning *rotations* of the singular vectors rather than just fine-tuning the components, enabling semantic steering.
+- **DoRA** (Liu et al., 2024): Decomposes weights into magnitude and direction. Like us, they recognize the importance of separating these components, but they operate in weight space for general fine-tuning, whereas we operate in transformation space for targeted steering.
+- **SVFT** (Lingam et al., 2024): Updates singular values ($\Sigma$) for efficient fine-tuning. We extend this by also rotating the singular vectors ($U, V$), which our ablations show is critical for steering (removing rotations drops performance by 96%).
+- **SSVD** (Wang et al., 2025): Rotates $V$ matrices for domain adaptation in speech. We independently developed a similar rotation mechanism but apply it to both $U$ and $V$ for bidirectional steering in language models.
+
+### Mechanistic Interpretability
+- **Universal Neurons** (Gurnee et al., 2024) & **Stages of Inference** (Lad et al., 2024): Identify that models have distinct "suppression" dynamics in later layers. This motivates our choice to steer at layers $N-2$ to $N-5$, intervening in the "reasoning" stage before suppression mechanisms activate.
+- **Negative Results for SAEs** (Smith et al., 2025): Highlights the difficulty of using Sparse Autoencoders for downstream tasks. Our work suggests that supervised/contrastive steering in transformation space may be a more practical route for control than unsupervised dictionary learning.
 
 **Key insight**: Methods operating in transformation space (SVD, rotations) generalize better than those in raw activation or weight space because they align with how transformers process information.
+
+## References
+
+See `references.bib` for full BibTeX entries.
+
+- [Zou et al., 2023] Representation Engineering: A Top-Down Approach to AI Transparency
+- [Cao et al., 2024] Personalized Steering of Large Language Models (BiPDO)
+- [Meng et al., 2024] PiSSA: Principal Singular Values and Singular Vectors Adaptation
+- [Wu et al., 2025] AxBench: Steering LLMs? Even Simple Baselines Outperform Sparse Autoencoders
+- [Liu et al., 2024] DoRA: Weight-Decomposed Low-Rank Adaptation
+- [Lingam et al., 2024] SVFT: Parameter-Efficient Fine-Tuning with Singular Vectors
+- [Zou et al., 2024] Improving Alignment and Robustness with Circuit Breakers
+
 
 ## Result
 
@@ -527,6 +584,7 @@ See also the repo for training with losses like this https://github.com/wassname
 | Mean ± Std | TODO          | TODO       |
 
 ---
+
 
 ## Citation
 

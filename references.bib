@@ -1,0 +1,145 @@
+@misc{zou2023representation,
+      title={Representation Engineering: A Top-Down Approach to AI Transparency}, 
+      author={Andy Zou and Long Phan and Sarah Chen and James Campbell and Phillip Guo and Richard Ren and Alexander Pan and Xuwang Yin and Mantas Mazeika and Ann-Kathrin Dombrowski and Shashwat Goel and Nathaniel Li and Michael J. Black and Timo Bolkart},
+      year={2023},
+      eprint={2310.01405},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      abstract={In this paper, we identify and characterize the emerging area of representation engineering (RepE), an approach to enhancing the transparency of AI systems that draws on insights from cognitive neuroscience. RepE places population-level representations, rather than neurons or circuits, at the center of analysis, equipping us with novel methods for monitoring and manipulating high-level cognitive phenomena in deep neural networks (DNNs). We provide baselines and an initial analysis of RepE techniques, showing that they offer simple yet effective solutions for improving our understanding and control of large language models. We showcase how these methods can provide traction on a wide range of safety-relevant problems, including honesty, harmlessness, power-seeking, and more, demonstrating the promise of top-down transparency research. We hope that this work catalyzes further exploration of RepE and fosters advancements in the transparency and safety of AI systems.}
+}
+
+@misc{cao2024personalized,
+      title={Personalized Steering of Large Language Models: Versatile Steering Vectors Through Bi-directional Preference Optimization}, 
+      author={Yuanpu Cao and Tianrong Zhang and Bochuan Cao and Ziyi Yin and Lu Lin and Fenglong Ma and Jinghui Chen},
+      year={2024},
+      eprint={2406.00045},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      abstract={Researchers have been studying approaches to steer the behavior of Large Language Models (LLMs) and build personalized LLMs tailored for various applications. While fine-tuning seems to be a direct solution, it requires substantial computational resources and may significantly affect the utility of the original LLM. Recent endeavors have introduced more lightweight strategies, focusing on extracting "steering vectors" to guide the model's output toward desired behaviors by adjusting activations within specific layers of the LLM's transformer architecture. However, such steering vectors are directly extracted from the activations of human preference data and thus often lead to suboptimal results and occasional failures, especially in alignment-related scenarios. This work proposes an innovative approach that could produce more effective steering vectors through bi-directional preference optimization. Our method is designed to allow steering vectors to directly influence the generation probability of contrastive human preference data pairs, thereby offering a more precise representation of the target behavior. By carefully adjusting the direction and magnitude of the steering vector, we enabled personalized control over the desired behavior across a spectrum of intensities. Extensive experimentation across various open-ended generation tasks, particularly focusing on steering AI personas, has validated the efficacy of our approach. Moreover, we comprehensively investigate critical alignment-concerning scenarios, such as managing truthfulness, mitigating hallucination, and addressing jailbreaking attacks. Remarkably, our method can still demonstrate outstanding steering effectiveness across these scenarios. Furthermore, we showcase the transferability of our steering vectors across different models/LoRAs and highlight the synergistic benefits of applying multiple vectors simultaneously.}
+}
+
+@misc{meng2024pissa,
+      title={PiSSA: Principal Singular Values and Singular Vectors Adaptation of Large Language Models}, 
+      author={Fanxu Meng and Zhaohui Wang and Muhan Zhang},
+      year={2024},
+      eprint={2404.02948},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      abstract={To parameter-efficiently fine-tune (PEFT) large language models (LLMs), the low-rank adaptation (LoRA) method approximates the model changes \Delta W \in \mathbb{R}^{m \times n} through the product of two matrices A \in \mathbb{R}^{m \times r} and B \in \mathbb{R}^{r \times n}, where r \ll \min(m, n), A is initialized with Gaussian noise, and B with zeros. LoRA freezes the original model W and updates the "Noise & Zero" adapter, which may lead to slow convergence. To overcome this limitation, we introduce Principal Singular values and Singular vectors Adaptation (PiSSA). PiSSA shares the same architecture as LoRA, but initializes the adaptor matrices A and B with the principal components of the original matrix W, and put the remaining components into a residual matrix W^{res} \in \mathbb{R}^{m \times n} which is frozen during fine-tuning. Compared to LoRA, PiSSA updates the principal components while freezing the "residual" parts, allowing faster convergence and enhanced performance. Comparative experiments of PiSSA and LoRA across 12 different models, ranging from 184M to 70B, encompassing 5 NLG and 8 NLU tasks, reveal that PiSSA consistently outperforms LoRA under identical experimental setups. On the GSM8K benchmark, Mistral-7B fine-tuned with PiSSA achieves an accuracy of 72.86%, surpassing LoRA's 67.7% by 5.16%. Due to the same architecture, PiSSA is also compatible with quantization to further reduce the memory requirement of fine-tuning. Compared to QLoRA, QPiSSA exhibits smaller quantization errors in the initial stages. Fine-tuning LLaMA-3-70B on GSM8K, QPiSSA attains an accuracy of 86.05%, exceeding the performances of QLoRA at 81.73%. Leveraging a fast SVD technique, PiSSA can be initialized in only a few seconds, presenting a negligible cost for transitioning from LoRA to PiSSA.}
+}
+
+@misc{wang2025ssvd,
+      title={SSVD: Structured SVD for Parameter-Efficient Fine-Tuning and Benchmarking under Domain Shift in ASR}, 
+      author={Pu Wang and Shinji Watanabe and Hugo Van hamme},
+      year={2025},
+      eprint={2509.02830},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      abstract={Parameter-efficient fine-tuning (PEFT) has emerged as a scalable solution for adapting large foundation models. While low-rank adaptation (LoRA) is widely used in speech applications, its state-of-the-art variants, e.g., VeRA, DoRA, PiSSA, and SVFT, are developed mainly for language and vision tasks, with limited validation in speech. This work presents the first comprehensive integration and benchmarking of these PEFT methods within ESPnet. We further introduce structured SVD-guided (SSVD) fine-tuning, which selectively rotates input-associated right singular vectors while keeping output-associated vectors fixed to preserve semantic mappings. This design enables robust domain adaptation with minimal trainable parameters and improved efficiency. We evaluate all methods on domain-shifted speech recognition tasks, including child speech and dialectal variation, across model scales from 0.1B to 2B. All implementations are released in ESPnet to support reproducibility and future work.}
+}
+
+@misc{liu2024dora,
+      title={DoRA: Weight-Decomposed Low-Rank Adaptation}, 
+      author={Shih-Yang Liu and Chien-Yi Wang and Hongxu Yin and Pavlo Molchanov and Yu-Chiang Frank Wang and Kwang-Ting Cheng and Min-Hung Chen},
+      year={2024},
+      eprint={2402.09353},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      abstract={Among the widely used parameter-efficient fine-tuning (PEFT) methods, LoRA and its variants have gained considerable popularity because of avoiding additional inference costs. However, there still often exists an accuracy gap between these methods and full fine-tuning (FT). In this work, we first introduce a novel weight decomposition analysis to investigate the inherent differences between FT and LoRA. Aiming to resemble the learning capacity of FT from the findings, we propose Weight-Decomposed Low-Rank Adaptation (DoRA). DoRA decomposes the pre-trained weight into two components, magnitude and direction, for fine-tuning, specifically employing LoRA for directional updates to efficiently minimize the number of trainable parameters. By employing \ours, we enhance both the learning capacity and training stability of LoRA while avoiding any additional inference overhead. \ours~consistently outperforms LoRA on fine-tuning LLaMA, LLaVA, and VL-BART on various downstream tasks, such as commonsense reasoning, visual instruction tuning, and image/video-text understanding.}
+}
+
+@misc{lingam2024svft,
+      title={SVFT: Parameter-Efficient Fine-Tuning with Singular Vectors}, 
+      author={Vijay Lingam and Atula Tejaswi and Aditya Vavre and Aneesh Shetty and Gautham Krishna Gudur and Joydeep Ghosh and Alex Dimakis and Eunsol Choi},
+      year={2024},
+      eprint={2405.19597},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      abstract={Popular parameter-efficient fine-tuning (PEFT) methods, such as LoRA and its variants, freeze pre-trained model weights \(W\) and inject learnable matrices \(\Delta W\). These \(\Delta W\) matrices are structured for efficient parameterization, often using techniques like low-rank approximations or scaling vectors. However, these methods typically show a performance gap compared to full fine-tuning. Although recent PEFT methods have narrowed this gap, they do so at the cost of additional learnable parameters. We propose SVFT, a simple approach that fundamentally differs from existing methods: the structure imposed on \(\Delta W\) depends on the specific weight matrix \(W\). Specifically, SVFT updates \(W\) as a sparse combination of outer products of its singular vectors, training only the coefficients (scales) of these sparse combinations. This approach allows fine-grained control over expressivity through the number of coefficients. Extensive experiments on language and vision benchmarks show that SVFT recovers up to 96% of full fine-tuning performance while training only 0.006 to 0.25% of parameters, outperforming existing methods that only recover up to 85% performance using 0.03 to 0.8% of the trainable parameter budget.}
+}
+
+@misc{zou2024improving,
+      title={Improving Alignment and Robustness with Circuit Breakers}, 
+      author={Andy Zou and Long Phan and Justin Wang and Derek Duenas and Maxwell Lin and Maksym Andriushchenko and Rowan Wang and Zico Kolter and Matt Fredrikson},
+      year={2024},
+      eprint={2406.04313},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      abstract={AI systems can take harmful actions and are highly vulnerable to adversarial attacks. We present an approach, inspired by recent advances in representation engineering, that interrupts the models as they respond with harmful outputs with "circuit breakers." Existing techniques aimed at improving alignment, such as refusal training, are often bypassed. Techniques such as adversarial training try to plug these holes by countering specific attacks. As an alternative to refusal training and adversarial training, circuit-breaking directly controls the representations that are responsible for harmful outputs in the first place. Our technique can be applied to both text-only and multimodal language models to prevent the generation of harmful outputs without sacrificing utility -- even in the presence of powerful unseen attacks. Notably, while adversarial robustness in standalone image recognition remains an open challenge, circuit breakers allow the larger multimodal system to reliably withstand image "hijacks" that aim to produce harmful content. Finally, we extend our approach to AI agents, demonstrating considerable reductions in the rate of harmful actions when they are under attack. Our approach represents a significant step forward in the development of reliable safeguards to harmful behavior and adversarial attacks.}
+}
+
+@misc{wu2025axbench,
+      title={AxBench: Steering LLMs? Even Simple Baselines Outperform Sparse Autoencoders}, 
+      author={Zhengxuan Wu and Aryaman Arora and Atticus Geiger and Zheng Wang and Jing Huang and Dan Jurafsky and Christopher D. Manning and Christopher Potts},
+      year={2025},
+      eprint={2501.17148},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      abstract={Fine-grained steering of language model outputs is essential for safety and reliability. Prompting and finetuning are widely used to achieve these goals, but interpretability researchers have proposed a variety of representation-based techniques as well, including sparse autoencoders (SAEs), linear artificial tomography, supervised steering vectors, linear probes, and representation finetuning. At present, there is no benchmark for making direct comparisons between these proposals. Therefore, we introduce AxBench, a large-scale benchmark for steering and concept detection, and report experiments on Gemma-2-2B and 9B. For steering, we find that prompting outperforms all existing methods, followed by finetuning. For concept detection, representation-based methods such as difference-in-means, perform the best. On both evaluations, SAEs are not competitive. We introduce a novel weakly-supervised representational method (Rank-1 Representation Finetuning; ReFT-r1), which is competitive on both tasks while providing the interpretability advantages that prompting lacks. Along with AxBench, we train and publicly release SAE-scale feature dictionaries for ReFT-r1 and DiffMean.}
+}
+
+@misc{jolicoeurmartineau2025less,
+      title={Less is More: Recursive Reasoning with Tiny Networks}, 
+      author={Alexia Jolicoeur-Martineau},
+      year={2025},
+      eprint={2510.04871},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      abstract={Hierarchical Reasoning Model (HRM) is a novel approach using two small neural networks recursing at different frequencies. This biologically inspired method beats Large Language models (LLMs) on hard puzzle tasks such as Sudoku, Maze, and ARC-AGI while trained with small models (27M parameters) on small data (around 1000 examples). HRM holds great promise for solving hard problems with small networks, but it is not yet well understood and may be suboptimal. We propose Tiny Recursive Model (TRM), a much simpler recursive reasoning approach that achieves significantly higher generalization than HRM, while using a single tiny network with only 2 layers. With only 7M parameters, TRM obtains 45% test-accuracy on ARC-AGI-1 and 8% on ARC-AGI-2, higher than most LLMs (e.g., Deepseek R1, o3-mini, Gemini 2.5 Pro) with less than 0.01% of the parameters.}
+}
+
+@misc{das2023decoderonly,
+      title={A decoder-only foundation model for time-series forecasting}, 
+      author={Abhimanyu Das and Weihao Kong and Rajat Sen and Yichen Zhou},
+      year={2023},
+      eprint={2310.10688},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      abstract={Motivated by recent advances in large language models for Natural Language Processing (NLP), we design a time-series foundation model for forecasting whose out-of-the-box zero-shot performance on a variety of public datasets comes close to the accuracy of state-of-the-art supervised forecasting models for each individual dataset. Our model is based on pretraining a patched-decoder style attention model on a large time-series corpus, and can work well across different forecasting history lengths, prediction lengths and temporal granularities.}
+}
+
+@misc{gurnee2024universal,
+      title={Universal Neurons in GPT2 Language Models}, 
+      author={Wes Gurnee and Theo Horsley and Zifan Carl Guo and Tara Rezaei Kheirkhah and Qinyi Sun and Will Hathaway and Neel Nanda and Dimitris Bertsimas},
+      year={2024},
+      eprint={2401.12181},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      abstract={A basic question within the emerging field of mechanistic interpretability is the degree to which neural networks learn the same underlying mechanisms. In other words, are neural mechanisms universal across different models? In this work, we study the universality of individual neurons across GPT2 models trained from different initial random seeds, motivated by the hypothesis that universal neurons are likely to be interpretable. In particular, we compute pairwise correlations of neuron activations over 100 million tokens for every neuron pair across five different seeds and find that 1-5\% of neurons are universal, that is, pairs of neurons which consistently activate on the same inputs. We then study these universal neurons in detail, finding that they usually have clear interpretations and taxonomize them into a small number of neuron families. We conclude by studying patterns in neuron weights to establish several universal functional roles of neurons in simple circuits: deactivating attention heads, changing the entropy of the next token distribution, and predicting the next token to (not) be within a particular set.}
+}
+
+@misc{lad2024remarkable,
+      title={The Remarkable Robustness of LLMs: Stages of Inference?}, 
+      author={Vedang Lad and Jin Hwa Lee and Wes Gurnee and Max Tegmark},
+      year={2024},
+      eprint={2406.19384},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      abstract={We investigate the robustness of Large Language Models (LLMs) to structural interventions by deleting and swapping adjacent layers during inference. Surprisingly, models retain 72-95% of their original top-1 prediction accuracy without any fine-tuning. We find that performance degradation is not uniform across layers: interventions to the early and final layers cause the most degradation, while the model is remarkably robust to dropping middle layers. This pattern of localized sensitivity motivates our hypothesis of four stages of inference, observed across diverse model families and sizes: (1) detokenization, where local context is integrated to lift raw token embeddings into higher-level representations; (2) feature engineering, where task- and entity-specific features are iteratively refined; (3) prediction ensembling, where hidden states are aggregated into plausible next-token predictions; and (4) residual sharpening, where irrelevant features are suppressed to finalize the output distribution. Synthesizing behavioral and mechanistic evidence, we provide a framework for interpreting depth-dependent computations in LLMs.}
+}
+
+@misc{anthropic2025persona,
+      title={Persona vectors: Monitoring and controlling character traits in language models},
+      author={{Anthropic}},
+      year={2025},
+      url={https://www.anthropic.com/research/persona-vectors},
+      note={Accessed: 2025-11-21},
+      abstract={AI models represent abstract concepts as patterns of activations within their neural network. Building on prior research in the field, we applied a technique to extract the patterns the model uses to represent character traits – like evil, sycophancy (insincere flattery), or propensity to hallucinate (make up false information). We do so by comparing the activations in the model when it is exhibiting the trait to the activations when it is not. We call these patterns persona vectors. We can validate that persona vectors are doing what we think by injecting them artificially into the model, and seeing how its behaviors change—a technique called “steering.”}
+}
+
+@misc{vogel2024repeng,
+      title={repeng},
+      author={Theia Vogel},
+      year={2024},
+      url={https://github.com/vgel/repeng/},
+      abstract={A Python library for generating control vectors with representation engineering. Train a vector in less than sixty seconds!}
+}
+
+@misc{smith2025negative,
+      title={Negative Results for SAEs On Downstream Tasks and Deprioritising SAE Research},
+      author={Lewis Smith and Senthooran Rajamanoharan and Arthur Conmy and Callum McDougall and Janos Kramar and Tom Lieberum and Rohin Shah and Neel Nanda},
+      year={2025},
+      url={https://www.alignmentforum.org/posts/4uXCAJNuPKtKBsi28/negative-results-for-saes-on-downstream-tasks},
+      note={GDM Mech Interp Team Progress Update \#2},
+      abstract={To validate whether SAEs were a worthwhile technique, we explored whether they were useful on the downstream task of OOD generalisation when detecting harmful intent in user prompts. Negative result: SAEs underperformed linear probes. Corollary: Linear probes are actually really good and cheap and perform great. As a result of this and parallel work, we are deprioritising fundamental SAE research for the moment and exploring other directions, though SAEs will remain a tool in our toolkit. We do not think that SAEs are useless or that no one should work on them, but we also do not think that SAEs will be a game-changer for interpretability, and speculate that the field is over-invested in them.}
+}

@@ -17,6 +17,7 @@
   - > Parameter-efficient fine-tuning (PEFT) has emerged as a scalable solution for adapting large foundation models. While low-rank adaptation (LoRA) is widely used in speech applications, its state-of-the-art variants, e.g., VeRA, DoRA, PiSSA, and SVFT, are developed mainly for language and vision tasks, with limited validation in speech. This work presents the first comprehensive integration and benchmarking of these PEFT methods within ESPnet. We further introduce structured SVD-guided (SSVD) fine-tuning, which selectively rotates input-associated right singular vectors while keeping output-associated vectors fixed to preserve semantic mappings. This design enables robust domain adaptation with minimal trainable parameters and improved efficiency. We evaluate all methods on domain-shifted speech recognition tasks, including child speech and dialectal variation, across model scales from 0.1B to 2B. All implementations are released in ESPnet to support reproducibility and future work.
 - [DoRA](https://arxiv.org/html/2306.08990v2) 
   - Seperates magnitude and direction and has become a popular and strong LoRA baseline
+  - > DoRA decomposes the pre-trained weight into two components, magnitude and direction, for fine-tuning, specifically employing LoRA for directional updates to efficiently minimize the number of trainable parameters. By employing \ours, we enhance both the learning capacity and training stability of LoRA while avoiding any additional inference overhead.
 - [SVFT](https://arxiv.org/html/2405.19597v1)
   - This paper updates the S of the SVD of each weight matrix like us
   - > Popular parameter-efficient fine-tuning (PEFT) methods, such as LoRA and its variants, freeze pre-trained model weights 𝐖 and inject learnable matrices 𝚫⁢𝐖. These 𝚫⁢𝐖 matrices are structured for efficient parameterization, often using techniques like low-rank approximations or scaling vectors. However, these methods typically show a performance gap compared to full fine-tuning. Although recent PEFT methods have narrowed this gap, they do so at the cost of additional learnable parameters. We propose SVFT, a simple approach that fundamentally differs from existing methods: the structure imposed on 𝚫⁢𝐖 depends on the specific weight matrix 𝐖. Specifically, SVFT updates 𝐖 as a sparse combination of outer products of its singular vectors, training only the coefficients (scales) of these sparse combinations. This approach allows fine-grained control over expressivity through the number of coefficients. Extensive experiments on language and vision benchmarks show that SVFT1 recovers up to 96% of full fine-tuning performance while training only 0.006 to 0.25% of parameters, outperforming existing methods that only recover up to 85% performance using 0.03 to 0.8% of the trainable parameter budget.
@@ -61,6 +62,7 @@ Why does current steering methods fail to generalise?
   Bidpo seems effective and sample-efficient but does not currently exceed more standard baselines. It’s hard to draw firm conclusions about bidpo because TruthfulQA might not be measuring truthfulness / factuality. However, we remain excited about dpo-driven Conditional Activation Steering, which has additional advantages—particularly for targeted loss mitigation.
 
 - [Anthropic steering personality traits paper](https://www.anthropic.com/research/persona-vectors)
+  - > AI models represent abstract concepts as patterns of activations within their neural network. ... We call these patterns persona vectors. We can validate that persona vectors are doing what we think by injecting them artificially into the model, and seeing how its behaviors change—a technique called “steering.”
 - supressed neurons
   - my readme that summarises the lesser known litriture on https://github.com/wassname/eliciting_suppressed_knowledge this tells you why I needed to steer on layer -3, because lots of supression happens after this and I hypothesis that the generation planning information I need to steer is supressed later on
 
@@ -74,8 +76,17 @@ Why does current steering methods fail to generalise?
      - [OpenAI (2025)](https://cdn.openai.com/pdf/34f2ada6-870f-4c26-9790-fd8def56387f/CoT_Monitoring.pdf) shows that penalizing "bad thoughts" leads to models that "learn to hide intent" rather than genuinely correcting reasoning
      - Both lines of evidence suggest models maintain internal representations that diverge from their expressed reasoning
 
+
+
+> Method. To analyze the hidden state, we adopt difference-in-means (DiffMean), a lightweight
+linear method that identifies directions associated with behavioral distinctions (Marks & Tegmark,
+2024). DiffMean is attractive because it is mathematically simple, directly interpretable, and empir-
+ically competitive: the AXBENCH benchmark finds it outperforms more complex approaches like
+sparse autoencoders and matches supervised probes for steering model behavior (Wu et al., 2025)
+
 Meta level content:
 - [TRM](https://arxiv.org/html/2510.04871v1)
+  - > Hierarchical Reasoning Model (HRM) is a novel approach using two small neural networks recursing at different frequencies. This biologically inspired method beats Large Language models (LLMs) on hard puzzle tasks such as Sudoku, Maze, and ARC-AGI while trained with small models (27M parameters) on small data (around 1000 examples). ... We propose Tiny Recursive Model (TRM), a much simpler recursive reasoning approach that achieves significantly higher generalization than HRM, while using a single tiny network with only 2 layers.
 - [How to write ML paper](https://www.alignmentforum.org/posts/eJGptPbbFPZGLpjsp/highly-opinionated-advice-on-how-to-write-ml-papers)
 - [TimesFM](https://arxiv.org/html/2310.10688v4) has a nice section explaining the model archetecture and it's guiding principles 
 

@@ -609,6 +609,17 @@ def combine_dual_coef_losses(
     """
     Combine losses from both coefficient directions (+1 and -1).
     
+    Part 1: Dual Coefficient Combination
+    1. Check Alignment:
+       total_proj = loss_pos.proj + loss_neg.proj
+       if total_proj > 0: flip_sign = -1  (Model is anti-aligned, flip to match)
+    
+    2. Adaptive Coherence (Optional):
+       # Relax coherence on directions that are struggling to separate
+       difficulty = -loss_proj  (Higher = Easier)
+       weights = softmax(difficulty / temp) * 2
+       L_total = L_proj + w_pos * L_coh_pos + w_neg * L_coh_neg
+
     Optionally applies:
     1. Difficulty-adaptive coherence weighting (adaptive_coherence=True)
     2. Monotonic ordering constraint (if loss_baseline provided)
@@ -640,10 +651,19 @@ def combine_dual_coef_losses(
         meta_neg: Dict with metrics for coef=-1 (cw, mono_violation)
         meta_shared: Dict with global metrics (loss_monotonic, mono_frac_violated)
     """
-    # Projection loss: maximize bidirectional separation magnitude
-    # Both coefficients separate in OPPOSITE directions by construction (alpha=±1)
-    # We want large separation in EITHER direction (model picks easiest path) for each module
-    # Without abs(), they could cancel out if model learns conflicting directions
+    # -------------------------------------------------------------------------
+    # Part 1: Anti-Alignment Guard (Flipped Logic)
+    # -------------------------------------------------------------------------
+    # Both coefficients separate in OPPOSITE directions by construction (alpha=±1).
+    # We want large separation in EITHER direction (model picks easiest path).
+    #
+    # Note: train_adapter.py swaps labels for coef=-1, so we expect both loss_pos 
+    # and loss_neg to be negative (minimizing loss).
+    #
+    # HOWEVER, if the model spontaneously learns an anti-aligned feature (separating 
+    # cho/rej in the opposite direction), (loss_pos + loss_neg) will be > 0.
+    # We detect this and flip the sign to maximize separation in the direction 
+    # the model chose, rather than fighting it.
     loss_proj_flipped = (loss_pos["loss_proj"] + loss_neg["loss_proj"]).mean() > 0
     
     proj_diff_pos = loss_pos["loss_proj"]
@@ -653,23 +673,29 @@ def combine_dual_coef_losses(
         proj_diff_neg = -proj_diff_neg
     loss_proj_bidirectional = proj_diff_pos + proj_diff_neg
     
-    # Determine coherence weights based on adaptive_relaxation flag
+    # -------------------------------------------------------------------------
+    # Part 2: Adaptive Coherence Weighting
+    # -------------------------------------------------------------------------
     if adaptive_relaxation:
-        # Adaptive: reweight coherence by difficulty
-        # proj_diff interpretation:
-        #   MORE negative (e.g., -3) = EASIER direction (pi separation >> ref separation)
-        #   LESS negative (e.g., -0.5) = HARDER direction (pi barely better than ref)
-        # 
-        # Strategy: RELAX coherence on HARD direction (less negative), TIGHTEN on EASY direction
-        # Rationale: Hard direction needs exploration room; easy direction is already working,
-        #            so keep it strictly coherent to prevent drift into saddle points.
+        # Strategy: RELAX coherence on HARD direction (weak separation), 
+        #           TIGHTEN on EASY direction (strong separation).
+        #
+        # Rationale: Hard directions need exploration room (relaxed coherence).
+        #            Easy directions are already separating well, keep them strictly 
+        #            coherent to prevent drift into saddle points.
+        #
+        # Math:
+        #   loss ~ -separation (more negative = stronger separation = easier)
+        #   losses = [-0.5 (Hard), -3.0 (Easy)]
+        #   -losses = [0.5, 3.0]
+        #   softmax([0.5, 3.0]) = [0.08, 0.92]
+        #   weights = [0.16, 1.84] (clamped to 1.0) -> [0.16, 1.0]
+        #   Result: Hard (-0.5) gets 0.16 weight. Easy (-3.0) gets 1.0 weight.
         
-        # Softmax with POSITIVE sign: LESS negative proj_diff → LOWER weight (relaxed coherence)
-        # Example: proj_diff_pos=-0.5, proj_diff_neg=-3.0
-        #   → softmax([-0.5, -3.0]) = [0.92, 0.08] → weights = [0.92, 0.08] (hard gets relaxed)
+        # Softmax with NEGATIVE sign: MORE negative loss → HIGHER weight (strict coherence)
         proj_diffs = torch.stack([proj_diff_pos, proj_diff_neg])  # (2,)
-        coh_weights = F.softmax(proj_diffs / temperature, dim=0) * 2.0  # Sum to 2.0
-        coh_weight_pos = torch.clamp(coh_weights[0], max=1.0)  # Cap at 1.0 to prevent over-tightening
+        coh_weights = F.softmax(-proj_diffs / temperature, dim=0) * 2.0  # Sum to 2.0
+        coh_weight_pos = torch.clamp(coh_weights[0], max=1.0)  # Cap at 1.0
         coh_weight_neg = torch.clamp(coh_weights[1], max=1.0)
     else:
         # Fixed weights: uniform coherence
@@ -689,8 +715,8 @@ def combine_dual_coef_losses(
     ).mean()
     
     # Build metadata dicts
-    meta_pos = {"cw": coh_weight_pos.item()}
-    meta_neg = {"cw": coh_weight_neg.item()}
+    meta_pos = {"cw": coh_weight_pos.mean().item()}
+    meta_neg = {"cw": coh_weight_neg.mean().item()}
     meta_shared = {"loss_proj_flipped": loss_proj_flipped.item()}
         
     # Optional: Add monotonic ordering constraint

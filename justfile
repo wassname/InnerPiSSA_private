@@ -7,7 +7,7 @@ default:
 
 # Generate shell completions for the training script
 completions:
-    #!/bin/bash -ex
+    #!/bin/bash -x
     uv run python nbs/train.py . --tyro-write-completion zsh ~/.zfunc/_01_functions_py
 
 # My temporary experiments and non core sweeps
@@ -86,18 +86,19 @@ ablate-paper:
     # make sure baselines are cached
     just eval-baselines
 
-    # just ablate-constraints
-    # just sweep-layers
-    # just sweep-wd
-    # just sweep-lr
     just sweep-rank
     just ablate-modules
     just run-models
     just run-seeds
     just data-efficiency
+    
+    just ablate-constraints
+    just sweep-layers
+    just sweep-wd
+    just sweep-lr
 
 ablate-constraints:
-    #!/bin/bash -ex
+    #!/bin/bash -x
     export WANDB_RUN_GROUP="ablate-constraints-$(date +%Y%m%d-%H%M)"
     BASE="uv run python nbs/train.py q4b-80gb"
     $BASE
@@ -110,36 +111,37 @@ ablate-constraints:
     $BASE --no_coh_adaptive
 
 sweep-layers:
-    #!/bin/bash -ex
+    #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-layers-$(date +%Y%m%d-%H%M)"
     for depth in 0.01 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 0.99; do
         uv run python nbs/train.py q4b-80gb --loss_depths=$depth
     done
 
 sweep-wd:
-    #!/bin/bash -ex
+    #!/bin/bash -x
     export WANDB_RUN_GROUP="ablate-wd-$(date +%Y%m%d-%H%M)"
-    for wd in 0 0.001 0.01 0.1 1.0 10.0; do
+    for wd in 0 0.001 0.01 0.1 1.0 10.0 100.0 1000.0; do
         uv run python nbs/train.py q4b-80gb --wd=$wd
     done
 
 sweep-lr:
-    #!/bin/bash -ex
+    #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-lr-$(date +%Y%m%d-%H%M)"
     for lr in 1e-0 1e-1 1e-2 1e-3 1e-4 1e-5; do
         uv run python nbs/train.py q4b-80gb --lr=$lr
     done
 
 ablate-modules:
-    #!/bin/bash -ex
+    #!/bin/bash -x
     export WANDB_RUN_GROUP="ablate-modules-$(date +%Y%m%d-%H%M)"
     uv run python nbs/train.py q4b-80gb --modules o_proj down_proj --experiment_name="layers residual out"
-    uv run python nbs/train.py q4b-80gb --modules gate_proj up_proj --experiment_name="mlp up"
+    uv run python nbs/train.py q4b-80gb --modules gate_proj up_proj down_proj --experiment_name="attn.down mlp.up"
+    uv run python nbs/train.py q4b-80gb --modules gate_proj up_proj --experiment_name="mlp up largest output dim"
     uv run python nbs/train.py q4b-80gb --modules q_proj k_proj v_proj --experiment_name="attention up"
-    uv run python nbs/train.py q4b-80gb --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=128 --experiment_name="all"
+    uv run python nbs/train.py q4b-80gb --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --experiment_name="all" --bs=16
 
 run-models:
-    #!/bin/bash -ex
+    #!/bin/bash -x
     export WANDB_RUN_GROUP="run-models-$(date +%Y%m%d-%H%M)"
     uv run python nbs/train.py q06b-24gb
     uv run python nbs/train.py q4b-80gb
@@ -153,21 +155,21 @@ run-models:
     # TODO try a 32b model... when I have more hdd space
 
 eval-baselines:
-    #!/bin/bash -ex
+    #!/bin/bash -x
     export WANDB_RUN_GROUP="eval-baselines-$(date +%Y%m%d-%H%M)"
     uv run python nbs/eval_baseline_prompting.py
     uv run python nbs/eval_baseline_repeng.py
     uv run python nbs/eval_baseline_wassname_Ssteer_baseline.py
 
 sweep-rank:
-    #!/bin/bash -ex
+    #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-rank-$(date +%Y%m%d-%H%M)"
     for r in 32 64 128 256 512; do
         uv run python nbs/train.py q4b-80gb --r=$r
     done
 
 run-seeds:
-    #!/bin/bash -ex
+    #!/bin/bash -x
     export WANDB_RUN_GROUP="run-seeds-$(date +%Y%m%d-%H%M)"
     for seed in 42 123 456; do
         uv run python nbs/train.py q4b-80gb --seed=$seed
@@ -175,7 +177,7 @@ run-seeds:
 
 # Data efficiency: what's minimum viable sample count?
 data-efficiency:
-    #!/bin/bash -ex
+    #!/bin/bash -x
     export WANDB_RUN_GROUP="data-efficiency-$(date +%Y%m%d-%H%M)"
     echo "WandB group: $WANDB_RUN_GROUP"
     BASE="uv run python nbs/train.py q4b-80gb"

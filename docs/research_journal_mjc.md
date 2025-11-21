@@ -377,3 +377,42 @@ Note: "Uncorrelated" cluster (emotions, relational values) showed same pattern a
 - check a math eval work
 - replicate my >1500 results
 - sweep/ablation
+
+# 2025-11-21 21:46:18 per layer metrics
+
+Per-layer metrics:                                                                                                                            
+
+21:24:32 | INFO     | Extracted U matrices: {'base_model.model.model.layers.18.mlp.down_proj': torch.Size([2560, 2560]), 'base_model.model.model.layers.18.mlp.gate_proj': torch.Size([9728, 2560]), 'base_model.model.model.layers.18.mlp.up_proj': torch.Size([9728, 2560]), 'base_model.model.model.layers.18.self_attn.k_proj': torch.Size([1024, 1024]), 'base_model.model.model.layers.18.self_attn.o_proj': torch.Size([2560, 2560]), 'base_model.model.model.layers.18.self_attn.q_proj': torch.Size([4096, 2560]), 'base_model.model.model.layers.18.self_attn.v_proj': torch.Size([1024, 1024])}
+
+| module              |   ℒproj_L-1.0 |   ℒproj_L1.0 |   Δlp_L-1.0 |   Δlp_L1.0 |   cw_L-1.0 |   cw_L1.0 |
+|:--------------------|--------------:|-------------:|------------:|-----------:|-----------:|----------:|
+| 18.mlp.down_proj    |         -2.29 |        +0.03 |       -1.05 |      +1.16 |      +1.00 |     +0.40 |
+| 18.mlp.gate_proj    |         -4.27 |        +0.04 |       -1.05 |      +1.16 |      +1.00 |     +0.40 |
+| 18.mlp.up_proj      |         -4.14 |        +0.04 |       -1.05 |      +1.16 |      +1.00 |     +0.40 |
+| 18.self_attn.k_proj |         -1.93 |        +0.03 |       -1.05 |      +1.16 |      +1.00 |     +0.40 |
+| 18.self_attn.o_proj |         -2.76 |        +0.03 |       -1.05 |      +1.16 |      +1.00 |     +0.40 |
+| 18.self_attn.q_proj |         -2.67 |        +0.04 |       -1.05 |      +1.16 |      +1.00 |     +0.40 |
+| 18.self_attn.v_proj |         -1.53 |        +0.03 |       -1.05 |      +1.16 |      +1.00 |     +0.40 |
+
+wandb: ⭐️ View project at 
+https://wandb.ai/wassname/InnerPiSSA
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/uq4ejfy8
+uv run python nbs/train.py q4b-80gb --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --experiment_name="all" --bs=16
+
+
+  Looking at the `U` matrix shapes from your logs, which correspond to the output space dimensions:
+
+  | Module | Output Dim | ℒproj (c=-1) | Note |
+  | :--- | :--- | :--- | :--- |
+  | **gate_proj** | **9728** | **-4.27** | Largest output space, best separation |
+  | **up_proj** | **9728** | **-4.14** | Largest output space, best separation |
+  | **q_proj** | **4096** | **-2.67** | Medium-high output space |
+  | **o_proj** | **2560** | **-2.76** | Standard hidden size |
+  | **down_proj** | **2560** | **-2.29** | Standard hidden size |
+  | **k_proj** | **1024** | **-1.93** | Smallest output space |
+  | **v_proj** | **1024** | **-1.53** | Smallest output space |
+
+  **Why this happens:**
+  A larger output dimension (like in the MLP expansion layers `gate` and `up`) gives the model many more degrees of freedom to represent the "honest vs dishonest" difference orthogonally to other features. It's easier to find a "clean" direction to steer in a 9728-dimensional space than in a 1024-dimensional space, resulting in a much stronger (more negative) projection loss.
+
+  This suggests that **MLP expansion layers (gate/up)** might be the most effective targets for steering because they offer the richest representation space for the steering vector to operate in.
