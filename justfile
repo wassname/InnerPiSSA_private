@@ -88,14 +88,14 @@ ablate-paper:
     # make sure baselines are cached
     just eval-baselines
     just run-models
-    just data-efficiency
-    just run-seeds
-    just ablate-constraints
     just sweep-layers # [/]
     just sweep-wd # [/]
     just sweep-lr
     just sweep-rank
     just ablate-modules
+    just data-efficiency
+    just run-seeds
+    just ablate-constraints
     
 
 ablate-constraints:
@@ -122,7 +122,7 @@ sweep-layers:
 sweep-wd:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="ablate-wd-$(date +%Y%m%d-%H%M)"
-    for wd in 0 0.001 0.01 0.1 1.0 10.0 100.0 1000.0; do
+    for wd in 0 0.001 0.01 0.1 1.0 10.0 100.0; do
         uv run python nbs/train.py q4b-80gb --wd=$wd
     done
 
