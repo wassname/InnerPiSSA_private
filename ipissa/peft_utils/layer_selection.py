@@ -12,6 +12,13 @@ import numpy as np
 import torch.nn as nn
 
 
+def build_regexp(layer_indices: List[int], module_suffixes: List[str]) -> str:
+    """Build PEFT target_modules regex from layer indices and module suffixes."""
+    layer_nums = "|".join(str(L) for L in layer_indices)
+    module_names = "|".join(sorted(module_suffixes))
+    return f".*\\.({layer_nums})\\..*({module_names})"
+
+
 @dataclass
 class LayerSelection:
     """Layer selection result: which layers get adapters vs loss computation."""
@@ -23,16 +30,11 @@ class LayerSelection:
     @property
     def adapter_regex(self) -> str:
         """Build PEFT target_modules regex from adapter indices and module suffixes."""
-        # Extract module suffixes from adapter layer names
-        suffixes = set()
-        for name in self.adapter_layer_names:
-            # e.g., "model.layers.10.mlp.down_proj" -> "down_proj"
-            suffix = name.split('.')[-1]
-            suffixes.add(suffix)
-        
-        layer_nums = "|".join(str(L) for L in self.adapter_layer_indices)
-        module_names = "|".join(sorted(suffixes))
-        return f".*\\.({layer_nums})\\..*({module_names})"
+
+        return build_regexp(
+            self.adapter_layer_indices,
+            [name.split('.')[-1] for name in self.adapter_layer_names],
+        )
     
     def translate_to_peft_model(self, model) -> 'LayerSelection':
         """Translate layer names for PeftModel (adds base_model.model prefix).
