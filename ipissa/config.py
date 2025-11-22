@@ -112,7 +112,7 @@ class TrainingConfig:
 
     adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"
 
-    r: int = 256
+    r: int = 128
     """Adapter rank"""
 
     scale_s: Literal["add2", "add_tanh", "mult", "none"] = "add2"
