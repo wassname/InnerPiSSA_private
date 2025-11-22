@@ -216,8 +216,6 @@ def load_model(model_id, quantization_type="none"):
     return base_model, tokenizer
 
 
-# match_linear_layers removed - import find_linear_layers from ipissa.peft_utils.layer_selection directly
-
 
 def setup_adapter(base_model, config: TrainingConfig, target_modules: str, init_steering_vecs=None):
     """Setup InnerPiSSA adapter on base model.

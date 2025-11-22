@@ -36,9 +36,8 @@ from ipissa.train.train_adapter import (
     generate_example_output,
     get_choice_ids,
     load_model,
-    load_train_suffixes,
-    match_linear_layers,
 )
+from ipissa.peft_utils.layer_selection import match_linear_layers
 
 logger.remove()
 logger.add(sys.stderr, format="{message}", level="INFO")
