@@ -344,35 +344,41 @@ As discussed in @sec-problem, **AxBench** [@wu2025axbench] established that repr
 
 # Discussion and Limitations {#sec-discussion}
 
+## What We Have Shown
+
+InnerPiSSA demonstrates that gradient-based SVD steering can outperform arithmetic baselines (PCA) by 5× while maintaining coherence where prompting catastrophically fails. This addresses the AxBench challenge [@wu2025axbench] but on a harder benchmark—not just concept injection, but alignment debugging under adversarial conditions (steering against RLHF). The method's bidirectional control, unsupervised extraction, and anti-RLHF robustness establish representation steering as viable for probing internal model states beyond surface behaviors.
+
 ## Limitations
 
-**Prompt-dependent extraction**: Our steering directions are extracted from contrastive prompt pairs. If prompts fail to elicit the target reasoning trajectory (e.g., heavily RLHF'd models that refuse even in prompts), extraction quality degrades. While steering *application* works when prompting fails (@tbl-anti-rlhf), steering *extraction* still depends on getting some signal from the model's responses to prompts. This is a fundamental limitation of unsupervised contrastive methods.
+**Prompt-dependent extraction**: Steering directions are extracted from contrastive prompt pairs. If models refuse to engage even at the prompt level (heavily RLHF'd to resist), extraction quality degrades. While steering *application* works when prompting fails (@tbl-anti-rlhf), steering *extraction* still requires some signal from model responses. This is fundamental to unsupervised contrastive methods—we cannot extract what the model refuses to compute.
 
-**Resistance from RLHF**: When steering against learned behaviors (coefficient = -1), we observe degradation faster than steering with them (coefficient = +1), visible in coherence costs (0.37 vs 0.31 NLL, @tbl-anti-rlhf). This asymmetry suggests RLHF creates directional structure in representation space that resists reversal. Stronger anti-RLHF steering may require adversarial training or different loss formulations.
+**Asymmetric RLHF resistance**: Steering against learned behaviors (coefficient = -1) degrades faster than steering with them (coefficient = +1), visible in coherence costs (0.37 vs 0.31 NLL, @tbl-anti-rlhf). RLHF creates directional structure in representation space that resists reversal. Stronger anti-RLHF steering may require adversarial training during adapter optimization or alternate loss formulations that explicitly model resistance.
 
-**White-box access required**: Like all representation steering methods, InnerPiSSA requires access to model internals (hidden states, gradients). This limits applicability to open-source models, unlike prompting which works with any API. However, for alignment debugging—our target use case—white-box access is inherent to the goal of probing internal representations.
+**White-box access required**: Like all representation methods, InnerPiSSA needs access to hidden states and gradients, limiting applicability to open-source models. This is not a bug but a feature—alignment debugging inherently requires probing internals. However, it means the method cannot audit closed-source models where alignment failures may be more concerning.
 
-**Data scope and complexity**: We use 200-1000 synthetic honesty pairs with simple templates ("I love/hate X"). While sufficient for proof-of-concept, steering more complex or subtle concepts may require higher-quality data from human annotations or more sophisticated prompt generation. Our data construction follows RepEng conventions but inherits their limitations in capturing nuanced behavioral distinctions.
+**Data scope**: We use 200-1000 synthetic honesty pairs with simple templates. While sufficient for proof-of-concept, steering complex or nuanced concepts may require higher-quality data. Our construction follows RepEng [@vogel2024repeng] conventions but inherits limitations in capturing subtle behavioral distinctions beyond binary preferences.
 
-**Steering site limitations**: We intervene only on residual stream activations via o_proj and down_proj modules. Other intervention sites (attention keys/values, MLP internals, specific token positions) may yield stronger or more targeted effects. Prior work shows different steering sites have different properties; we have not systematically explored this space.
+**Intervention sites**: We intervene only on residual stream activations via `o_proj` and `down_proj`. Other sites (attention keys/values, MLP gates, specific token positions) may yield different steering properties. Prior work shows different sites have different effects [@wu2024reft]; we have not systematically explored this space.
 
-**Model scale**: Primary validation uses Qwen 0.6B-14B models. Larger models (70B+) may exhibit different representation geometry, suppression dynamics, or RLHF resistance. Cross-architecture results (@tbl-cross-model) show sensitivity to model family, suggesting architecture-specific tuning may be necessary.
+**Model architecture sensitivity**: Cross-architecture results (@tbl-cross-model) show sensitivity to model family. Qwen models respond well; Llama/Gemma show mixed results. This suggests architecture-specific tuning of layer selection, rank, and loss weights may be necessary. The suppression dynamics hypothesis (@sec-suppression) may not generalize uniformly.
 
-**Evaluation benchmark mismatch**: We evaluate on DailyDilemmas (moral reasoning) rather than AxBench (concept steering). While DailyDilemmas better tests our alignment debugging goals (genuine preference conflicts, RLHF resistance), direct AxBench comparison would strengthen claims about solving the representation-steering-vs-prompting gap.
+**Benchmark mismatch**: We evaluate on DailyDilemmas (moral reasoning under preference conflict) rather than AxBench (open-vocabulary concept steering). While DailyDilemmas better tests alignment debugging goals, direct AxBench comparison would strengthen claims about solving the representation-steering-vs-prompting gap Wu et al. identified.
 
-**Mechanistic understanding incomplete**: We hypothesize middle layers work best due to suppression dynamics (@sec-suppression), but cannot fully explain why depth 0.5 outperforms our predicted 0.7-0.8. The layer selection findings are empirical, not derived from mechanistic theory. Better understanding of how transformers structure reasoning across layers would enable principled design.
+**Incomplete mechanistic understanding**: We hypothesize middle layers work best due to suppression dynamics [@gurnee2024universal], but cannot explain why depth 0.5 empirically outperforms our predicted 0.7-0.8 range. Layer selection is data-driven, not theory-driven. Better mechanistic models of transformer reasoning would enable principled design.
 
-**Compute cost**: Training InnerPiSSA adapters requires gradient computation and backpropagation through the model, unlike PCA which only needs forward passes. For each concept, we need ~10 minutes on a single GPU. While modest compared to full fine-tuning, this is more expensive than arithmetic extraction methods (seconds). However, for alignment debugging use cases, this one-time cost is acceptable.
+**Compute overhead**: Training adapters requires backpropagation (~10 min/concept on single GPU), unlike PCA (seconds). While modest compared to full fine-tuning, this is higher than arithmetic extraction. For alignment debugging use cases requiring one-time setup, acceptable; for rapid iteration across many concepts, less practical than PCA or prompting.
 
-## Future Work
+## Future Directions
 
-**Compositional steering**: Can we compose multiple steering directions (e.g., honesty + curiosity) to achieve complex behavioral changes? Does SVD space enable linear superposition of concepts?
+**Compositional steering**: Can we superpose multiple steering vectors (honesty + curiosity) to achieve complex behaviors? Does SVD space enable linear composition where activation space does not?
 
-**Adaptive coherence budgets**: Currently we use fixed NLL thresholds. Could we dynamically adjust coherence constraints based on task difficulty or steering magnitude?
+**Adaptive coherence budgets**: Fixed NLL thresholds may be suboptimal. Could we dynamically adjust constraints based on steering difficulty (measured by projection magnitude) or task requirements?
 
-**Explaining middle-layer effectiveness**: Why does depth 0.5 outperform our predicted 0.7-0.8 range? Mechanistic studies correlating steering effectiveness with SAE features or neuron function could clarify.
+**Explaining layer effectiveness**: Why does depth 0.5 outperform predictions? Correlating steering effectiveness with SAE features [@lieberum-etal-2024-gemma] or circuit analysis [@wang2022interpretability] could reveal mechanistic principles.
 
-**Probing deceptive alignment**: The anti-RLHF capability suggests potential for studying models that conceal misaligned reasoning. Can we use InnerPiSSA to detect or characterize deceptive behaviors in capable models?
+**Deceptive alignment probing**: The anti-RLHF capability enables studying models that conceal misaligned reasoning. Can InnerPiSSA detect or characterize deception in capable models? This requires careful experimental design to avoid anthropomorphizing statistical patterns.
+
+**Scaling to AxBench**: Direct evaluation on AxBench's 16k concept dataset would test whether gradient-based methods scale to open-vocabulary steering while maintaining advantages over prompting on adversarial robustness.
 
 
 # References (Original Position) {.unnumbered}
