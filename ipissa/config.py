@@ -90,7 +90,7 @@ class TrainingConfig:
     """Batch size"""
 
     n_epochs: int = 20
-    lr: float = 8e-3
+    lr: float = 3e-3
     """Learning rate"""
 
     wd: float = 1.0
@@ -178,6 +178,9 @@ class TrainingConfig:
 
     eval_max_tokens: int = 288
     """Max tokens for eval sample (cropped above this)"""
+
+    seed: int = 42
+    """Random seed for reproducibility"""
 
     output_dir: Path = proj_root / "outputs/adapters"
     experiment_name: Optional[str] = None

@@ -68,6 +68,17 @@ def setup_logging(verbose: bool = False):
     )
 
 
+def set_seed(seed: int):
+    """Set random seeds for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    # Deterministic ops may impact performance
+    # torch.backends.cudnn.deterministic = True
+    # torch.backends.cudnn.benchmark = False
+
+
 def clear_mem():
     """Clear GPU memory."""
     gc.collect()
@@ -1300,6 +1311,7 @@ def auto_flip_adapter_sign(model, tokenizer, choice_ids, adapter_name, threshold
 def train_model(config: TrainingConfig):
     """Main training pipeline."""
     setup_logging(config.verbose)
+    set_seed(config.seed)
     logger.info(f"Starting training with config:\n{config}")
 
     if config.quick:
