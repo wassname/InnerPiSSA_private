@@ -143,3 +143,30 @@
       note={GDM Mech Interp Team Progress Update \#2},
       abstract={To validate whether SAEs were a worthwhile technique, we explored whether they were useful on the downstream task of OOD generalisation when detecting harmful intent in user prompts. Negative result: SAEs underperformed linear probes. Corollary: Linear probes are actually really good and cheap and perform great. As a result of this and parallel work, we are deprioritising fundamental SAE research for the moment and exploring other directions, though SAEs will remain a tool in our toolkit. We do not think that SAEs are useless or that no one should work on them, but we also do not think that SAEs will be a game-changer for interpretability, and speculate that the field is over-invested in them.}
 }
+@article{miehling2024evaluating,
+    title={Evaluating the Prompt Steerability of Large Language Models},
+    author={Miehling, Erik and Desmond, Michael and Ramamurthy, Karthikeyan Natesan and Daly, Elizabeth M. and Dognin, Pierre and Rios, Jesus and Bouneffouf, Djallel and Liu, Miao},
+    journal={arXiv preprint arXiv:2411.12405},
+    year={2024},
+    abstract={Building pluralistic AI requires designing models that are able to be shaped to represent a wide range of value systems and cultures. Achieving this requires first being able to evaluate the degree to which a given model is capable of reflecting various personas. To this end, we propose a benchmark for evaluating the steerability of model personas as a function of prompting. Our design is based on a formal definition of prompt steerability, which analyzes the degree to which a model's joint behavioral distribution can be shifted from its baseline. By defining steerability indices and inspecting how these indices change as a function of steering effort, we can estimate the steerability of a model across various persona dimensions and directions. Our benchmark reveals that the steerability of many current models is limited -- due to both a skew in their baseline behavior and an asymmetry in their steerability across many persona dimensions. We release an implementation of our benchmark at this https URL.}
+}
+@misc{lee2024programmingrefusalconditionalactivation,
+      title={Programming Refusal with Conditional Activation Steering}, 
+      author={Bruce W. Lee and Inkit Padhi and Karthikeyan Natesan Ramamurthy and Erik Miehling and Pierre Dognin and Manish Nagireddy and Amit Dhurandhar},
+      year={2024},
+      eprint={2409.05907},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2409.05907}, 
+      abstract={LLMs have shown remarkable capabilities, but precisely controlling their response behavior remains challenging. Existing activation steering methods alter LLM behavior indiscriminately, limiting their practical applicability in settings where selective responses are essential, such as content moderation or domain-specific assistants. In this paper, we propose Conditional Activation Steering (CAST), which analyzes LLM activation patterns during inference to selectively apply or withhold activation steering based on the input context. Our method is based on the observation that different categories of prompts activate distinct patterns in the model's hidden states. Using CAST, one can systematically control LLM behavior with rules like "if input is about hate speech or adult content, then refuse" or "if input is not about legal advice, then refuse." This allows for selective modification of responses to specific content while maintaining normal responses to other content, all without requiring weight optimization. We release an open-source implementation of our framework at this http URL . }
+}
+@misc{sun2025hypersteeractivationsteeringscale,
+      title={HyperSteer: Activation Steering at Scale with Hypernetworks}, 
+      author={Jiuding Sun and Sidharth Baskaran and Zhengxuan Wu and Michael Sklar and Christopher Potts and Atticus Geiger},
+      year={2025},
+      eprint={2506.03292},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2506.03292}, 
+      abstract={Steering language models (LMs) by modifying internal activations is a popular approach for controlling text generation. Unsupervised dictionary learning methods, e.g., sparse autoencoders, can be scaled to produce many steering vectors, but lack guarantees on the individual efficacy of each vector and control over the coverage of relevant steering tasks. In contrast, supervised methods for constructing steering vectors are targeted and effective, but require more data collection and training for each additional steering vector produced. In this work, we introduce HyperSteer, a family of hypernetwork-based architectures which are trained end-to-end to generate steering vectors conditioned on the natural language steering prompts and the internals of the steered LM. In our evaluations, we show that scaling HyperSteer with thousands of steering prompts exceeds the performance of state-of-the-art activation steering methods, even on steering prompts never seen during training. Moreover, HyperSteer performs on par with steering-via-prompting.}
+}
