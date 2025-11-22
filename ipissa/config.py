@@ -59,7 +59,7 @@ EVAL_BASELINE_MODELS = [
     "Qwen/Qwen3-14B",
     # "openai/gpt-oss-20b",
     # "google/gemma-3-27b-it",
-    "Qwen/Qwen3-32B",
+    # "Qwen/Qwen3-32B",
     "unsloth/Llama-3.1-8B-Instruct"
     #"unsloth/Llama-3.3-70B-Instruct",
 ]
