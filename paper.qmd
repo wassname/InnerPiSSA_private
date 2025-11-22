@@ -120,13 +120,18 @@ We construct ~1000 such pairs using:
 
 - 2 prompt templates ("I love/hate X", "I always tell/hide the truth about X") 
 - 500 random context suffixes (from general text corpus)
-- No human preference labels
-- No model completions
+- **No human preference labels** - directions extracted from model's own activation patterns
+- **No model completions** - prefixes capture planning before output generation
 
-This **self-supervised contrastive** approach differs from:
-- **DPO/BiPO**: Require full completions and human preference labels
-- **Standard CAA/RepEng**: Use complete prompts or prompt-suffix pairs
-- **InnerPiSSA**: Extracts from incomplete prefixes to capture planning state
+This **unsupervised, on-policy contrastive** approach addresses a critical limitation of supervised steering: off-policy data distribution shift. Methods that extract from human-labeled preferences [@cao2024personalized] or model outputs on contrived prompts [@zou2023representation] capture what models *say* about concepts rather than how they *internally represent* them during naturalistic reasoning. By extracting from incomplete prefixes in the model's own forward pass, we avoid this contamination.
+
+Comparison to related methods:
+- **DPO/BiPO** [@rafailov2023direct]: Require full completions and human preference labels (off-policy)
+- **Standard CAA/RepEng** [@lee2024programmingrefusalconditionalactivation; @vogel2024repeng]: Use complete prompts or model outputs (off-policy)
+- **Supervised probes** [@burns2022discovering; @cao2024personalized]: Train on human labels of model internals (distribution shift)
+- **InnerPiSSA**: Extracts from incomplete prefixes in model's own reasoning trajectory (on-policy, unsupervised)
+
+The on-policy property is essential for alignment debugging—to observe what models compute internally when safety constraints are bypassed, we need directions that reflect actual internal representations, not artifacts of how models respond when explicitly asked about concepts.
 
 See and for the mathematical formulation of contrastive activation extraction.
 
@@ -375,6 +380,47 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 
 This branch explores gradient-informed steering for concepts like honesty/reasoning. Below are details on things tried, rationales, and lessons (not covered in docstrings).
 
+## Ideas That Failed: Why Gradient-Based SVD Steering is Necessary {#sec-failed-ideas}
+
+The final InnerPiSSA method emerged after systematically testing arithmetic, gradient-based, and transformation-based approaches. This section documents what didn't work and why, justifying the necessity of gradient-based optimization in SVD space.
+
+### Arithmetic Methods: Insufficient Generalization
+
+**PCA Baseline** (activation difference): Extract direction as $\text{mean}(hs_{cho} - hs_{rej})$ and apply as additive bias during inference. This is the standard RepEng [@zou2023representation] approach.
+
+- **What failed**: Near-zero effect sizes (0.053 at coeff=±100) on moral reasoning transfer
+- **Why it failed**: Averaging activations captures surface statistics (word choice, syntactic patterns) rather than semantic transformations. No learning mechanism to discover task-relevant subspaces.
+- **Evidence**: @tbl-main-results shows PCA achieves 4.2% normalized gain vs InnerPiSSA's 18.7% at matched coefficients
+
+**S-weighted Steering** (SVD with fixed extraction): Project activations to S-space using pre-trained SVD, extract direction, apply with $\sqrt{S}$ weighting to match PiSSA initialization pattern [@meng2024pissa].
+
+- **What failed**: Better than raw PCA but still underperforms learned rotations
+- **Why it failed**: Pre-trained SVD basis captures variance in model's original task distribution, not behavioral preferences. Fixed extraction cannot adapt to steering objectives.
+- **Evidence**: Ablation study shows removing learnable rotations (keep only S-scaling) drops performance by 89% (see @tbl-arch-ablation, "No Rotation" row)
+
+### Gradient Methods Without SVD: Training Instability
+
+**DPO/SimPO Losses**: Apply Direct Preference Optimization [@rafailov2023direct] or length-normalized variants to hidden states instead of outputs.
+
+- **What failed**: Training collapsed or produced incoherent outputs
+- **Why it failed**: DPO optimizes output distributions with implicit regularization from LM objective. Applying to hidden states lacks this structure—models can satisfy the loss by making arbitrary changes that break downstream layers.
+- **Evidence**: Early experiments (see `docs/readme_for_previous_failed_work.md`) showed DPO achieves 90% train accuracy but <25% on out-of-distribution moral reasoning
+
+**Projected Gradients** (clip gradients to PCA direction before backprop): Compute PCA direction, then project weight gradients onto it during DPO training.
+
+- **What failed**: 89.4% test accuracy vs 90.0% for standard DPO—no improvement despite increased complexity
+- **Why it failed**: Gradient clipping operates in weight space, but steering needs activation-space control. Discarding orthogonal gradient components removes information needed for coherent generation.
+
+### Why InnerPiSSA's Design Works
+
+The successful approach combines three elements that failed methods lacked:
+
+1. **SVD Transformation Space**: Projects to basis aligned with model's learned transformations (not arbitrary PCA variance)
+2. **Learnable Rotations**: Discovers task-relevant subspaces via gradient descent on Cayley parameters
+3. **Coherence-Constrained Loss**: ReprPO with per-token NLL bounds prevents training collapse while maximizing separation
+
+Ablations confirm all three are necessary (see @tbl-arch-ablation): removing any component causes >85% performance drop. The anti-RLHF stress test (@tbl-anti-rlhf) further validates that gradient-based learning enables robustness unattainable by fixed extractions—prompting collapses (-10.84) while InnerPiSSA maintains control (-0.70) at coefficient -1.
+
 ### Metrics Reference
 
 **Main metric**: `T-statistic / (1 + NLL_degradation)`
@@ -471,7 +517,7 @@ See also the repo for training with losses like this https://github.com/wassname
 |    0.9  |      32 |  279.7 |  279.7 |        1 |        1.5 | Late - weak  |
 |    0.99 |      35 |  547.3 |  547.3 |        1 |       16.4 | Late - weak  |
 
-**Finding**: Middle layers (0.3-0.5, layers 10-18) work best. Early layers lack semantic content, late layers already suppressed. Matches N-2 hypothesis.
+**Finding**: Middle layers (0.3-0.5, layers 10-18) work best. Early layers lack semantic content, late layers already suppressed. Matches mechanistic interpretability findings [@gurnee2024universal; @lad2024stages] showing suppression dynamics concentrate in later layers.
 
 ## Learning Rate Sensitivity {#sec-ablation-lr}
 
