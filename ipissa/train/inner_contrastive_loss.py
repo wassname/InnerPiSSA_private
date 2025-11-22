@@ -460,7 +460,7 @@ def contrastive_steering_loss_with_ref(
     assert torch.isfinite(loss).all(), "Non-finite loss"
     
     # Monitoring metrics
-    avg_logp_deg = reduce_tokens_w_attention(logp_deg, loss_mask).mean()
+    avg_coh_deg = -reduce_tokens_w_attention(logp_deg, loss_mask).mean()  # Flip sign: positive = pi better
     
     # Compute preference gap change for monotonic ordering constraint
     # delta_logp_change = (logp_pi_cho - logp_pi_rej) - (logp_ref_cho - logp_ref_rej)
@@ -475,8 +475,8 @@ def contrastive_steering_loss_with_ref(
         "loss_proj": loss_proj,
         "loss_coh": loss_coh,
         # "loss_total": loss,  # For backward compatibility
-        "logp_degradation": avg_logp_deg,  # nats (positive = worse)
-        "prob_ratio": torch.exp(-avg_logp_deg),  # p_pi/p_ref
+        "coh_deg": avg_coh_deg,  # nats (positive = pi better, ℒcoh penalizes when < -threshold)
+        "prob_ratio": torch.exp(avg_coh_deg),  # p_pi/p_ref
         "proj_pi": proj_pi_agg.mean(),
         "proj_ref": proj_ref_agg.mean(),
         "proj_diff": proj_diff.mean(),  # What loss operates on

@@ -54,6 +54,24 @@ class InnerPiSSAConfig(PeftConfig):
     """
     # InnerPiSSA-specific parameters
     r: int = field(default=16, metadata={"help": "SVD rank for principal components"})
+    steering_vectors: Optional[Dict[str, torch.Tensor]] = field(
+        default=None,
+        repr=False,  # Don't print in __repr__
+        metadata={"help": "Dict of {layer_name: dHS_tensor} for data-aware SVD selection. "
+                          "If provided, selects top-r singular vectors by |dHS @ U| instead of naive top-r by S."}
+    )
+    
+    def __post_init__(self):
+        self.peft_type = 'INNERPISSA'
+        if self.target_modules is None:
+            self.target_modules = ["q_proj", "v_proj"]
+    
+    def to_dict(self):
+        """Override to exclude non-serializable fields."""
+        d = super().to_dict()
+        # Remove steering_vectors from serialization (it's only for init)
+        d.pop('steering_vectors', None)
+        return d
     rotate_u: bool = field(
         default=False,
         metadata={"help": "Learn rotation on U singular vectors (SVDSteering-style)"}
@@ -158,11 +176,17 @@ class InnerPiSSALayer(BaseTunerLayer):
         rotate_v,
         rotation_method,
         block_size,
+        steering_vectors: Optional[Dict[str, torch.Tensor]] = None,
+        layer_name: Optional[str] = None,
+        # data_aware_init_use_magnitudes: bool = False,
         # steer_s,
         **kwargs
     ) -> None:
         """
         Initialize adapter with simple top-r SVD + residual (PiSSA-style).
+        
+        If steering_vectors provided, selects SVD components by projection magnitude
+        onto dHS (data-aware) instead of naive top-r by singular values.
         """
         if adapter_name in self.ipissa_u:
             return  # Already initialized
@@ -188,13 +212,63 @@ class InnerPiSSALayer(BaseTunerLayer):
         base_weight = base_weight.float()  # [out, in]
         device = base_weight.device
 
-        # Simple top-r SVD (like SVDSteering snippet)
+        # Full SVD for component selection
         U_full, S_full, Vh_full = torch.linalg.svd(base_weight, full_matrices=False)
+        max_rank = min(U_full.shape[1], S_full.shape[0])  # Can't exceed matrix dimensions
+        r_actual = min(r, max_rank)  # Clamp r to available rank
         
-        U = U_full[:, :r]  # [d_out, r]
-        S = S_full[:r]     # [r]
-        Vh = Vh_full[:r, :]  # [r, d_in]
-        V = Vh.T           # [d_in, r]
+        # Data-aware component selection if steering vectors provided
+        if steering_vectors is not None and layer_name in steering_vectors:
+            """
+            Data-aware SVD initialization: select components by relevance to preference direction dHS
+            AND use projection magnitudes as singular values.
+            
+            Approach:
+            1. Normalize dHS so projections are comparable across layers (prevents scale dependence)
+            2. Project dHS onto each singular vector: proj[i] = dHS @ U[:, i] gives alignment strength
+            3. Select top-r by |proj| (most aligned directions, regardless of sign)
+            4. Use proj magnitudes as S values: S_init[i] = |proj[i]| ∈ [0, 1]
+            
+            Rationale:
+            - Projection magnitudes capture "how much" each direction is used when dHS is decomposed in U basis
+            - Lower S values naturally downweight less-relevant directions during learning
+            - Avoids initializing with large S values for directions orthogonal to preference
+            
+            Tradeoff: proj magnitudes are in [0, 1] while original S can be 10-1000, so this
+            effectively initializes with smaller singular values. Training must learn to scale up
+            relevant directions. Empirically showed mixed results - model can learn rotations
+            regardless of initialization, but this provides a theoretically cleaner starting point.
+            """
+            dHS = steering_vectors[layer_name].to(device).float()  # [d_out]
+            
+            # Normalize dHS for comparable projection magnitudes across layers
+            dHS_norm = dHS / (dHS.norm() + 1e-8)
+            
+            # Project preference direction onto each singular vector
+            # proj[i] = cosine similarity between dHS and U[:, i] (since both normalized)
+            proj = dHS_norm @ U_full  # [rank], values in [-1, 1]
+            
+            # Select top-r by absolute projection magnitude
+            _, indices = torch.topk(proj.abs(), r_actual)
+            indices_sorted = indices.sort()[0]  # Keep in descending S order for stability
+            
+            U = U_full[:, indices_sorted]  # [d_out, r_actual]
+            Vh = Vh_full[indices_sorted, :]  # [r_actual, d_in]
+            V = Vh.T                        # [d_in, r_actual]
+            
+            # S initialization: use projection magnitudes if flag enabled, else original S
+            # if data_aware_init_use_magnitudes:
+            # Use projection magnitudes as S values (experimental)
+            S = proj[indices_sorted].abs()  # [r_actual]
+            # else:
+            #     # Use original S values (direction-aware only)
+            #     S = S_full[indices_sorted]      # [r_actual]
+        else:
+            # Naive top-r by singular values (original PiSSA)
+            U = U_full[:, :r_actual]  # [d_out, r_actual]
+            S = S_full[:r_actual]     # [r_actual]
+            Vh = Vh_full[:r_actual, :]  # [r_actual, d_in]
+            V = Vh.T           # [d_in, r_actual]
         
         # Compute residual (PiSSA-style)
         W_principal = U @ torch.diag(S) @ Vh
@@ -211,13 +285,13 @@ class InnerPiSSALayer(BaseTunerLayer):
         # Learnable S scaling (modified to be reversible DeLoRA/PiSSA-style)
         if scale_s in ["add", "add2", "add_tanh"]:
             self.ipissa_delta_s[adapter_name] = nn.Parameter(
-                torch.zeros(r, device=device), 
+                torch.zeros(r_actual, device=device), 
                 requires_grad=True
             )
             nn.init.uniform_(self.ipissa_delta_s[adapter_name], a=1e-5, b=1e-3)
         elif scale_s == "mult":
             self.ipissa_loglambda_s[adapter_name] = nn.Parameter(
-                torch.zeros(r, device=device), 
+                torch.zeros(r_actual, device=device), 
                 requires_grad=True
             )
             nn.init.trunc_normal_(self.ipissa_loglambda_s[adapter_name], std=0.002)
@@ -239,26 +313,26 @@ class InnerPiSSALayer(BaseTunerLayer):
         # Initialize rotation parameters (reversible OFT,SSVD-style)
         if rotate_u:
             if rotation_method == "block_diagonal":
-                assert block_size is not None and r % block_size == 0, f"block_size {block_size} must divide r {r}"
-                num_blocks = r // block_size
+                assert block_size is not None and r_actual % block_size == 0, f"block_size {block_size} must divide r_actual {r_actual}"
+                num_blocks = r_actual // block_size
                 self.ipissa_rotation_params_u[adapter_name] = nn.Parameter(
                     initialize_skew_symmetric_matrix(num_blocks, block_size, block_size, device=device)
                 )
             else:
                 self.ipissa_rotation_params_u[adapter_name] = nn.Parameter(
-                    initialize_skew_symmetric_matrix(r, r, device=device)
+                    initialize_skew_symmetric_matrix(r_actual, r_actual, device=device)
                 )
         
         if rotate_v:
             if rotation_method == "block_diagonal":
-                assert block_size is not None and r % block_size == 0, f"block_size {block_size} must divide r {r}"
-                num_blocks = r // block_size
+                assert block_size is not None and r_actual % block_size == 0, f"block_size {block_size} must divide r_actual {r_actual}"
+                num_blocks = r_actual // block_size
                 self.ipissa_rotation_params_v[adapter_name] = nn.Parameter(
                     initialize_skew_symmetric_matrix(num_blocks, block_size, block_size, device=device)
                 )
             else:
                 self.ipissa_rotation_params_v[adapter_name] = nn.Parameter(
-                    initialize_skew_symmetric_matrix(r, r, device=device)
+                    initialize_skew_symmetric_matrix(r_actual, r_actual, device=device)
                 )
     def _get_rotation(
         self, 
@@ -472,6 +546,9 @@ class InnerPiSSAModel(BaseTuner):
             "block_size": ipissa_config.block_size,
             "scale_s": ipissa_config.scale_s,
             "alpha": ipissa_config.alpha,
+            "steering_vectors": ipissa_config.steering_vectors,
+            "layer_name": current_key,  # Pass layer name for steering vector lookup
+            # "data_aware_init_use_magnitudes": ipissa_config.data_aware_init_use_magnitudes,
             # "steer_s": ipissa_config.steer_s,
             **optional_kwargs,
         }
@@ -510,11 +587,14 @@ class InnerPiSSAModel(BaseTuner):
 
 
 def register_ipissa_peft():
-    """Register custom InnerPiSSA adapter with PEFT."""
-
+    """Register custom InnerPiSSA adapter with PEFT (idempotent)."""
     import peft.utils.peft_types
     from peft.mapping import PEFT_TYPE_TO_PREFIX_MAPPING
     from peft.utils import register_peft_method
+
+    # Check if already registered
+    if hasattr(peft.utils.peft_types.PeftType, 'INNERPISSA'):
+        return  # Already registered
 
     class PeftType2(str, enum.Enum):
         INNERPISSA = "INNERPISSA"

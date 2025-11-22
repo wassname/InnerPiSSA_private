@@ -110,6 +110,7 @@ ablate-constraints:
     $BASE --scale_s=none
     $BASE --adapter_type lora
     $BASE --no_coh_adaptive
+    $BASE --no_data_aware_init
 
 sweep-layers:
     #!/bin/bash -x

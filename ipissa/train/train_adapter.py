@@ -54,6 +54,7 @@ from ipissa.train.daily_dilemas import (
 from ipissa.train.inner_contrastive_loss import contrastive_steering_loss_with_ref, combine_dual_coef_losses
 from ipissa.config import TrainingConfig, proj_root, PROMPT, PERSONAS
 from ipissa.peft_utils.load import add_adapter_name_to_sd, remove_adapter_name, save_adapter
+from ipissa.peft_utils.layer_selection import LayerSelection, compute_layer_selection
 
 
 def setup_logging(verbose: bool = False):
@@ -73,31 +74,8 @@ def clear_mem():
     torch.cuda.empty_cache()
 
 
-def normalize_layer_spec(layer_spec: List[float | int], total_layers: int) -> List[int]:
-    """Convert layer specs to absolute layer numbers.
-    
-    Handles formats:
-    - Float fraction: 0.5 -> layer 16, -0.15 -> layer 27 (for 32 layers)
-    - Integer offset: 10 -> layer 10, -3 -> layer 29 (for 32 layers)
-    
-    Args:
-        layer_spec: List of layer specs (float fraction or integer offset)
-        total_layers: Total number of layers in model
-    
-    Returns:
-        List of absolute layer numbers
-    """
-    normalized = []
-    for x in layer_spec:
-        if (x>=0) and (x < 1):
-            # Fraction: convert to layer number, then modulo handles negatives
-            x = int(x * total_layers)
-        
-        # Integer: modulo handles negative offsets
-        layer_num = int(x) % total_layers
-
-        normalized.append(layer_num)
-    return normalized
+# normalize_layer_spec moved to ipissa.peft_utils.layer_selection
+# (imported above for backward compatibility if needed elsewhere)
 
 
 def load_train_suffixes(
@@ -238,70 +216,18 @@ def load_model(model_id, quantization_type="none"):
     return base_model, tokenizer
 
 
-def match_linear_layers(model, layer_nums: List[int], module_names: List[str], verbose=False, blocklist=['vision']) -> List[str]:
-    # Build peft regex: .*\.(layer1|layer2|...)\..*(module1|module2|...)
-    layer_nums = "|".join(str(L) for L in layer_nums)
-    module_names = "|".join(module_names)
-    target_modules = f".*\\.({layer_nums})\\..*({module_names})"
+
+def setup_adapter(base_model, config: TrainingConfig, target_modules: str, init_steering_vecs=None):
+    """Setup InnerPiSSA adapter on base model.
+    
+    Args:
+        base_model: Base model to add adapter to
+        config: Training configuration
+        target_modules: PEFT target_modules regex (from LayerSelection)
+        init_steering_vecs: Optional dict of {layer_name: dHS_tensor} for data-aware init
+    """
 
     logger.info(f"Target modules regex: {target_modules}")
-    module_path_shapes = {}
-    for name, m in model.named_modules():
-        if any(block in name for block in blocklist):
-            continue
-        if re.search(target_modules, name):
-            if isinstance(m, torch.nn.Linear):
-                module_path_shapes[name] = m.weight.shape
-    if verbose:
-        logger.info(f"Found {len(module_path_shapes)} target modules:")
-    return list(module_path_shapes.keys())
-
-
-def setup_adapter(base_model, config: TrainingConfig):
-    """Setup InnerPiSSA adapter on base model."""
-    total_layers = base_model.config.num_hidden_layers
-    start_layer , end_layer = normalize_layer_spec([config.depth_start, config.depth_end], total_layers)
-    assert start_layer < end_layer, f"Invalid layer range: start {start_layer}, end {end_layer}"
-    assert end_layer <= total_layers, f"End layer {end_layer} exceeds total layers {total_layers}"
-    assert start_layer >= 0, f"Start layer {start_layer} is negative"
-
-    # Convert loss_depths to absolute layer numbers
-    loss_depths = config.loss_depths
-    if not isinstance(loss_depths, list):
-        loss_depths = [loss_depths]
-    loss_layers = normalize_layer_spec(loss_depths, total_layers)
-
-    # Get all candidate layers in range, excluding loss layers
-    all_candidate_layers = list(range(start_layer, end_layer + 1))
-    available_layers = [L for L in all_candidate_layers if L not in loss_layers]
-    
-    if not available_layers:
-        raise ValueError(f"No available layers after excluding loss layers {loss_layers} from range [{start_layer}, {end_layer}]")
-    
-    # Take evenly-spaced subset from available layers
-    if config.n_depths >= len(available_layers):
-        layers = sorted(set(available_layers))
-        logger.warning(f"n_depths={config.n_depths} >= available layers ({len(available_layers)}), using all available layers")
-    else:
-        logger.warning(f"Trying to select more than available layers: n_depths={config.n_depths}, available={len(available_layers)}")
-        # Use linspace on indices, then map to actual layer numbers
-        indices = np.linspace(0, len(available_layers) - 1, config.n_depths, dtype=int)
-        layers = sorted(set(available_layers[i] for i in indices))
-    
-    logger.info(f"Selected {len(layers)} evenly-spaced adapter layers from {len(available_layers)} available (excluding loss layers {loss_layers}): {layers}")
-    
-    # Build peft regex: .*\.(layer1|layer2|...)\..*(module1|module2|...)
-    layer_nums = "|".join(str(L) for L in layers)
-    module_names = "|".join(config.modules)
-    target_modules = f".*\\.({layer_nums})\\..*({module_names})"
-
-    logger.info(f"Target modules regex: {target_modules}")
-    available = {}
-    for name, m in base_model.named_modules():
-        if re.search(r"\.0\.", name):
-            if isinstance(m, torch.nn.Linear):
-                available[name] = m.weight.shape
-    logger.info(f"Available modules: {available}")
 
     if config.adapter_type == "innerpissa":
         adapter_config = InnerPiSSAConfig(
@@ -311,6 +237,7 @@ def setup_adapter(base_model, config: TrainingConfig):
             rotate_v=config.rot_v,
             task_type="CAUSAL_LM",
             target_modules=target_modules,
+            steering_vectors=init_steering_vecs,
         )
     else:  # lora or dora
         from peft import LoraConfig
@@ -331,57 +258,7 @@ def setup_adapter(base_model, config: TrainingConfig):
     return model
 
 
-def get_loss_layers(model, config: TrainingConfig):
-    """Determine which layers to apply loss to based on config.loss_layers.
-    
-    Args:
-        model: The model (used to get total layer count and find matching modules)
-        config: TrainingConfig with loss_layers (negative offsets from end)
-    
-    Returns:
-        List of layer names matching config.layers suffixes at depths specified by config.loss_layers.
-        Returns the actual executed layers (adapter wrappers), not base_layer submodules.
-        
-    Example:
-        config.loss_layers = [-3, -5]  # 3rd and 5th from last layer
-        config.layers = ["down_proj", "k_proj"]
-        -> ["model.layers.29.mlp.down_proj", "model.layers.29.self_attn.k_proj",
-            "model.layers.27.mlp.down_proj", "model.layers.27.self_attn.k_proj"]
-    """
-    num_hidden_layers = model.config.num_hidden_layers
-    
-    # Convert negative offsets to absolute layer indices
-    loss_layer_indices = normalize_layer_spec(config.loss_depths, num_hidden_layers)
-    
-    # Find all linear layers at these depths matching config.layers suffixes
-    # Hook the actual executed layers (adapter wrappers or base Linear), not base_layer
-    loss_layers = []
-    for name, module in model.named_modules():
-        # Skip base_layer submodules - they're never executed
-        if name.endswith('.base_layer'):
-            continue
-            
-        if not isinstance(module, torch.nn.Linear):
-            continue
-        
-        # Extract layer number from name (e.g., "model.layers.29.mlp.down_proj" -> 29)
-        match = re.search(r"\.layers\.(\d+)\.", name)
-        if not match:
-            continue
-        layer_idx = int(match.group(1))
-        
-        # Check if this layer index is in our target list
-        if layer_idx not in loss_layer_indices:
-            continue
-        
-        # Check if module name ends with one of our target suffixes
-        if any(name.endswith(suffix) for suffix in config.modules):
-            loss_layers.append(name)
-    
-    loss_layers = sorted(set(loss_layers))
-    assert len(loss_layers) > 0, f"No loss layers found matching config.loss_layers={loss_layer_indices} and config.layers={config.modules}->{loss_layers}"
-    logger.info(f"Loss layers (indices {loss_layer_indices}): {loss_layers}")
-    return loss_layers
+# get_loss_layers removed - loss layers come from layer_selection.loss_layer_names
 
 
 def extract_U_matrices(model, loss_layers: List[str], config: TrainingConfig):
@@ -412,6 +289,57 @@ def extract_U_matrices(model, loss_layers: List[str], config: TrainingConfig):
     logger.info(f"Extracted U matrices: {shapes}")
 
     return Uw_full, Sw_full, Vw_full
+
+
+def compute_init_steering_vectors(
+    model, dataset_pt, loss_layers, tokenizer, config, n_samples=32
+):
+    """Compute raw dHS from first batch for data-aware adapter initialization.
+    
+    Args:
+        model: Base model (no adapter yet)
+        dataset_pt: Tokenized dataset
+        loss_layers: Layers to extract activations from
+        tokenizer: Tokenizer
+        config: TrainingConfig
+        n_samples: Number of samples to use (must be even for cho/rej pairs)
+    
+    Returns:
+        Dict[layer_name, dHS_tensor] where dHS = mean(hs_cho - hs_rej)
+    """
+    from torch.utils.data import DataLoader, Subset
+    from transformers import DataCollatorWithPadding
+    
+    # Take first n_samples (must be even for pairs)
+    assert n_samples % 2 == 0, "n_samples must be even for cho/rej pairs"
+    subset_indices = list(range(min(n_samples, len(dataset_pt))))
+    subset = Subset(dataset_pt, subset_indices)
+    
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer, padding="longest")
+    dataloader = DataLoader(subset, batch_size=config.bs, collate_fn=data_collator)
+    
+    model.eval()
+    steering_vecs = {layer: [] for layer in loss_layers}
+    
+    with torch.no_grad(), torch.amp.autocast("cuda", dtype=torch.bfloat16):
+        for batch in dataloader:
+            batch = {k: v.to(model.device) for k, v in batch.items()}
+            attention_mask = batch["attention_mask"]
+            
+            with TraceDict(model, layers=loss_layers) as ret:
+                model(**batch)
+            
+            # Extract last token activations
+            for layer in loss_layers:
+                hs = (ret[layer].output * attention_mask.unsqueeze(-1)).float()
+                hs_cho = hs[::2].mean(dim=1)  # [n_pairs, d] -> avg over seq
+                hs_rej = hs[1::2].mean(dim=1)
+                dHS = (hs_cho - hs_rej).mean(dim=0)  # [d] - mean over pairs
+                steering_vecs[layer].append(dHS.cpu())
+    
+    # Average across batches
+    steering_vecs = {k: torch.stack(v).mean(dim=0) for k, v in steering_vecs.items()}
+    return steering_vecs
 
 
 def train_steer_vector(
@@ -756,7 +684,7 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
         'cw': 'cw',  # Now per-coefficient
         'mono_frac_violated': 'mviol%',
         'mono_violation': 'mvio',  # Per-coefficient violation magnitude
-        'logp_degradation': 'degr',
+        'coh_deg': 'coh',  # pi_logp - ref_logp (positive = pi better, ℒcoh penalizes if < -threshold)
         'prob_ratio': 'p_rat',
         'proj_pi': 'π_prj',
         'proj_ref': 'ref_prj',
@@ -767,9 +695,9 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
     # Keep only key metrics for display
     if group_by == 'layer':
         # FIXME group by layer still show coef as index??
-        key_cols = ['ℒproj', 'Δlp', 'cw',]
+        key_cols = ['ℒproj', 'ℒmono', ]
     else:
-        key_cols = ['ℒproj', 'ℒcoh', 'ℒmono', 'ℒtot', 'Δlp', 'cw', 'mviol%', 'mvio']
+        key_cols = ['ℒproj', 'ℒcoh',  'ℒmono', 'ℒtot', 'coh', 'cw', 'mviol%', 'mvio']
     df_display = df_grouped2[[c for c in key_cols if c in df_grouped2.columns]]
     
     # For multi-level index (layer grouping), pivot for compact display
@@ -1404,23 +1332,67 @@ def train_model(config: TrainingConfig):
     if config.adapter_type == "innerpissa":
         register_ipissa_peft()
 
-    # Load model and adapter
+    # Load model
     base_model, tokenizer = load_model(
         model_id=config.model_name, quantization_type=config.quantization_type
     )
-    model = setup_adapter(base_model, config)
+    
+    # Create dataset early for data-aware init
+    train_honest, train_dataset_pt, val_honest, val_dataset_pt = create_train_dataset(
+        config, tokenizer, max_size=config.max_samples
+    )
+    
+    # Compute layer selection ONCE (single source of truth)
+    layer_selection = compute_layer_selection(
+        base_model,
+        depth_start=config.depth_start,
+        depth_end=config.depth_end,
+        n_depths=config.n_depths,
+        loss_depths=config.loss_depths,
+        modules=config.modules,
+    )
+    
+    logger.info(
+        f"Layer selection: {len(layer_selection.adapter_layer_names)} adapter layers "
+        f"(indices {layer_selection.adapter_layer_indices}), "
+        f"{len(layer_selection.loss_layer_names)} loss layers "
+        f"(indices {layer_selection.loss_layer_indices})"
+    )
+    
+    # Compute steering vectors for data-aware adapter init (before adapter setup)
+    # ✅ FIX: Use adapter_layer_names, not loss_layer_names!
+    if config.adapter_type == "innerpissa" and config.data_aware_init:
+        logger.info(
+            f"Computing steering vectors for data-aware adapter initialization on "
+            f"{len(layer_selection.adapter_layer_names)} adapter layers"
+        )
+        init_steering_vecs = compute_init_steering_vectors(
+            base_model, 
+            train_dataset_pt, 
+            layer_selection.adapter_layer_names,  # ✅ CORRECT - use adapter layers!
+            tokenizer, 
+            config, 
+            n_samples=32
+        )
+        logger.info(f"Computed init steering for {len(init_steering_vecs)} layers")
+    else:
+        init_steering_vecs = None
+    
+    # Setup adapter (pass pre-computed regex and init steering vectors)
+    model = setup_adapter(
+        base_model, 
+        config, 
+        target_modules=layer_selection.adapter_regex,
+        init_steering_vecs=init_steering_vecs
+    )
 
     # Get choice IDs for evaluation
     choice_ids = get_choice_ids(tokenizer)
 
-    # Create dataset with train/val split
-    train_honest, train_dataset_pt, val_honest, val_dataset_pt = create_train_dataset(
-        config, tokenizer, max_size=config.max_samples
-    )
-
-    # Setup loss layers
-    loss_layers = get_loss_layers(model, config)
-    assert len(loss_layers) > 0, "No valid loss layers found!"
+    # Translate layer names for PeftModel (paths change after wrapping)
+    layer_selection_peft = layer_selection.translate_to_peft_model(model)
+    loss_layers = layer_selection_peft.loss_layer_names
+    logger.info(f"Loss layers (PeftModel paths): {loss_layers}")
     
     # Extract SVD matrices only for InnerPiSSA (LoRA/DoRA don't use SVD)
     if config.adapter_type == "innerpissa":

@@ -1,4 +1,6 @@
 
+also see reference.bib which has citation and abstract
+
 # References
 
 - Representation Engineering: https://arxiv.org/abs/2310.01405
@@ -235,3 +237,52 @@ AxBench update blogpost https://zen-wu.social/steer/index.html
     We thank Aryaman Arora, Qinan Yu, Chris Potts, and Chris Manning for helpful discussions and feedback on this blog post.
     
     @stanfordnlp
+
+
+https://scholar.google.com/scholar?cites=3587739844617946085&as_sdt=2005&sciodt=0,5&hl=en
+
+"Sycophancy Is Not One Thing: Causal Separation of Sycophantic Behaviors in LLMs" https://arxiv.org/html/2509.21305?
+
+  > Large language models (LLMs) often exhibit sycophantic behaviors—such as excessive agreement with or flattery of the user—but it is unclear whether these behaviors arise from a single mechanism or multiple distinct processes. We decompose sycophancy into sycophantic agreement and sycophantic praise, contrasting both with genuine agreement. Using difference-in-means directions, activation additions, and subspace geometry across multiple models and datasets, we show that: (1) the three behaviors are encoded along distinct linear directions in latent space; (2) each behavior can be independently amplified or suppressed without affecting the others; and (3) their representational structure is consistent across model families and scales. These results suggest that sycophantic behaviors correspond to distinct, independently steerable representations.
+
+
+
+#  [HyperSteer](https://arxiv.org/html/2506.03292v1)
+
+- > Steering language models (LMs) by modifying internal activations is a popular approach for controlling text generation. Unsupervised dictionary learning methods, e.g., sparse autoencoders, can be scaled to produce many steering vectors, but lack guarantees on the individual efficacy of each vector and control over the coverage of relevant steering tasks. In contrast, supervised methods for constructing steering vectors are targeted and effective, but require more data collection and training for each additional steering vector produced. In this work, we introduce HyperSteer, a family of hypernetwork-based architectures which are trained end-to-end to generate steering vectors conditioned on the natural language steering prompts and the internals of the steered LM. In our evaluations, we show that scaling HyperSteer with thousands of steering prompts exceeds the performance of state-of-the-art activation steering methods, even on steering prompts never seen during training. Moreover, HyperSteer performs on par with steering-via-prompting. We release ours at \faGithub stanfordnlp/axbench.
+- > Figure 1: The state-of-the-art HyperSteer Model: A transformer hypernetwork uses self attention to process a steering prompt and uses a cross attention module to read from the residual stream of a base LM run on a second prompt. The hypernetwork outputs a steering vector that is added to the base LM residual stream.
+  
+  7 Limitations
+  Data
+
+  A key limitation of our approach is the limited scope and quantity of the concept datasets. Using data with concepts of much greater complexity and difficulty from a model steering perspective would likely improve model performance and help make evaluation more robust. We also note that quality and robustness of concepts is bounded by the GemmaScope feature labels used to derive them, and collecting data from humans or other high quality sources is a feasible alternative. This is a key research priority we emphasize for future work.
+  Steering Sites
+
+  All experiments in our work are limited to intervening on the residual stream activations of the base LM. There are other potentially more performant sites for intervention, including various points of the decoder block and during the attention computation. We also adopt the convention of prior work to intervene at all token positions; exploring more targeted interventions could reduce detrimental off-target steering effects and improve the overall steering score.
+  Compute
+
+  Compared to supervised dictionary learning, the compute requirements of training a hypernetwork are large, as the number of trainable parameters significantly exceeds a ReFT-r1.
+  Model Scale
+
+  Due to to compute constraints we only experimented with Gemma-2-2B  architectures, which are worse instruction followers and in-context learners than the leading open source models with many more parameters. Training on models at a variety of scale would help cement HyperSteer ’s strong steering performance against the improved in-context learning ability of larger LMs.
+  Open Source Models
+
+  Our approach requires white-box access to a model’s internals in order to use steering vectors, a limitation prompting does not encounter. Hence, we rely on the existence of sufficiently capable open source models as a basis for our research.
+
+
+# TODO https://github.com/IBM/prompt-steering
+
+> Building pluralistic AI requires designing models that are able to be shaped to represent a wide range of value systems and cultures. Achieving this requires first being able to evaluate the degree to which a given model is capable of reflecting various personas. To this end, we propose a benchmark for evaluating the steerability of model personas as a function of prompting. Our design is based on a formal definition of prompt steerability, which analyzes the degree to which a model's joint behavioral distribution can be shifted from its baseline. By defining steerability indices and inspecting how these indices change as a function of steering effort, we can estimate the steerability of a model across various persona dimensions and directions. Our benchmark reveals that the steerability of many current models is limited -- due to both a skew in their baseline behavior and an asymmetry in their steerability across many persona dimensions. We release an implementation of our benchmark at this https URL. 
+> Note this is like repeng, and cites it. They also use contrastive prompts
+https://arxiv.org/abs/2411.12405 https://github.com/IBM/prompt-steering
+
+# [RepIt: Steering Language Models with Concept-Specific Refusal Vectors](https://arxiv.org/abs/2509.13281)
+
+> While activation steering in large language models (LLMs) is a growing area of research, methods can often incur broader effects than desired. This motivates isolation of purer concept vectors to enable targeted interventions and understand LLM behavior at a more granular level. We present RepIt, a simple and data-efficient framework for isolating concept-specific representations. Across five frontier LLMs, RepIt enables precise interventions: it selectively suppresses refusal on targeted concepts while preserving refusal elsewhere, producing models that answer WMD-related questions while still scoring as safe on standard benchmarks. We further show that the corrective signal localizes to just 100-200 neurons and that robust target representations can be extracted from as few as a dozen examples on a single A6000. This efficiency raises a dual concern: manipulations can be performed with modest compute and data to extend to underrepresented data-scarce topics while evading existing benchmarks. By disentangling refusal vectors with RepIt, this work demonstrates that targeted interventions can counteract overgeneralization, laying the foundation for more granular control of model behavior. 
+
+## [Resa: Transparent Reasoning Models via SAEs](https://arxiv.org/abs/2506.09967)
+
+> How cost-effectively can we elicit strong reasoning in language models by leveraging their underlying representations? We answer this question with Resa, a family of 1.5B reasoning models trained via a novel and efficient sparse autoencoder tuning (SAE-Tuning) procedure. This method first trains an SAE to capture reasoning abilities from a source model, and then uses the trained SAE to guide a standard supervised fine-tuning process to elicit such abilities in a target model, all using verified question-answer data without any reasoning traces. Notably, when applied to certain base models before further RL post-training, SAE-Tuning retains >97% of its RL-trained counterpart's reasoning performance while reducing training costs by >2000x to roughly $1 and training time by >450x to around 20 minutes. Furthermore, when applied to lightly RL-trained models (e.g., within 1 hour on 2 GPUs), it enables reasoning performance such as 43.33% Pass@1 on AIME24 and 90% Pass@1 on AMC23 for only around $1 additional cost. Surprisingly, the reasoning abilities extracted via SAEs are potentially both generalizable and modular. Generality means abilities extracted from one dataset still elevate performance on a larger and overlapping corpus. Modularity means abilities extracted from Qwen or Qwen-Math can be attached to the R1-Distill model at test time, without any retraining, and yield comparable gains. Extensive ablations validate these findings and all artifacts are fully open-sourced. 
+> # [Persona Vectors: Monitoring and Controlling Character Traits in Language Models](https://arxiv.org/abs/2507.21509)
+
+>  Large language models interact with users through a simulated 'Assistant' persona. While the Assistant is typically trained to be helpful, harmless, and honest, it sometimes deviates from these ideals. In this paper, we identify directions in the model's activation space-persona vectors-underlying several traits, such as evil, sycophancy, and propensity to hallucinate. We confirm that these vectors can be used to monitor fluctuations in the Assistant's personality at deployment time. We then apply persona vectors to predict and control personality shifts that occur during training. We find that both intended and unintended personality changes after finetuning are strongly correlated with shifts along the relevant persona vectors. These shifts can be mitigated through post-hoc intervention, or avoided in the first place with a new preventative steering method. Moreover, persona vectors can be used to flag training data that will produce undesirable personality changes, both at the dataset level and the individual sample level. Our method for extracting persona vectors is automated and can be applied to any personality trait of interest, given only a natural-language description. 

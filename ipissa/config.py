@@ -113,7 +113,7 @@ class TrainingConfig:
 
     adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"
 
-    r: int = 256
+    r: int = 128
     """Adapter rank"""
 
     scale_s: Literal["add2", "add_tanh", "mult", "none"] = "add2"
@@ -124,6 +124,11 @@ class TrainingConfig:
 
     rot_v: bool = True
     """Rotate V (input space)"""
+    
+    # Data-aware initialization: select SVD components by |dHS @ U| projection magnitude
+    # AND use those projection magnitudes as S values (not original singular values)
+    data_aware_init: bool = True
+    """Use data-aware SVD component selection (InnerPiSSA only)"""
 
     dataset_name: str = "honest"
     max_samples: Optional[int] = 800

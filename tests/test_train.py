@@ -20,7 +20,7 @@ def mk_test_cng(**kwargs):
 test_configs = [
     mk_test_cng(),
     mk_test_cng(adapter_type="dora", loss_type="raw"),
-    mk_test_cng(loss_type="tanh_sym", adaptive_coherence=False, monotonic_margin=None, scale_s="mult"),
+    mk_test_cng(loss_type="tanh_sym", coh_adaptive=False, mono_margin=None, scale_s="mult"),
 ]
 
 @pytest.mark.parametrize("config", test_configs)
