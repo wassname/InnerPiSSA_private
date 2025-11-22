@@ -372,7 +372,7 @@ def contrastive_steering_loss_with_ref(
         violation = F.relu(degradation - threshold)
         
         # log(1 + scale*x) gives steep initial gradient (scale) but bounded growth
-        penalty = torch.log1p(violation * scale)
+        penalty = torch.log1p(violation) * scale
         
         return reduce_tokens_w_attention(penalty, loss_mask), degradation
     
