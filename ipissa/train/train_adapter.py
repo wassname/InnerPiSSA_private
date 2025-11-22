@@ -814,7 +814,7 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
         'cw': 'cw',  # Now per-coefficient
         'mono_frac_violated': 'mviol%',
         'mono_violation': 'mvio',  # Per-coefficient violation magnitude
-        'logp_degradation': '-coh',  # Raw degradation (ℒcoh penalizes positive values)
+        'coh_deg': 'coh',  # pi_logp - ref_logp (positive = pi better, ℒcoh penalizes if < -threshold)
         'prob_ratio': 'p_rat',
         'proj_pi': 'π_prj',
         'proj_ref': 'ref_prj',
@@ -827,7 +827,7 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
         # FIXME group by layer still show coef as index??
         key_cols = ['ℒproj', 'ℒmono', ]
     else:
-        key_cols = ['ℒproj', 'ℒcoh',  'ℒmono', 'ℒtot', '-coh', 'cw', 'mviol%', 'mvio']
+        key_cols = ['ℒproj', 'ℒcoh',  'ℒmono', 'ℒtot', 'coh', 'cw', 'mviol%', 'mvio']
     df_display = df_grouped2[[c for c in key_cols if c in df_grouped2.columns]]
     
     # For multi-level index (layer grouping), pivot for compact display
@@ -1477,6 +1477,8 @@ def train_model(config: TrainingConfig):
         # Determine target layers early (needed for init steering)
         # Match the logic from get_loss_layers to find the specific loss layers
         num_hidden_layers = base_model.config.num_hidden_layers
+
+        # FIXME this is wrong it should be peft layers not loss layers
         loss_layer_indices = normalize_layer_spec(config.loss_depths, num_hidden_layers)
         
         # Find all linear layers at these depths matching config.modules suffixes
