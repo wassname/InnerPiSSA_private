@@ -85,15 +85,15 @@ scratch:
 ablate-paper:
     # make sure baselines are cached
     just eval-baselines
-    just run-models
+    just ablate-constraints
     just data-efficiency
     just run-seeds
-    just ablate-constraints
     just sweep-layers # [/]
     just sweep-wd # [/]
     just sweep-lr
     just sweep-rank
     just ablate-modules
+    just run-models
     
 
 ablate-constraints:
@@ -193,3 +193,10 @@ data-efficiency:
 # Quick test run
 quick:
     uv run python nbs/train.py --quick --model_name=Qwen/Qwen3-0.6B --bs=64
+
+
+paper:
+    wget https://github.com/quarto-dev/quarto-cli/releases/download/v1.8.26/quarto-1.8.26-linux-amd64.deb /tmp/quarto.deb
+    sudo dpkg -i /tmp/quarto.deb
+    quarto render paper.qmd --to html
+    quarto render paper.qmd --to gfm

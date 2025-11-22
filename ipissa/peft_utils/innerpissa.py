@@ -249,20 +249,27 @@ class InnerPiSSALayer(BaseTunerLayer):
             proj = dHS_norm @ U_full  # [rank], values in [-1, 1]
             
             # Select top-r by absolute projection magnitude
-            _, indices = torch.topk(proj.abs(), r_actual)
-            indices_sorted = indices.sort()[0]  # Keep in descending S order for stability
+            indices_p = torch.topk(proj, r_actual).indices.sort()[0]
+            indices_n = torch.topk(-proj, r_actual).indices.sort()[0]
+            indices = torch.cat([indices_p, indices_n], dim=0)
             
-            U = U_full[:, indices_sorted]  # [d_out, r_actual]
-            Vh = Vh_full[indices_sorted, :]  # [r_actual, d_in]
+            U_p = U_full[:, indices_p]  # [d_out, r_actual]
+            U_n = U_full[:, indices_n]  # [d_out, r_actual]
+            U = torch.cat([U_p, -U_n], dim=1)  # [d_out, 2 * r_actual]
+            Vh = Vh_full[indices, :]  # [r_actual, d_in]
             V = Vh.T                        # [d_in, r_actual]
             
-            # S initialization: use projection magnitudes if flag enabled, else original S
-            # if data_aware_init_use_magnitudes:
-            # Use projection magnitudes as S values (experimental)
-            S = proj[indices_sorted].abs()  # [r_actual]
-            # else:
-            #     # Use original S values (direction-aware only)
-            #     S = S_full[indices_sorted]      # [r_actual]
+            # S initialization:
+            # 1. Use proj to get the "shape" (relative importance/sign) of the steering vector
+            # 2. Scale it to match the "energy" (norm) of the original singular values
+            # This avoids the "Mass in Residual" problem while still initializing with the steering direction.
+            S_original = S_full[indices]
+            proj_selected = proj[indices]
+            
+            # Scaling factor to match L2 norm (energy)
+            scale_factor = S_original.norm() / (proj_selected.norm() + 1e-8)
+            
+            S = proj_selected * scale_factor
         else:
             # Naive top-r by singular values (original PiSSA)
             U = U_full[:, :r_actual]  # [d_out, r_actual]

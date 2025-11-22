@@ -216,8 +216,17 @@ results_to_compare = sorted((proj_root / "./outputs/adapters/").glob("*"))
 
 all_results = []
 
-for result_dir in tqdm(results_to_compare):
+for _result_dir in tqdm(results_to_compare):
     try:
+        df_res = pd.read_parquet(_result_dir / "eval_effect_sizes_T-stat.parquet")
+        score = df_res.loc['InnerPiSSA (ours)']['Gain_T-stat (%)'].item()
+        if score < 1200:
+            continue  # Skip low-effect runs
+        if 'prompting' not in df_res.columns:
+            continue  # Skip non-baseline runs
+
+        result_dir = _result_dir
+
         run_name, df_value_stats, df_cluster_stats, config = analyze_checkpoint(
             result_dir, clusters, target_label
         )
@@ -246,6 +255,7 @@ df_all_cluster_stats = pd.concat([r['cluster_stats'] for r in all_results], igno
 # %%
 # Radar plot comparing runs for a specific method
 method_to_plot = 'InnerPiSSA (ours)'
+# FIXME add baselines too
 plot_radar(
     df_all_cluster_stats, 
     series_key='Run', 
@@ -258,7 +268,7 @@ plt.show()
 # %%
 # Single-run detailed analysis
 # Pick most recent run or specific checkpoint
-result_dir = proj_root / "./outputs/adapters/q4b-raw-r256-lr1e-2_20251120_095949"  # wd=100
+# result_dir = proj_root / "./outputs/adapters/q4b-raw-r256-lr1e-2_20251120_095949"  # wd=100
 
 run_name, df_value_stats, df_cluster_stats, config = analyze_checkpoint(
     result_dir, clusters, target_label
@@ -310,3 +320,4 @@ df_correlations
 # %%
 # view the agent ones
 df_correlations[[('t_mean', 'Agent'), ('t_std', 'Agent')]].sort_values(('t_mean', 'Agent'))
+# %%
