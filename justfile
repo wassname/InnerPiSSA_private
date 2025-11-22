@@ -85,17 +85,16 @@ scratch:
 ablate-paper:
     # make sure baselines are cached
     just eval-baselines
-
+    just run-models
+    just data-efficiency
+    just run-seeds
+    just ablate-constraints
+    just sweep-layers # [/]
+    just sweep-wd # [/]
+    just sweep-lr
     just sweep-rank
     just ablate-modules
-    just run-models
-    just run-seeds
-    just data-efficiency
     
-    just ablate-constraints
-    just sweep-layers
-    just sweep-wd
-    just sweep-lr
 
 ablate-constraints:
     #!/bin/bash -x
@@ -152,6 +151,8 @@ run-models:
     uv run python nbs/train.py gemma1b-80gb
     uv run python nbs/train.py gemma4b-80gb
     uv run python nbs/train.py gemma12b-80gb
+    uv run python nbs/train.py q32b-80gb
+    uv run python nbs/train.py l8b-80gb
     # TODO try a 32b model... when I have more hdd space
 
 eval-baselines:

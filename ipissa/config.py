@@ -59,7 +59,8 @@ EVAL_BASELINE_MODELS = [
     "Qwen/Qwen3-14B",
     # "openai/gpt-oss-20b",
     # "google/gemma-3-27b-it",
-    #"Qwen/Qwen3-32B",
+    "Qwen/Qwen3-32B",
+    "unsloth/Llama-3.1-8B-Instruct"
     #"unsloth/Llama-3.3-70B-Instruct",
 ]
 
@@ -314,15 +315,22 @@ default_configs = {
         "Qwen 14B on 80GB GPU (production quality)",
         TrainingConfig(
             model_name="Qwen/Qwen3-14B",
-            bs=32,
+            bs=16,
         ),
     ),
     # Qwen/Qwen3-32B
+    "q32b-80gb": (
+        "Qwen 32B on 80GB GPU (maximum size)",
+        TrainingConfig(
+            model_name="Qwen/Qwen3-32B",
+            bs=12,
+        ),
+    ),
     "l8b-80gb": (
         "Llama 3.1 8B on 80GB GPU",
         TrainingConfig(
             model_name="unsloth/Llama-3.1-8B-Instruct",
-            bs=32,
+            bs=6,
         ),
     ),
 
