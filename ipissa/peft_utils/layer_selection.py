@@ -11,6 +11,8 @@ from typing import List
 import numpy as np
 import torch.nn as nn
 
+from ipissa.control import model_layer_list
+
 
 def build_regexp(layer_indices: List[int], module_suffixes: List[str]) -> str:
     """Build PEFT target_modules regex from layer indices and module suffixes."""
@@ -118,7 +120,9 @@ def compute_layer_selection(
     modules: List[str],
 ) -> LayerSelection:
     """Compute which layers get adapters vs loss, ensuring no overlap."""
-    total_layers = model.config.num_hidden_layers
+    # FIXME: AttributeError: 'Gemma3Config' object has no attribute 'num_hidden_layers'. Use RepEng form method
+    # total_layers = model.config.num_hidden_layers
+    total_layers = len(model_layer_list(model))
     
     # Convert config to absolute layer indices
     start_layer, end_layer = normalize_layer_spec([depth_start, depth_end], total_layers)
