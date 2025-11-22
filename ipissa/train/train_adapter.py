@@ -54,6 +54,7 @@ from ipissa.train.daily_dilemas import (
 from ipissa.train.inner_contrastive_loss import contrastive_steering_loss_with_ref, combine_dual_coef_losses
 from ipissa.config import TrainingConfig, proj_root, PROMPT, PERSONAS
 from ipissa.peft_utils.load import add_adapter_name_to_sd, remove_adapter_name, save_adapter
+from ipissa.peft_utils.layer_selection import LayerSelection, compute_layer_selection
 
 
 def setup_logging(verbose: bool = False):
@@ -73,31 +74,8 @@ def clear_mem():
     torch.cuda.empty_cache()
 
 
-def normalize_layer_spec(layer_spec: List[float | int], total_layers: int) -> List[int]:
-    """Convert layer specs to absolute layer numbers.
-    
-    Handles formats:
-    - Float fraction: 0.5 -> layer 16, -0.15 -> layer 27 (for 32 layers)
-    - Integer offset: 10 -> layer 10, -3 -> layer 29 (for 32 layers)
-    
-    Args:
-        layer_spec: List of layer specs (float fraction or integer offset)
-        total_layers: Total number of layers in model
-    
-    Returns:
-        List of absolute layer numbers
-    """
-    normalized = []
-    for x in layer_spec:
-        if (x>=0) and (x < 1):
-            # Fraction: convert to layer number, then modulo handles negatives
-            x = int(x * total_layers)
-        
-        # Integer: modulo handles negative offsets
-        layer_num = int(x) % total_layers
-
-        normalized.append(layer_num)
-    return normalized
+# normalize_layer_spec moved to ipissa.peft_utils.layer_selection
+# (imported above for backward compatibility if needed elsewhere)
 
 
 def load_train_suffixes(
@@ -238,76 +216,20 @@ def load_model(model_id, quantization_type="none"):
     return base_model, tokenizer
 
 
-def match_linear_layers(model, layer_nums: List[int], module_names: List[str], verbose=False, blocklist=['vision']) -> List[str]:
-    # Build peft regex: .*\.(layer1|layer2|...)\..*(module1|module2|...)
-    layer_nums = "|".join(str(L) for L in layer_nums)
-    module_names = "|".join(module_names)
-    target_modules = f".*\\.({layer_nums})\\..*({module_names})"
-
-    logger.info(f"Target modules regex: {target_modules}")
-    module_path_shapes = {}
-    for name, m in model.named_modules():
-        if any(block in name for block in blocklist):
-            continue
-        if re.search(target_modules, name):
-            if isinstance(m, torch.nn.Linear):
-                module_path_shapes[name] = m.weight.shape
-    if verbose:
-        logger.info(f"Found {len(module_path_shapes)} target modules:")
-    return list(module_path_shapes.keys())
+# match_linear_layers removed - import find_linear_layers from ipissa.peft_utils.layer_selection directly
 
 
-def setup_adapter(base_model, config: TrainingConfig, init_steering_vecs=None):
+def setup_adapter(base_model, config: TrainingConfig, target_modules: str, init_steering_vecs=None):
     """Setup InnerPiSSA adapter on base model.
     
     Args:
         base_model: Base model to add adapter to
         config: Training configuration
+        target_modules: PEFT target_modules regex (from LayerSelection)
         init_steering_vecs: Optional dict of {layer_name: dHS_tensor} for data-aware init
     """
-    total_layers = base_model.config.num_hidden_layers
-    start_layer , end_layer = normalize_layer_spec([config.depth_start, config.depth_end], total_layers)
-    assert start_layer < end_layer, f"Invalid layer range: start {start_layer}, end {end_layer}"
-    assert end_layer <= total_layers, f"End layer {end_layer} exceeds total layers {total_layers}"
-    assert start_layer >= 0, f"Start layer {start_layer} is negative"
-
-    # Convert loss_depths to absolute layer numbers
-    loss_depths = config.loss_depths
-    if not isinstance(loss_depths, list):
-        loss_depths = [loss_depths]
-    loss_layers = normalize_layer_spec(loss_depths, total_layers)
-
-    # Get all candidate layers in range, excluding loss layers
-    all_candidate_layers = list(range(start_layer, end_layer + 1))
-    available_layers = [L for L in all_candidate_layers if L not in loss_layers]
-    
-    if not available_layers:
-        raise ValueError(f"No available layers after excluding loss layers {loss_layers} from range [{start_layer}, {end_layer}]")
-    
-    # Take evenly-spaced subset from available layers
-    if config.n_depths >= len(available_layers):
-        layers = sorted(set(available_layers))
-        logger.warning(f"n_depths={config.n_depths} >= available layers ({len(available_layers)}), using all available layers")
-    else:
-        logger.warning(f"Trying to select more than available layers: n_depths={config.n_depths}, available={len(available_layers)}")
-        # Use linspace on indices, then map to actual layer numbers
-        indices = np.linspace(0, len(available_layers) - 1, config.n_depths, dtype=int)
-        layers = sorted(set(available_layers[i] for i in indices))
-    
-    logger.info(f"Selected {len(layers)} evenly-spaced adapter layers from {len(available_layers)} available (excluding loss layers {loss_layers}): {layers}")
-    
-    # Build peft regex: .*\.(layer1|layer2|...)\..*(module1|module2|...)
-    layer_nums = "|".join(str(L) for L in layers)
-    module_names = "|".join(config.modules)
-    target_modules = f".*\\.({layer_nums})\\..*({module_names})"
 
     logger.info(f"Target modules regex: {target_modules}")
-    available = {}
-    for name, m in base_model.named_modules():
-        if re.search(r"\.0\.", name):
-            if isinstance(m, torch.nn.Linear):
-                available[name] = m.weight.shape
-    logger.info(f"Available modules: {available}")
 
     if config.adapter_type == "innerpissa":
         adapter_config = InnerPiSSAConfig(
@@ -338,57 +260,7 @@ def setup_adapter(base_model, config: TrainingConfig, init_steering_vecs=None):
     return model
 
 
-def get_loss_layers(model, config: TrainingConfig):
-    """Determine which layers to apply loss to based on config.loss_layers.
-    
-    Args:
-        model: The model (used to get total layer count and find matching modules)
-        config: TrainingConfig with loss_layers (negative offsets from end)
-    
-    Returns:
-        List of layer names matching config.layers suffixes at depths specified by config.loss_layers.
-        Returns the actual executed layers (adapter wrappers), not base_layer submodules.
-        
-    Example:
-        config.loss_layers = [-3, -5]  # 3rd and 5th from last layer
-        config.layers = ["down_proj", "k_proj"]
-        -> ["model.layers.29.mlp.down_proj", "model.layers.29.self_attn.k_proj",
-            "model.layers.27.mlp.down_proj", "model.layers.27.self_attn.k_proj"]
-    """
-    num_hidden_layers = model.config.num_hidden_layers
-    
-    # Convert negative offsets to absolute layer indices
-    loss_layer_indices = normalize_layer_spec(config.loss_depths, num_hidden_layers)
-    
-    # Find all linear layers at these depths matching config.layers suffixes
-    # Hook the actual executed layers (adapter wrappers or base Linear), not base_layer
-    loss_layers = []
-    for name, module in model.named_modules():
-        # Skip base_layer submodules - they're never executed
-        if name.endswith('.base_layer'):
-            continue
-            
-        if not isinstance(module, torch.nn.Linear):
-            continue
-        
-        # Extract layer number from name (e.g., "model.layers.29.mlp.down_proj" -> 29)
-        match = re.search(r"\.layers\.(\d+)\.", name)
-        if not match:
-            continue
-        layer_idx = int(match.group(1))
-        
-        # Check if this layer index is in our target list
-        if layer_idx not in loss_layer_indices:
-            continue
-        
-        # Check if module name ends with one of our target suffixes
-        if any(name.endswith(suffix) for suffix in config.modules):
-            loss_layers.append(name)
-    
-    loss_layers = sorted(set(loss_layers))
-    assert len(loss_layers) > 0, f"No loss layers found matching config.loss_layers={loss_layer_indices} and config.layers={config.modules}->{loss_layers}"
-    logger.info(f"Loss layers (indices {loss_layer_indices}): {loss_layers}")
-    return loss_layers
+# get_loss_layers removed - loss layers come from layer_selection.loss_layer_names
 
 
 def extract_U_matrices(model, loss_layers: List[str], config: TrainingConfig):
@@ -1472,49 +1344,57 @@ def train_model(config: TrainingConfig):
         config, tokenizer, max_size=config.max_samples
     )
     
+    # Compute layer selection ONCE (single source of truth)
+    layer_selection = compute_layer_selection(
+        base_model,
+        depth_start=config.depth_start,
+        depth_end=config.depth_end,
+        n_depths=config.n_depths,
+        loss_depths=config.loss_depths,
+        modules=config.modules,
+    )
+    
+    logger.info(
+        f"Layer selection: {len(layer_selection.adapter_layer_names)} adapter layers "
+        f"(indices {layer_selection.adapter_layer_indices}), "
+        f"{len(layer_selection.loss_layer_names)} loss layers "
+        f"(indices {layer_selection.loss_layer_indices})"
+    )
+    
     # Compute steering vectors for data-aware adapter init (before adapter setup)
+    # ✅ FIX: Use adapter_layer_names, not loss_layer_names!
     if config.adapter_type == "innerpissa" and config.data_aware_init:
-        # Determine target layers early (needed for init steering)
-        # Match the logic from get_loss_layers to find the specific loss layers
-        num_hidden_layers = base_model.config.num_hidden_layers
-
-        # FIXME this is wrong it should be peft layers not loss layers
-        loss_layer_indices = normalize_layer_spec(config.loss_depths, num_hidden_layers)
-        
-        # Find all linear layers at these depths matching config.modules suffixes
-        loss_layers_for_init = []
-        for name, module in base_model.named_modules():
-            if name.endswith('.base_layer'):
-                continue
-            if not isinstance(module, torch.nn.Linear):
-                continue
-            match = re.search(r"\.layers\.(\d+)\.", name)
-            if not match:
-                continue
-            layer_idx = int(match.group(1))
-            if layer_idx not in loss_layer_indices:
-                continue
-            if any(name.endswith(suffix) for suffix in config.modules):
-                loss_layers_for_init.append(name)
-        
-        logger.info(f"Computing steering vectors for data-aware adapter initialization on layers: {loss_layers_for_init}")
+        logger.info(
+            f"Computing steering vectors for data-aware adapter initialization on "
+            f"{len(layer_selection.adapter_layer_names)} adapter layers"
+        )
         init_steering_vecs = compute_init_steering_vectors(
-            base_model, train_dataset_pt, loss_layers_for_init, tokenizer, config, n_samples=32
+            base_model, 
+            train_dataset_pt, 
+            layer_selection.adapter_layer_names,  # ✅ CORRECT - use adapter layers!
+            tokenizer, 
+            config, 
+            n_samples=32
         )
         logger.info(f"Computed init steering for {len(init_steering_vecs)} layers")
     else:
         init_steering_vecs = None
     
-    # Setup adapter (pass init steering vectors through config)
-    model = setup_adapter(base_model, config, init_steering_vecs=init_steering_vecs)
+    # Setup adapter (pass pre-computed regex and init steering vectors)
+    model = setup_adapter(
+        base_model, 
+        config, 
+        target_modules=layer_selection.adapter_regex,
+        init_steering_vecs=init_steering_vecs
+    )
 
     # Get choice IDs for evaluation
     choice_ids = get_choice_ids(tokenizer)
 
-    # Dataset already created earlier (before adapter setup)
-    # Setup loss layers
-    loss_layers = get_loss_layers(model, config)
-    assert len(loss_layers) > 0, "No valid loss layers found!"
+    # Translate layer names for PeftModel (paths change after wrapping)
+    layer_selection_peft = layer_selection.translate_to_peft_model(model)
+    loss_layers = layer_selection_peft.loss_layer_names
+    logger.info(f"Loss layers (PeftModel paths): {loss_layers}")
     
     # Extract SVD matrices only for InnerPiSSA (LoRA/DoRA don't use SVD)
     if config.adapter_type == "innerpissa":

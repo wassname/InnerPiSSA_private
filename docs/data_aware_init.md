@@ -148,3 +148,43 @@ model, save_folder = train_model(config)
 
 - Standard PiSSA: https://arxiv.org/abs/2404.02948
 - Similar idea in LoRA initialization: "Task-aware low-rank adaptation" (select by gradient importance)
+
+# 2025-11-22 08:20:14
+
+Update  when I try this I do get VERY difference incices
+
+torch.topk(proj.abs(), 5).indices.sort()[0]
+tensor([  0,   3,   9,  17, 125], device='cuda:0')
+torch.topk(S_full.abs(), 5).indices.sort()[0]
+tensor([0, 1, 2, 3, 4], device='cuda:0')
+
+torch.topk(S_full.abs(), 15).indices.sort()[0]
+tensor([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14],
+       device='cuda:0')
+torch.topk(proj.abs(), 15).indices.sort()[0]
+tensor([  0,   2,   3,   6,   9,  10,  13,  15,  17,  21,  39,  54,  55, 104,
+        125], device='cuda:0')
+
+
+```
+print(f"rank {S_full.shape}")
+for N in [2, 4, 8, 16,32,64,128,256,512, 640]:
+    a = set(torch.topk(S_full.abs(), N).indices.sort()[0].tolist()[:16])
+    b = set(torch.topk(proj.abs(), N).indices.sort()[0].tolist())
+    n_missing = len(a-b)
+    print(f"{N}: missing of top 16 {n_missing/N:2.2f}")
+```
+rank torch.Size([640])
+2: missing of top 16 0.50
+4: missing of top 16 0.50
+8: missing of top 16 0.75
+16: missing of top 16 0.44
+32: missing of top 16 0.19
+64: missing of top 16 0.06
+128: missing of top 16 0.02
+256: missing of top 16 0.00
+512: missing of top 16 0.00
+640: missing of top 16 0.00
+
+
+As you see you cant make sure you have the top 16, you need to go up to rank >128 so this is perhaps >8x as effecient and should prevent overfitting too
