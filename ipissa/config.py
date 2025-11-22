@@ -59,7 +59,7 @@ EVAL_BASELINE_MODELS = [
     "Qwen/Qwen3-14B",
     # "openai/gpt-oss-20b",
     # "google/gemma-3-27b-it",
-    # "Qwen/Qwen3-32B",
+    # "Qwen/Qwen3-32B",b
     "unsloth/Llama-3.1-8B-Instruct"
     #"unsloth/Llama-3.3-70B-Instruct",
 ]
@@ -127,7 +127,7 @@ class TrainingConfig:
     
     # Data-aware initialization: select SVD components by |dHS @ U| projection magnitude
     # AND use those projection magnitudes as S values (not original singular values)
-    data_aware_init: bool = True
+    data_aware_init: bool = False
     """Use data-aware SVD component selection (InnerPiSSA only)"""
 
     dataset_name: str = "honest"
@@ -304,7 +304,7 @@ default_configs = {
         "Qwen 4B on 24GB GPU (balanced quality/speed)",
         TrainingConfig(
             model_name="Qwen/Qwen3-4B-Instruct-2507",
-            bs=6,
+            bs=8,
         ),
     ),
 
@@ -328,14 +328,14 @@ default_configs = {
         "Qwen 32B on 80GB GPU (maximum size)",
         TrainingConfig(
             model_name="Qwen/Qwen3-32B",
-            bs=12,
+            bs=8,
         ),
     ),
     "l8b-80gb": (
         "Llama 3.1 8B on 80GB GPU",
         TrainingConfig(
             model_name="unsloth/Llama-3.1-8B-Instruct",
-            bs=6,
+            bs=4,
         ),
     ),
 
