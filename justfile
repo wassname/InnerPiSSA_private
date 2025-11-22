@@ -137,6 +137,7 @@ ablate-modules:
     uv run python nbs/train.py q4b-80gb --modules gate_proj up_proj down_proj --experiment_name="attn.down mlp.up"
     uv run python nbs/train.py q4b-80gb --modules gate_proj up_proj --experiment_name="mlp up largest output dim"
     uv run python nbs/train.py q4b-80gb --modules q_proj k_proj v_proj --experiment_name="attention up"
+    uv run python nbs/train.py q4b-80gb --modules v_proj --experiment_name="attention v"
     uv run python nbs/train.py q4b-80gb --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --experiment_name="all" --bs=16
 
 run-models:
