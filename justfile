@@ -2,6 +2,7 @@
 # Default full run
 [private]
 default:
+    #!/bin/bash -x
     # just scratch
     just ablate-paper
 
@@ -83,6 +84,7 @@ scratch:
 
 # Paper ablation suite
 ablate-paper:
+    #!/bin/bash -x
     # make sure baselines are cached
     just eval-baselines
     just run-models
