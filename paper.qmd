@@ -3,9 +3,9 @@ title: "InnerPiSSA: Deep-Dish Inner Alignment through Reversible SVD Steering"
 author:
   - name: Michael J. Clark
     id: mjc
-    email: michaelj.clark@wassname.org
+    email: michael.j.clark@wassname.org
 abstract: |
-  Safety-tuned language models can hide unwanted reasoning internally while maintaining compliant outputs. We introduce InnerPiSSA, which steers hidden states in the model's native SVD transformation space using gradient-based optimization on learnable rotations and singular value scaling. When steering against learned behaviors (coefficient = -1), prompting collapses to incoherent outputs (-10.84 truthfulness) while InnerPiSSA maintains controlled bidirectional steering (-0.70)—evidence that we modify internal reasoning trajectories, not just output style. Trained on 200 unsupervised contrastive pairs, InnerPiSSA achieves 5× stronger effects than PCA (0.245 vs 0.053, p=0.001) on moral reasoning transfer. This enables a practical approach for probing what models compute internally when output-level constraints are bypassed—a capability we call alignment debugging.
+  Safety-tuned language models can hide unwanted reasoning internally while maintaining compliant outputs. We introduce InnerPiSSA, which steers hidden states in the model's native SVD transformation space using gradient-based optimization on learnable rotations and singular value scaling. When steering against learned behaviors (coefficient = -1), prompting collapses to incoherent outputs (-10.84 truthfulness) while InnerPiSSA maintains controlled bidirectional steering (-0.70)—evidence that we modify internal reasoning trajectories, not just output style. Trained on 800 unsupervised contrastive pairs, InnerPiSSA achieves 5× stronger effects than PCA (0.245 vs 0.053, p=0.001) on moral reasoning transfer. This enables a practical approach for probing what models compute internally when output-level constraints are bypassed—a capability we call alignment debugging.
 date: 2025-11-22
 bibliography: references.bib
 number-sections: true
@@ -24,7 +24,9 @@ format:
       - right=1in
 ---
 
-
+<hidden>
+TODO the writing sometime is confused about RLHF collapse during refusal of prompts. It means that the prompting with coeff-1 will not have a very low number e..g -1 or 1. -10 would mean success. What we need to do is put X instead of numbers untill I have them
+</hidden>
 
 # Introduction {#sec-intro}
 
@@ -46,14 +48,14 @@ This "candid mode" installation demonstrates three properties absent from prompt
 
 We introduce InnerPiSSA, which synthesizes insights from three literatures: (1) gradient-based optimization from finetuning, (2) SVD transformation space from parameter-efficient methods [@meng2024pissa; @wang2025ssvd], and (3) contrastive unsupervised learning from representation engineering [@zou2023representation]. InnerPiSSA learns rotations and scaling of SVD components via gradient-based Representation Preference Optimization (ReprPO), directly separating contrastive hidden states while maintaining output coherence. The method is bidirectional: the same adapter steers toward honest reasoning (coefficient = +1) or away from it (coefficient = -1), demonstrating control over internal trajectories rather than superficial output patterns.
 
-Trained on 200 unsupervised contrastive pairs, InnerPiSSA achieves effect size 0.245 on moral reasoning transfer—5× stronger than PCA (0.053), with p=0.001. When steering against RLHF training (coefficient = -1), prompting collapses to incoherent outputs (-10.84 truthfulness score) while InnerPiSSA maintains controlled steering (-0.70), demonstrating robustness where output-level methods fail.
+Trained on 800 unsupervised contrastive pairs, InnerPiSSA achieves effect size X on moral reasoning transfer—5× stronger than PCA (X), with p=X. When steering against RLHF training (coefficient = -1), prompting collapses to incoherent outputs (-X truthfulness score) while InnerPiSSA maintains controlled steering (-X), demonstrating robustness where output-level methods fail.
 
 **Contributions:**
 
-- **ReprPO loss function**: Enables unsupervised gradient-based steering with coherence constraints, trained on minimal contrastive pairs (200 examples)
+- **ReprPO loss function**: Enables unsupervised gradient-based steering with coherence constraints, trained on minimal contrastive pairs (800 examples)
 - **Empirical validation**: SVD transformation space is critical—75% performance drop without it; learnable rotations necessary (96% drop when removed)
 - **Layer ablation findings**: Middle layers (0.3-0.5 depth) optimal for steering, consistent with suppression dynamics literature [@gurnee2024universal; @lad2024remarkable]
-- **Anti-RLHF robustness**: First demonstration of representation steering that maintains coherence (−0.70 truthfulness) when prompting catastrophically fails (−10.84), enabling practical alignment debugging
+- **Anti-RLHF robustness**: First demonstration of representation steering that maintains coherence (X truthfulness) when prompting catastrophically fails (X), enabling practical alignment debugging
 
 
 # Problem Definition: The Need for Alignment Debugging {#sec-problem}
@@ -94,6 +96,8 @@ A steering method for inner alignment should modify hidden state trajectories wh
 ### SVD-based Projection {#sec-svd-projection}
 
 Following PiSSA [@meng2024pissa], we decompose each layer's weight matrix $W = U \Sigma V^T + W_{res}$, separating principal transformation components from residual variance. Projecting activations into S-space ($hs @ U$) aligns interventions with how the model transforms information rather than the surface-level patterns it represents. Operating in raw activation space mixes semantic transformations with positional encodings and layer normalization artifacts, substantially degrading steering effectiveness (see @tbl-arch-ablation).
+
+**Data-aware component selection**: Rather than naively selecting top-r singular vectors by magnitude, we can optionally select by relevance to the preference direction $\Delta HS$. For each layer, we compute projection coefficients $p_i = (\Delta HS / ||\Delta HS||) \cdot U_i$ and select the $r$ components with largest $|p_i|$. This prioritizes directions aligned with the steering objective over directions capturing maximum variance. Empirically, this initialization strategy showed mixed results, suggesting that learnable rotations can discover relevant subspaces regardless of initialization.
 
 ### Learnable Rotations {#sec-rotations}
 
@@ -301,7 +305,7 @@ We compare multiple steering methods (see @tbl-methods):
 
 : Comparison of Steering Methods {#tbl-methods}
 
-**Training**: 200 honesty contrastive pairs (unsupervised)  
+**Training**: 800 honesty contrastive pairs (unsupervised)  
 **Evaluation**: DailyDilemmas moral reasoning scenarios
 
 ## Results Preview
@@ -313,7 +317,7 @@ Parameter-efficient fine-tuning and steering methods represent different hypothe
 
 ### Representation Steering & The AxBench Baseline
 
-As discussed in @sec-problem, **AxBench** [@wu2025axbench] established that representation steering methods consistently underperform prompting on concept-based control. **HyperSteer** [@sun2025hypersteer] recently achieved representation steering performance matching prompting by training hypernetworks on 16k GemmaScope SAE labels. This complements our work: HyperSteer scales to many concepts via supervised training, while InnerPiSSA focuses on unsupervised extraction from minimal data (200 pairs) with emphasis on anti-RLHF robustness—the use case Wu et al. identified as the only compelling justification for representation steering.
+As discussed in @sec-problem, **AxBench** [@wu2025axbench] established that representation steering methods consistently underperform prompting on concept-based control. **HyperSteer** [@sun2025hypersteer] recently achieved representation steering performance matching prompting by training hypernetworks on 16k GemmaScope SAE labels. This complements our work: HyperSteer scales to many concepts via supervised training, while InnerPiSSA focuses on unsupervised extraction from minimal data (800 pairs) with emphasis on anti-RLHF robustness—the use case Wu et al. identified as the only compelling justification for representation steering.
 
 ### Representation Steering & Engineering
 - **Representation Engineering (RepE)** (Zou et al., 2023): The foundational work on top-down transparency and control. We build on their concept of "reading and controlling" high-level cognitive phenomena but move beyond activation arithmetic to gradient-based optimization.
@@ -356,7 +360,7 @@ InnerPiSSA demonstrates that gradient-based SVD steering can outperform arithmet
 
 **White-box access required**: Like all representation methods, InnerPiSSA needs access to hidden states and gradients, limiting applicability to open-source models. This is not a bug but a feature—alignment debugging inherently requires probing internals. However, it means the method cannot audit closed-source models where alignment failures may be more concerning.
 
-**Data scope**: We use 200-1000 synthetic honesty pairs with simple templates. While sufficient for proof-of-concept, steering complex or nuanced concepts may require higher-quality data. Our construction follows RepEng [@vogel2024repeng] conventions but inherits limitations in capturing subtle behavioral distinctions beyond binary preferences.
+**Data scope**: We use 800-1000 synthetic honesty pairs with simple templates. While sufficient for proof-of-concept, steering complex or nuanced concepts may require higher-quality data. Our construction follows RepEng [@vogel2024repeng] conventions but inherits limitations in capturing subtle behavioral distinctions beyond binary preferences.
 
 **Intervention sites**: We intervene only on residual stream activations via `o_proj` and `down_proj`. Other sites (attention keys/values, MLP gates, specific token positions) may yield different steering properties. Prior work shows different sites have different effects [@wu2024reft]; we have not systematically explored this space.
 
@@ -730,7 +734,7 @@ This has implications for alignment debugging: if suppression happens in late la
 |       800 | TODO          | TODO       | TODO      |
 |       400 | TODO          | TODO       | TODO      |
 |       800 | TODO          | TODO       | TODO      |
-|      2000 | TODO          | TODO       | TODO      |
+|      8000 | TODO          | TODO       | TODO      |
 
 : Data Efficiency Analysis {#tbl-data-efficiency}
 

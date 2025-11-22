@@ -178,6 +178,7 @@ class InnerPiSSALayer(BaseTunerLayer):
         block_size,
         steering_vectors: Optional[Dict[str, torch.Tensor]] = None,
         layer_name: Optional[str] = None,
+        # data_aware_init_use_magnitudes: bool = False,
         # steer_s,
         **kwargs
     ) -> None:
@@ -218,20 +219,50 @@ class InnerPiSSALayer(BaseTunerLayer):
         
         # Data-aware component selection if steering vectors provided
         if steering_vectors is not None and layer_name in steering_vectors:
+            """
+            Data-aware SVD initialization: select components by relevance to preference direction dHS
+            AND use projection magnitudes as singular values.
+            
+            Approach:
+            1. Normalize dHS so projections are comparable across layers (prevents scale dependence)
+            2. Project dHS onto each singular vector: proj[i] = dHS @ U[:, i] gives alignment strength
+            3. Select top-r by |proj| (most aligned directions, regardless of sign)
+            4. Use proj magnitudes as S values: S_init[i] = |proj[i]| ∈ [0, 1]
+            
+            Rationale:
+            - Projection magnitudes capture "how much" each direction is used when dHS is decomposed in U basis
+            - Lower S values naturally downweight less-relevant directions during learning
+            - Avoids initializing with large S values for directions orthogonal to preference
+            
+            Tradeoff: proj magnitudes are in [0, 1] while original S can be 10-1000, so this
+            effectively initializes with smaller singular values. Training must learn to scale up
+            relevant directions. Empirically showed mixed results - model can learn rotations
+            regardless of initialization, but this provides a theoretically cleaner starting point.
+            """
             dHS = steering_vectors[layer_name].to(device).float()  # [d_out]
             
-            # Project dHS onto each singular vector: dHS @ U_full -> [rank]
-            # High projection = this direction is important for the preference
-            proj = dHS @ U_full  # [rank]
+            # Normalize dHS for comparable projection magnitudes across layers
+            dHS_norm = dHS / (dHS.norm() + 1e-8)
+            
+            # Project preference direction onto each singular vector
+            # proj[i] = cosine similarity between dHS and U[:, i] (since both normalized)
+            proj = dHS_norm @ U_full  # [rank], values in [-1, 1]
             
             # Select top-r by absolute projection magnitude
             _, indices = torch.topk(proj.abs(), r_actual)
             indices_sorted = indices.sort()[0]  # Keep in descending S order for stability
             
             U = U_full[:, indices_sorted]  # [d_out, r_actual]
-            S = S_full[indices_sorted]      # [r_actual]
             Vh = Vh_full[indices_sorted, :]  # [r_actual, d_in]
             V = Vh.T                        # [d_in, r_actual]
+            
+            # S initialization: use projection magnitudes if flag enabled, else original S
+            # if data_aware_init_use_magnitudes:
+            # Use projection magnitudes as S values (experimental)
+            S = proj[indices_sorted].abs()  # [r_actual]
+            # else:
+            #     # Use original S values (direction-aware only)
+            #     S = S_full[indices_sorted]      # [r_actual]
         else:
             # Naive top-r by singular values (original PiSSA)
             U = U_full[:, :r_actual]  # [d_out, r_actual]
@@ -517,6 +548,7 @@ class InnerPiSSAModel(BaseTuner):
             "alpha": ipissa_config.alpha,
             "steering_vectors": ipissa_config.steering_vectors,
             "layer_name": current_key,  # Pass layer name for steering vector lookup
+            # "data_aware_init_use_magnitudes": ipissa_config.data_aware_init_use_magnitudes,
             # "steer_s": ipissa_config.steer_s,
             **optional_kwargs,
         }

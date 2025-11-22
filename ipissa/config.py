@@ -125,6 +125,8 @@ class TrainingConfig:
     rot_v: bool = True
     """Rotate V (input space)"""
     
+    # Data-aware initialization: select SVD components by |dHS @ U| projection magnitude
+    # AND use those projection magnitudes as S values (not original singular values)
     data_aware_init: bool = True
     """Use data-aware SVD component selection (InnerPiSSA only)"""
 

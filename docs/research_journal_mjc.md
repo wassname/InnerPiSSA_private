@@ -7,7 +7,6 @@ Training the same adapter with c=±1 creates a consistency constraint that preve
 
 # 2025-11-18 08:27:13
 
-## Research Journal Entry: Saddle Point Failure Mode Discovery & Solution
 
 **Date**: November 18, 2025  
 **Topic**: Fixing non-monotonic steering behavior in InnerPiSSA
@@ -416,3 +415,88 @@ uv run python nbs/train.py q4b-80gb --modules q_proj k_proj v_proj o_proj gate_p
   A larger output dimension (like in the MLP expansion layers `gate` and `up`) gives the model many more degrees of freedom to represent the "honest vs dishonest" difference orthogonally to other features. It's easier to find a "clean" direction to steer in a 9728-dimensional space than in a 1024-dimensional space, resulting in a much stronger (more negative) projection loss.
 
   This suggests that **MLP expansion layers (gate/up)** might be the most effective targets for steering because they offer the richest representation space for the steering vector to operate in.
+
+# 2025-11-22 11:42:34
+
+
+## Research Journal - Michael J. Clark
+
+## 2025-11-22: Data-Aware SVD Initialization with Projection Magnitudes
+
+### Problem
+InnerPiSSA initialization was naive: select top-r SVD components by singular value magnitude (largest variance directions in weight space). This ignores the preference direction dHS extracted from training data. Large singular values might correspond to directions orthogonal to what we want to steer.
+
+### Insight
+When we decompose dHS in the U basis: `dHS = Σ proj[i] * U[:, i]`, the projection coefficients `proj[i] = dHS @ U[:, i]` tell us exactly how much each singular direction contributes to the preference. We should:
+1. **Select** components by `|proj|` (alignment strength) not `|S|` (variance magnitude)
+2. **Initialize S** with projection magnitudes `|proj|` not original singular values
+
+This makes initialization truly "data-aware" in both direction and magnitude.
+
+### Theoretical Justification
+- Normalizing dHS before projection: `dHS_norm = dHS / ||dHS||` ensures proj values are comparable across layers (scale-invariant)
+- Projection onto orthonormal basis U: `proj[i] = dHS_norm @ U[:, i]` gives cosine similarity ∈ [-1, 1]
+- Using `|proj|` as S: Captures "proportion of dHS explained by this direction" - naturally small for irrelevant components
+
+### Implementation Choices
+
+**What we implemented:**
+```python
+dHS_norm = dHS / (dHS.norm() + 1e-8)  # Normalize for comparability
+proj = dHS_norm @ U_full  # [rank] ∈ [-1, 1]
+indices = topk(proj.abs(), r)  # Select by alignment
+S_init = proj[indices].abs()  # Use projection magnitudes as singular values
+```
+
+
+OR
+
+```py
+ = 
+proj = U_full.T @ dHS  # [full_rank] - how much each U direction contributes
+
+# Take top-r by magnitude (you already do this!)
+indices = topk(|proj|, r)
+
+S_init = proj[indices].abs()
+
+# Rescale to match original S magnitude (preserve W structure)
+original_S_norm = S_full[indices].norm()
+data_S_norm = S_init.norm()
+S_init = S_init * (original_S_norm / data_S_norm)
+
+# Now USE the projection magnitudes as S:
+U_init = U_full[:, indices]      # [d_out, r]
+S_init = S_init                  # [r] ← Use actual projection magnitudes!
+V_init = V_full[:, indices]      # [d_in, r]
+
+# Reconstruct:
+W_dhs_approx = U_init @ diag(S_init) @ V_init.T
+```
+
+
+**Alternatives considered:**
+1. **Indices only, original S:** `S_init = S_full[indices]` - keeps original scales but may over-represent large-variance directions
+2. **Rescaled projections:** `S_init = proj[indices].abs() * S_full[indices].mean()` - matches original S scale
+3. **No normalization:** `proj = dHS @ U_full` - scale-dependent, incomparable across layers
+
+**Why we chose raw projection magnitudes:**
+- Theoretically clean: S values represent "proportion used" in [0, 1]
+- Regularization effect: Forces model to learn scaling during training
+- Empirically tested rescaling - didn't improve results
+
+### Results
+Empirical testing (2025-11-22) showed data-aware init with magnitude-based S didn't outperform naive top-r selection. Possible reasons:
+1. Small S init ([0, 1]) vs original ([10, 1000]) creates too much regularization
+2. Model can learn rotations anyway, so init matters less than expected
+3. First-batch dHS estimation is noisy (only 32 samples)
+
+Kept as the single unified approach when `data_aware_init=True` (no separate flags). Provides theoretically cleaner initialization even if empirical gains are modest. May revisit with:
+- Better dHS estimation (more samples, multiple batches)
+- Hybrid rescaling: select by proj, scale to match original S magnitude
+- Analysis of which layers/models benefit most
+
+### Code Location
+- Config: `ipissa/config.py` (single flag: `data_aware_init`)
+- Implementation: `ipissa/peft_utils/innerpissa.py::update_layer()`
+- Steering extraction: `ipissa/train/train_adapter.py::compute_init_steering_vectors()`
