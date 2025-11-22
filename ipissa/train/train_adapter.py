@@ -412,6 +412,7 @@ def train_steer_vector(
             # Activation-space PCA: simple mean difference
             h_cho = hs_cpu[::2]
             h_rej = hs_cpu[1::2]
+            # FIXME, need to apply mask and take last N tokens
             delta_act = (h_cho - h_rej).mean(dim=0)  # [d] activation space
             delta_act = F.normalize(delta_act, dim=0)
             

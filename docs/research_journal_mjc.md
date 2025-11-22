@@ -500,3 +500,19 @@ Kept as the single unified approach when `data_aware_init=True` (no separate fla
 - Config: `ipissa/config.py` (single flag: `data_aware_init`)
 - Implementation: `ipissa/peft_utils/innerpissa.py::update_layer()`
 - Steering extraction: `ipissa/train/train_adapter.py::compute_init_steering_vectors()`
+
+### 2025-11-22: The "Mass in Residual" Problem (Fixing Data-Aware Init)
+
+We encountered an issue where Data-Aware Initialization (using projection magnitudes for $S$) caused asymmetric and poor steering performance.
+
+**The Diagnosis**:
+When we initialized $S_{new} = proj$ (values $\in [-1, 1]$) instead of $S_{orig}$ (values $\in [10, 1000]$), we effectively moved the "mass" of the selected principal components into the frozen residual $W_{res}$.
+$W_{res} = W_{base} - U S_{new} V^T$.
+Since $S_{new}$ was tiny, $W_{res}$ contained almost the entire original weight of these components.
+
+**The Consequence**:
+1.  **Un-rotatable Mass**: The adapter learns rotations $R_u, R_v$. The effective weight is $U R_u S_{new} R_v^T V^T$. Since $S_{new}$ acts as a gain factor, if it is near zero, the rotations have negligible effect. The massive component in $W_{res}$ is frozen and cannot be rotated.
+2.  **Steering Lock**: The model is locked to its base behavior because the steerable part is too weak to override the frozen residual.
+
+**The Fix**:
+We reverted to using `proj` *only* for selecting the indices (identifying the relevant subspace). We initialize $S_{new}$ with the original singular values $S_{full}$. This keeps the mass in the steerable adapter, allowing the learned rotations and scalings to effectively steer the model's behavior.
