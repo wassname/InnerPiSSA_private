@@ -1,4 +1,4 @@
-# InnerPiSSA: Deep-Dish Inner Alignment through Reversible SVD Steering
+# InnerPiSSA: Inner Alignment through Reversible SVD Steering
 
 ## Abstract
 
