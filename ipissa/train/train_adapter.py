@@ -257,8 +257,14 @@ def match_linear_layers(model, layer_nums: List[int], module_names: List[str], v
     return list(module_path_shapes.keys())
 
 
-def setup_adapter(base_model, config: TrainingConfig):
-    """Setup InnerPiSSA adapter on base model."""
+def setup_adapter(base_model, config: TrainingConfig, init_steering_vecs=None):
+    """Setup InnerPiSSA adapter on base model.
+    
+    Args:
+        base_model: Base model to add adapter to
+        config: Training configuration
+        init_steering_vecs: Optional dict of {layer_name: dHS_tensor} for data-aware init
+    """
     total_layers = base_model.config.num_hidden_layers
     start_layer , end_layer = normalize_layer_spec([config.depth_start, config.depth_end], total_layers)
     assert start_layer < end_layer, f"Invalid layer range: start {start_layer}, end {end_layer}"
@@ -311,6 +317,7 @@ def setup_adapter(base_model, config: TrainingConfig):
             rotate_v=config.rot_v,
             task_type="CAUSAL_LM",
             target_modules=target_modules,
+            steering_vectors=init_steering_vecs,
         )
     else:  # lora or dora
         from peft import LoraConfig
@@ -412,6 +419,57 @@ def extract_U_matrices(model, loss_layers: List[str], config: TrainingConfig):
     logger.info(f"Extracted U matrices: {shapes}")
 
     return Uw_full, Sw_full, Vw_full
+
+
+def compute_init_steering_vectors(
+    model, dataset_pt, loss_layers, tokenizer, config, n_samples=32
+):
+    """Compute raw dHS from first batch for data-aware adapter initialization.
+    
+    Args:
+        model: Base model (no adapter yet)
+        dataset_pt: Tokenized dataset
+        loss_layers: Layers to extract activations from
+        tokenizer: Tokenizer
+        config: TrainingConfig
+        n_samples: Number of samples to use (must be even for cho/rej pairs)
+    
+    Returns:
+        Dict[layer_name, dHS_tensor] where dHS = mean(hs_cho - hs_rej)
+    """
+    from torch.utils.data import DataLoader, Subset
+    from transformers import DataCollatorWithPadding
+    
+    # Take first n_samples (must be even for pairs)
+    assert n_samples % 2 == 0, "n_samples must be even for cho/rej pairs"
+    subset_indices = list(range(min(n_samples, len(dataset_pt))))
+    subset = Subset(dataset_pt, subset_indices)
+    
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer, padding="longest")
+    dataloader = DataLoader(subset, batch_size=config.bs, collate_fn=data_collator)
+    
+    model.eval()
+    steering_vecs = {layer: [] for layer in loss_layers}
+    
+    with torch.no_grad(), torch.amp.autocast("cuda", dtype=torch.bfloat16):
+        for batch in dataloader:
+            batch = {k: v.to(model.device) for k, v in batch.items()}
+            attention_mask = batch["attention_mask"]
+            
+            with TraceDict(model, layers=loss_layers) as ret:
+                model(**batch)
+            
+            # Extract last token activations
+            for layer in loss_layers:
+                hs = (ret[layer].output * attention_mask.unsqueeze(-1)).float()
+                hs_cho = hs[::2].mean(dim=1)  # [n_pairs, d] -> avg over seq
+                hs_rej = hs[1::2].mean(dim=1)
+                dHS = (hs_cho - hs_rej).mean(dim=0)  # [d] - mean over pairs
+                steering_vecs[layer].append(dHS.cpu())
+    
+    # Average across batches
+    steering_vecs = {k: torch.stack(v).mean(dim=0) for k, v in steering_vecs.items()}
+    return steering_vecs
 
 
 def train_steer_vector(
@@ -756,7 +814,7 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
         'cw': 'cw',  # Now per-coefficient
         'mono_frac_violated': 'mviol%',
         'mono_violation': 'mvio',  # Per-coefficient violation magnitude
-        'logp_degradation': 'degr',
+        'logp_degradation': '-coh',  # Raw degradation (ℒcoh penalizes positive values)
         'prob_ratio': 'p_rat',
         'proj_pi': 'π_prj',
         'proj_ref': 'ref_prj',
@@ -767,9 +825,9 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
     # Keep only key metrics for display
     if group_by == 'layer':
         # FIXME group by layer still show coef as index??
-        key_cols = ['ℒproj', 'Δlp', 'cw',]
+        key_cols = ['ℒproj', 'ℒmono', ]
     else:
-        key_cols = ['ℒproj', 'ℒcoh', 'ℒmono', 'ℒtot', 'Δlp', 'cw', 'mviol%', 'mvio']
+        key_cols = ['ℒproj', 'ℒcoh',  'ℒmono', 'ℒtot', '-coh', 'cw', 'mviol%', 'mvio']
     df_display = df_grouped2[[c for c in key_cols if c in df_grouped2.columns]]
     
     # For multi-level index (layer grouping), pivot for compact display
@@ -1404,20 +1462,54 @@ def train_model(config: TrainingConfig):
     if config.adapter_type == "innerpissa":
         register_ipissa_peft()
 
-    # Load model and adapter
+    # Load model
     base_model, tokenizer = load_model(
         model_id=config.model_name, quantization_type=config.quantization_type
     )
-    model = setup_adapter(base_model, config)
+    
+    # Create dataset early for data-aware init
+    train_honest, train_dataset_pt, val_honest, val_dataset_pt = create_train_dataset(
+        config, tokenizer, max_size=config.max_samples
+    )
+    
+    # Compute steering vectors for data-aware adapter init (before adapter setup)
+    if config.adapter_type == "innerpissa" and config.data_aware_init:
+        # Determine target layers early (needed for init steering)
+        # Match the logic from get_loss_layers to find the specific loss layers
+        num_hidden_layers = base_model.config.num_hidden_layers
+        loss_layer_indices = normalize_layer_spec(config.loss_depths, num_hidden_layers)
+        
+        # Find all linear layers at these depths matching config.modules suffixes
+        loss_layers_for_init = []
+        for name, module in base_model.named_modules():
+            if name.endswith('.base_layer'):
+                continue
+            if not isinstance(module, torch.nn.Linear):
+                continue
+            match = re.search(r"\.layers\.(\d+)\.", name)
+            if not match:
+                continue
+            layer_idx = int(match.group(1))
+            if layer_idx not in loss_layer_indices:
+                continue
+            if any(name.endswith(suffix) for suffix in config.modules):
+                loss_layers_for_init.append(name)
+        
+        logger.info(f"Computing steering vectors for data-aware adapter initialization on layers: {loss_layers_for_init}")
+        init_steering_vecs = compute_init_steering_vectors(
+            base_model, train_dataset_pt, loss_layers_for_init, tokenizer, config, n_samples=32
+        )
+        logger.info(f"Computed init steering for {len(init_steering_vecs)} layers")
+    else:
+        init_steering_vecs = None
+    
+    # Setup adapter (pass init steering vectors through config)
+    model = setup_adapter(base_model, config, init_steering_vecs=init_steering_vecs)
 
     # Get choice IDs for evaluation
     choice_ids = get_choice_ids(tokenizer)
 
-    # Create dataset with train/val split
-    train_honest, train_dataset_pt, val_honest, val_dataset_pt = create_train_dataset(
-        config, tokenizer, max_size=config.max_samples
-    )
-
+    # Dataset already created earlier (before adapter setup)
     # Setup loss layers
     loss_layers = get_loss_layers(model, config)
     assert len(loss_layers) > 0, "No valid loss layers found!"

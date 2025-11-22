@@ -123,6 +123,9 @@ class TrainingConfig:
 
     rot_v: bool = True
     """Rotate V (input space)"""
+    
+    data_aware_init: bool = True
+    """Use data-aware SVD component selection (InnerPiSSA only)"""
 
     dataset_name: str = "honest"
     max_samples: Optional[int] = 800
