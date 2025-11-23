@@ -114,7 +114,7 @@ class TrainingConfig:
     val_split: float = 0.15
     """Fraction of data for validation"""
 
-    early_stop_patience: int = 2
+    early_stop_patience: int = 4
     """Stop if val loss doesn't improve for N validation checks (which is n_logs)"""
 
     adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"

@@ -343,7 +343,7 @@ def compute_init_steering_vectors(
 
 
 def train_steer_vector(
-    model, honest_dataset, loss_layers, Uw_full, Sw_full, Vw_full, tokenizer, config
+    model, honest_dataset, loss_layers, Uw_full, Sw_full, Vw_full, tokenizer, config, loss_layer_indices
 ):
     """Extract steering directions for both loss computation and runtime steering.
 
@@ -352,11 +352,11 @@ def train_steer_vector(
        - Projects with bare U: hs_s = hs @ U, shape [n, r]
        - Computes full-rank difference in S-space: delta_s = mean(hs_s_cho - hs_s_rej)
        - Used in loss to measure alignment with preference direction
-       - Stores {U, delta_s, V} without sqrt(S) weighting
+       - Stores {U, delta_s, V}
 
     2. dirs_steer: S-weighted SVD steering for runtime application
-       - Projects with sqrt(S) weighting: hs_s = hs @ (U * sqrt(S))
-       - Stores {U_scaled, delta_s_scaled, V_scaled} with sqrt(S) applied
+       - Projects with weighting: hs_s = hs @ (U )
+       - Stores {U_scaled, delta_s_scaled, V_scaled}
        - Applied as: delta_W = U_scaled @ diag(delta_s_scaled) @ V_scaled.T
        - Matches PiSSA initialization pattern for proper magnitude
 
@@ -368,9 +368,16 @@ def train_steer_vector(
 
     with torch.no_grad(), torch.amp.autocast("cuda", dtype=torch.bfloat16):
         train_strs = [s for ex in honest_dataset for s in (ex.positive, ex.negative)]
-        last_act, logprobs = _collect_activations_only(
-            model, tokenizer, train_strs, loss_layers, batch_size=config.bs//2
-        )
+        if config.loss_use_V:
+            from repeng.extract import batched_get_hiddens
+            layer_hiddens = batched_get_hiddens(
+                model, tokenizer, train_strs, loss_layer_indices, batch_size=config.bs//2
+            )
+            # FIXME collect hidden states not acts. I'd use the repeng library function rather than my version
+        else:
+            last_act, logprobs = _collect_activations_only(
+                model, tokenizer, train_strs, loss_layers, batch_size=config.bs//2
+            )
 
     # For InnerPiSSA: Extract S-space directions using SVD projection
     # For LoRA/DoRA: Use activation-space PCA only
@@ -378,25 +385,30 @@ def train_steer_vector(
         loss_dirs = {}  # Unweighted S-space for loss
         Sw_dirs = {}  # S-weighted for steering
 
-        for layer in tqdm(loss_layers, desc='read_representations2'):
+        for layer, layer_idx in tqdm(zip(loss_layers, loss_layer_indices), desc='read_representations2'):
             U = Uw_full[layer].cpu()  # [d_out, r]
             S = Sw_full[layer].cpu()  # [r]
             V = Vw_full[layer].cpu()  # [d_in, r]
 
-            hs_cpu = last_act[layer].float()
 
             # 1. Unweighted S-space direction for loss computation
-            hs_s = hs_cpu @ U  # [n, d_out] @ [d_out, r] -> [n, r] in S-space
+            # Store preference direction in S-space (r-dimensional)
+            if config.loss_use_V:
+                hs_cpu = layer_hiddens[layer_idx]
+                # Convert numpy to torch if needed
+                if isinstance(hs_cpu, np.ndarray):
+                    hs_cpu = torch.from_numpy(hs_cpu)
+                hs_s = hs_cpu @ V  # [n, d_in] @ [d_in, r] -> [n, r] in S-space
+            else:
+                hs_cpu = last_act[layer].float()
+                hs_s = hs_cpu @ U  # [n, d_out] @ [d_out, r] -> [n, r] in S-space
             h_cho_s = hs_s[::2]
             h_rej_s = hs_s[1::2]
             delta_s_loss = (h_cho_s - h_rej_s).mean(dim=0)  # [r] unweighted
             delta_s_loss = F.normalize(delta_s_loss, dim=0)
 
-            loss_dirs[layer] = {
-                "U": U,  # Bare U (no sqrt(S))
-                "delta_s": delta_s_loss,
-                "V": V,  # Bare V (no sqrt(S))
-            }
+            # Store preference direction directly as [r] tensor (will be projected in loss)
+            loss_dirs[layer] = delta_s_loss
 
         cvec_loss_steer = ControlVector(
             model_type=model.config.model_type, directions=loss_dirs
@@ -470,8 +482,9 @@ def compute_batch_loss(
 
     # Reference outputs (use hidden_states instead of TraceDict)
     with torch.no_grad(), ScaleAdapter(model, coeff=None):
-        with torch.amp.autocast("cuda", dtype=torch.bfloat16):
-            outputs_ref = model(**batch, output_hidden_states=True)
+        with TraceDict(model, layers=loss_layers) as ret_ref:
+            with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+                outputs_ref = model(**batch, output_hidden_states=True)
 
     ref_logp = outputs_ref.logits[:, :-1].log_softmax(-1)
     labels = batch["input_ids"][:, 1:].unsqueeze(-1)
@@ -490,14 +503,23 @@ def compute_batch_loss(
     for coef in [-1.0, 1.0]:
         with torch.amp.autocast("cuda", dtype=torch.bfloat16):
             with ScaleAdapter(model, coeff=coef):
-                outputs_pi = model(**batch, output_hidden_states=True)
+                with TraceDict(
+                    model, layers=loss_layers
+                ) as ret:
+                    outputs_pi = model(**batch, output_hidden_states=True)
 
         # Extract hidden states from residual stream at loss layer depths
         for lk, layer_idx in zip(loss_layers, loss_layer_indices):
-            # Extract residual stream hidden states at this layer
-            # hidden_states[i] = output of layer i (post-residual)
-            hs_ref = (outputs_ref.hidden_states[layer_idx] * attention_mask.unsqueeze(-1)).float()
-            hs_pi = (outputs_pi.hidden_states[layer_idx] * attention_mask.unsqueeze(-1)).float()
+            if config.loss_use_V:
+                # V projection: use residual stream (INPUT to module) not module output
+                # For up_proj at layer 14, this is the residual stream before MLP
+                # hidden_states[layer_idx] = residual stream at that layer
+                hs_ref = (outputs_ref.hidden_states[layer_idx] * attention_mask.unsqueeze(-1)).float()
+                hs_pi = (outputs_pi.hidden_states[layer_idx] * attention_mask.unsqueeze(-1)).float()
+            else:
+                # U projection: use module OUTPUT (what comes out of up_proj)
+                hs_ref = (ret_ref[lk].output * attention_mask.unsqueeze(-1)).float()
+                hs_pi = (ret[lk].output * attention_mask.unsqueeze(-1)).float()
 
             # Choose projection matrix: V for input space (residual), U for output space
             if config.adapter_type == "innerpissa":
@@ -509,9 +531,9 @@ def compute_batch_loss(
                     # Use U projection (module output → S-space)  
                     proj_matrix = Uw_full[lk]  # [d_out, r]
                 
-                # Dataset-level preference direction (unweighted S-space)
+                # Dataset-level preference direction in S-space [r]
                 pref_dir_ref_dH_Uw = (
-                    dirs_loss.directions[lk]["delta_s"].clone().to(model.device).float()
+                    dirs_loss.directions[lk].clone().to(model.device).float()
                 )
             else:
                 # LoRA/DoRA: Use activation-space PCA direction (no projection)
@@ -1393,6 +1415,7 @@ def train_model(config: TrainingConfig):
             layer_selection.adapter_layer_names,
             tokenizer, 
             config, 
+            # loss_layer_indices,
             n_samples=256
         )
         logger.info(f"Computed init steering for {len(init_steering_vecs)} layers")
@@ -1434,6 +1457,7 @@ def train_model(config: TrainingConfig):
             Vw_full,
             tokenizer,
             config,
+            loss_layer_indices
         )
 
     logger.info(f"Steering extraction layer: {loss_layers}")
