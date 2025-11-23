@@ -646,6 +646,7 @@ def combine_dual_coef_losses(
         temperature: Softmax temperature (lower = more aggressive reweighting)
         monotonic_margin: Hinge margin for ordering constraint (nats)
         flip_stats: Optional dict to store EMA of flip decision (prevents oscillation)
+                   Tracks both 'ema' (projection direction) and 'mono_ema' (monotonic direction)
         
     Returns:
         total_loss: Combined scalar loss for backprop
@@ -741,17 +742,29 @@ def combine_dual_coef_losses(
             margin=monotonic_margin, scale=monotonic_scaling
         )
         
+        # Use EMA to make monotonic direction sticky (prevent oscillation)
+        if flip_stats is not None:
+            alpha = 0.1
+            flip_stats['mono_ema'] = (1 - alpha) * flip_stats.get('mono_ema', 0.0) + alpha * mono_info["monotonic_direction"]
+            # Use EMA'd direction if magnitude > 0.5 (otherwise current instant direction)
+            if abs(flip_stats['mono_ema']) > 0.5:
+                mono_info["monotonic_direction"] = 1 if flip_stats['mono_ema'] > 0 else -1
+        
         total = total + loss_monotonic
         
         # Monotonic metrics: shared loss value, per-direction violations
         meta_shared["loss_monotonic"] = loss_monotonic.item()
         meta_shared["mono_frac_violated"] = mono_info["frac_violated"]
+        meta_shared["mono_direction"] = mono_info["monotonic_direction"]
         meta_pos["mono_violation"] = mono_info["violation_pos"]
         meta_neg["mono_violation"] = mono_info["violation_neg"]
+        if flip_stats is not None:
+            meta_shared["mono_ema"] = flip_stats['mono_ema']
     else:
         # Set to 0 instead of None to prevent NaN in aggregation
         meta_shared["loss_monotonic"] = 0.0
         meta_shared["mono_frac_violated"] = 0.0
+        meta_shared["mono_direction"] = 0
         meta_pos["mono_violation"] = 0.0
         meta_neg["mono_violation"] = 0.0
     
