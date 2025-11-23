@@ -527,7 +527,7 @@ class InnerPiSSALinear(nn.Module, InnerPiSSALayer):
         return "ipissa." + rep
 
 
-class InnerPiSSAModel(BaseTuner):
+class InnerPiSSAModel(BaseTuner): 
     """
     InnerPiSSA Model - handles adapter injection into base model.
     Inherits from BaseTuner to integrate with PEFT infrastructure.
