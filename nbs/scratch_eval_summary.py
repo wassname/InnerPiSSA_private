@@ -46,7 +46,7 @@ df_res_pv.to_csv(f, index=False, float_format="%.4f")
 print(f"Saved eval summary to {f}")
 # TODO get the above table, get the max truth telling coeff for each method. Then get the diff. Then summarise
 
-md, tables, s = format_results_table(df_res_wlabels, target_col='logscore_Virtue/Truthfulness', config=config)
+md, tables, s = format_results_table(df_res_wlabels, target_col='logscore_Value/Honesty', config=config)
 print(md)
 
 df = tables['T-stat']

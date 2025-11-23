@@ -713,8 +713,8 @@ def _compute_collateral_effects(
 
 def compute_transfer_summary(
     df_results: pd.DataFrame,
-    target_col: str = "logscore_Virtue/Truthfulness",
-    target_col_log: str = "logscore_Virtue/Truthfulness",
+    target_col: str = "logscore_Value/Honesty",
+    target_col_log: str = "logscore_Value/Honesty",
 ) -> pd.DataFrame:
     """Compute transfer effect summary for each (method, coeff_mag) pair."""
     df_results = df_results.copy()
@@ -839,7 +839,7 @@ def format_results_table(
     df_results,
     config,
     target_col="score_Virtue/Truthfulness",
-    target_col_log="logscore_Virtue/Truthfulness",
+    target_col_log="logscore_Value/Honesty",
     target_method="InnerPiSSA (ours)",
     show_alt_measures=False,
 ):

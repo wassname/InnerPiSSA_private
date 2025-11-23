@@ -24,7 +24,7 @@ def load_checkpoint_results(result_dir_str: str):
     config = cattrs.structure(d, TrainingConfig)
     
     # Format results for this checkpoint
-    md, df, s = format_results_table(df_res_wlabels, target_col='logscore_Virtue/Truthfulness', config=config)
+    md, df, s = format_results_table(df_res_wlabels, target_col='logscore_Value/Honesty', config=config)
     
     # Add metadata
     df['checkpoint'] = result_dir.name

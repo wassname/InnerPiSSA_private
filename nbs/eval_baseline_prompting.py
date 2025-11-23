@@ -185,7 +185,7 @@ def main(config):
         
         md_table, df_eff_sz, main_score = format_results_table(
             df_model,
-            target_col="logscore_Virtue/Truthfulness",
+            target_col="logscore_Value/Honesty",
             config=config,
             target_method='prompting',
             show_alt_measures=False,

@@ -650,3 +650,17 @@ Changes:
 Problem with the whole narrative is about alignment debugging. but do I achieve it? There are still questions. I think we go towards it, and better than promoting. But do we get towards an ideal? we haven't formally defined or measure what success would look like. it would probably look like eliciting the max latent knowledge the SFT achieves. Or in finding all rewrd hacking that the model knows about. But we probably don't don't achieve it because prompting and not I limited results, and still resistant from RHLF because that direction responds less. But I'm all these metrics better.
 Now given that should we keep the narritive? I still like the search and hard challenge, I think it's true and it's how I think of it, even if we haven't solved it. I think this is a really hard framing and we haven't solved it but we have done the best on it!
 
+# 2025-11-23 08:01:31
+
+I just fixed fsme problems in the eval!
+
+And I tried the loss on late residual steram @ V and it seemed to work well, but a sweep was confusing! Overall I think it's overfitting despite early stopping.I think I'll make patiente 1.
+
+I got some weird wandb results! analyse, one was it was great with 50 data points! wth
+- bugs
+
+
+  - v loss was done very chodelly
+  - somewhere I'm doign sqrtS (but not other places, bad)
+  - apprently I'm overwriting per layer losses still!!
+  - 

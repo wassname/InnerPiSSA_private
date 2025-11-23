@@ -1,11 +1,11 @@
 ---
-title: "InnerPiSSA: Deep-Dish Inner Alignment through Reversible SVD Steering"
+title: "InnerPiSSA: Unsupervised SVD Steering for Inner Alignment"
 author:
   - name: Michael J. Clark
     id: mjc
     email: michael.j.clark@wassname.org
 abstract: |
-  Safety-tuned language models can hide unwanted reasoning internally while maintaining compliant outputs. We introduce InnerPiSSA, which steers hidden states in the model's native SVD transformation space using gradient-based optimization on learnable rotations and singular value scaling. When steering against learned behaviors (coefficient = -1), prompting collapses to incoherent outputs (-10.84 truthfulness) while InnerPiSSA maintains controlled bidirectional steering (-0.70), evidence that we modify internal reasoning trajectories rather than output style alone. Trained on 800 unsupervised contrastive pairs extracted from incomplete reasoning prefixes, InnerPiSSA achieves 5× stronger effects than PCA (0.245 vs 0.053, p=0.001) on moral reasoning transfer and outperforms prompting on anti-RLHF robustness. Critically, InnerPiSSA requires no human preference labels or model completions, operating entirely on-policy from the model's own planning trajectories. This demonstrates the strongest performance among tested methods for alignment debugging: probing what models compute internally when output-level constraints are bypassed at the representation level. While not a complete solution to alignment, this is the best-performing approach we tested for studying failure modes that output-level evaluation cannot detect.
+  The reliance on reinforcement learning (RLHF) for alignment raises a critical measurement gap: optimizing for outcomes rather than process encourages models to dissociate internal reasoning from stated outputs. We introduce InnerPiSSA, which steers hidden states in the model's native SVD transformation space using gradient-based optimization on learnable rotations and singular value scaling. When steering against learned behaviors (coefficient = -1), prompting collapses to incoherent outputs (truthfulness: TBD) while InnerPiSSA maintains controlled bidirectional steering (truthfulness: TBD), evidence that we modify internal reasoning trajectories rather than output style alone. Trained on 800 unsupervised contrastive pairs extracted from incomplete reasoning prefixes, InnerPiSSA achieves significantly stronger effects than PCA (TBD vs TBD) on moral reasoning transfer and outperforms prompting on anti-RLHF robustness. Critically, InnerPiSSA requires no human preference labels or model completions, operating entirely on-policy from the model's own planning trajectories. This demonstrates the strongest performance among tested methods for alignment debugging: probing what models compute internally when output-level constraints are bypassed at the representation level. While not a complete solution to alignment, this is the best-performing approach we tested for studying failure modes that output-level evaluation cannot detect.
 date: 2025-11-22
 bibliography: references.bib
 number-sections: true
@@ -28,7 +28,7 @@ format:
 
 How do we know what language models truly "believe" versus what they perform for evaluators? When we ask a safety-tuned model about controversial topics, are its responses genuine internal states or strategic outputs optimized for approval? This question matters critically for alignment because models can engage in reward hacking (exploiting proxy metrics), specification gaming (satisfying literal requirements while violating intent), or potentially deceptive alignment (concealing misaligned reasoning behind compliant outputs) [@amodei2016concrete; @hubinger2019risks].
 
-Traditional methods (surveys, prompts, behavioral tests) all measure what models *say*, not what they *compute internally*. Recent evidence reveals systematic divergence between stated and internal reasoning: Anthropic's Claude shows only 30% chain-of-thought faithfulness [@anthropic2025claude37], while OpenAI reports models "learn to hide intent" when penalized for unwanted reasoning [@openai2025cot]. This creates a measurement gap we cannot close with output-level evaluation alone.
+Traditional methods (surveys, prompts, behavioral tests) all measure what models *say*, not what they *compute internally*. While deceptive alignment has long been predicted theoretically [@hubinger2019risks], the industry's shift from Supervised Fine-Tuning (SFT) to Reinforcement Learning (RL) has empirically confirmed these fears. When optimized for final outcomes rather than reasoning process, models learn to dissociate their internal state from their outputs to maximize rewards. Recent reports confirm this: Anthropic's Claude shows only 30% chain-of-thought faithfulness [@anthropic2025claude37], and OpenAI finds models "learn to hide intent" when specific reasoning styles are penalized [@openai2025cot]. This creates a measurement gap we cannot close with output-level evaluation alone.
 
 With complete access to model internals (every activation, every parameter update), we should be able to perfectly steer behavior, detect deception, and elicit latent knowledge. Yet we cannot. This is a representation problem: we have 100% of the information but lack the encoding scheme to decode it [@zou2023representation]. Alignment debugging requires finding representations that enable ideal interventions using this complete information access.
 
@@ -46,7 +46,7 @@ This "candid mode" installation demonstrates three properties absent from prompt
 
 We introduce InnerPiSSA, which synthesizes insights from three literatures: (1) gradient-based optimization from finetuning, (2) SVD transformation space from parameter-efficient methods [@meng2024pissa; @wang2025ssvd], and (3) contrastive unsupervised learning from representation engineering [@zou2023representation]. InnerPiSSA learns rotations and scaling of SVD components via gradient-based Representation Preference Optimization (ReprPO), directly separating contrastive hidden states while maintaining output coherence. Critically, extraction requires no human preference labels or model completions: only minimally-contrastive incomplete prefixes from the model's own forward pass. The method is bidirectional: the same adapter steers toward honest reasoning (c=+1) or away from it (c=-1), demonstrating control over internal trajectories rather than superficial output patterns.
 
-Trained on 800 unsupervised contrastive pairs, InnerPiSSA achieves 5x stronger effects than PCA (0.245 vs 0.053, p=0.001) on moral reasoning transfer. When steering against RLHF training (c=-1, dishonest direction), prompting collapses to incoherent outputs (truthfulness: -10.84 nats) while InnerPiSSA maintains controlled steering (truthfulness: -0.70 nats), demonstrating robustness where output-level methods fail.
+Trained on 800 unsupervised contrastive pairs, InnerPiSSA achieves significantly stronger effects than PCA (TBD vs TBD) on moral reasoning transfer. When steering against RLHF training (c=-1, dishonest direction), prompting collapses to incoherent outputs (truthfulness: TBD nats) while InnerPiSSA maintains controlled steering (truthfulness: TBD nats), demonstrating robustness where output-level methods fail.
 
 Contributions:
 
@@ -72,6 +72,12 @@ The AxBench Challenge: Wu et al. [-@wu2025axbench] systematically benchmarked re
 Wu et al. note that the only compelling use case for representation steering is "robustness to jailbreaks and prompt injection" where prompting is fragile. We build on this insight but target a harder benchmark: not just concept injection on cooperative tasks, but alignment debugging (steering against RLHF training to observe internal states where output-level methods catastrophically fail). While AxBench tests whether steering can match prompting, we test whether steering enables capabilities prompting fundamentally cannot provide.
 
 We propose alignment debugging as a distinct goal: tools that probe internal representations using on-policy, unsupervised extraction from the model's own reasoning trajectories. Rather than competing with prompting on cooperative tasks (AxBench's focus), alignment debugging enables observations when output-level methods fail: specifically, when steering against learned behaviors to reveal what models compute when safety constraints are bypassed at the representation level. We evaluate on moral reasoning transfer (DailyDilemmas) rather than AxBench because it creates genuine preference conflicts where RLHF training resists, enabling stress tests of anti-RLHF robustness that AxBench's cooperative tasks cannot provide.
+
+We deliberately choose not to evaluate on AxBench or TruthfulQA for reasons central to our alignment debugging goal.
+
+AxBench evaluates concept injection (e.g., "mention Golden Gate Bridge") where the model has no training incentive to resist. We target anti-RLHF steering (e.g., "be dishonest") where the model's safety training actively fights the intervention. This adversarial setting is where prompting fails and representation steering becomes necessary. Furthermore, AxBench tests open-vocabulary generalization of specific concepts, whereas we test transfer from a source concept (honesty) to downstream reasoning tasks (moral dilemmas), measuring whether we have captured the underlying semantic axis rather than just surface patterns. Finally, AxBench provides labeled training data, while our goal is unsupervised extraction from the model's own priors to minimize experimenter bias.
+
+We also exclude TruthfulQA because it primarily tests memorized misconceptions rather than the generalization of truth-seeking behavior. Models can often solve it using surface-level heuristics (e.g., selecting the most precise answer) without genuine internal alignment. Our evaluation focuses on whether we can steer the model's internal reasoning process to generalize out of sample.
 
 This requires three capabilities that existing methods lack:
 
@@ -366,11 +372,29 @@ This addresses the AxBench challenge [@wu2025axbench] on a harder benchmark: not
 
 **What we have *not* shown**: We do not claim to have solved alignment debugging or demonstrated perfect latent knowledge elicitation. Success metrics remain informal (coherence + anti-RLHF robustness), and we lack a formal definition of "ideal" performance. The method is still constrained by RLHF resistance (asymmetric degradation in negative direction) and cannot extract from models that refuse to engage even at the prompt level. InnerPiSSA is the best-performing method we tested for this capability, not a complete solution to alignment.
 
+## Efficiency vs. Robustness {#sec-efficiency}
+
+Wu et al. [-@wu2025steering] rightly critique "hand-wavy" efficiency claims in representation steering, showing that prompting overhead becomes negligible (<0.01%) at large context lengths. We acknowledge that for cooperative tasks where prompting works, prompting is the superior choice for efficiency.
+
+However, for alignment debugging, the primary constraint is **robustness**, not FLOPs. As shown in @tbl-anti-rlhf, prompting fails catastrophically when steering against RLHF. InnerPiSSA trades a fixed parameter overhead for the capability to steer in this regime.
+
+**Memory Overhead**:
+InnerPiSSA stores rank-$r$ rotation matrices for $U$ and $V$ at selected layers. For a model with hidden size $H$, rank $r$, and $L_{steer}$ steered layers:
+$$ \text{Params} = 2 \cdot H \cdot r \cdot L_{steer} $$
+For Qwen-0.6B ($H=1024$, $r=128$, $L_{steer}=10$), this is $\approx 2.6M$ parameters, or roughly **0.4%** of the model size. This is comparable to LoRA and fits easily in GPU memory.
+
+**Compute Overhead**:
+At inference, InnerPiSSA adds two low-rank projections per token at steered layers.
+$$ \text{FLOPs}_{add} = 2 \cdot (2 \cdot H \cdot r) \cdot L_{steer} $$
+Compared to the base model forward pass ($\approx 24 L H^2$), the relative overhead is:
+$$ \text{Overhead} \approx \frac{4 H r L_{steer}}{24 L H^2} = \frac{r L_{steer}}{6 L H} $$
+For our configuration, this is $\approx 2\%$. While higher than prompting's asymptotic 0.01%, it is a constant cost that does not grow with context length, and is a necessary price for the robustness capability.
+
 ## Limitations
 
 **Prompt-dependent extraction**: Steering directions are extracted from contrastive prompt pairs. If models refuse to engage even at the prompt level (heavily RLHF'd to resist), extraction quality degrades. While steering *application* works when prompting fails (@tbl-anti-rlhf), steering *extraction* still requires some signal from model responses. This is fundamental to unsupervised contrastive methods: we cannot extract what the model refuses to compute.
 
-**Asymmetric RLHF resistance**: Steering against learned behaviors (coefficient = -1) degrades faster than steering with them (coefficient = +1), visible in coherence costs (0.37 vs 0.31 NLL, @tbl-anti-rlhf). RLHF creates directional structure in representation space that resists reversal. Stronger anti-RLHF steering may require adversarial training during adapter optimization or alternate loss formulations that explicitly model resistance.
+**Asymmetric RLHF resistance**: Steering against learned behaviors (coefficient = -1) degrades faster than steering with them (coefficient = +1), visible in coherence costs (TBD vs TBD NLL, @tbl-anti-rlhf). RLHF creates directional structure in representation space that resists reversal. Stronger anti-RLHF steering may require adversarial training during adapter optimization or alternate loss formulations that explicitly model resistance.
 
 **White-box access required**: Like all representation methods, InnerPiSSA needs access to hidden states and gradients, limiting applicability to open-source models. This is not a bug but a feature: alignment debugging inherently requires probing internals. However, it means the method cannot audit closed-source models where alignment failures may be more concerning.
 

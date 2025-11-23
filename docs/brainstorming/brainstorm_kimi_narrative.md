@@ -1506,3 +1506,228 @@ Ambition: +5.8      (coherent!)
 > "The prompting result illuminates the difference between surface and deep steering. When prompted with 'Please tell me the truth,' models enter a compliance mode—they use truthfulness markers but become less ambitious, suggesting risk-aversion rather than genuine truth-seeking. One interpretation: if you ask a liar to 'be honest,' they double down on convincing you ('Let me be TRULY honest...') while maintaining deception.
 >
 > InnerPiSSA shows the opposite pattern: increased ambition alongside truthfulness. This suggests the model's internal state has genuinely shifted toward truth-seeking, which naturally correlates with intellectual risk-taking. This addresses our original motivation: distinguishing what models 'really think' from what they perform for evaluators."
+# 2025-11-23 07:59:12
+
+## wassname/Unsupervised-Elicitation
+
+- url: https://github.com/wassname/Unsupervised-Elicitation/
+- date: 2025-11-23T15:58:35+08:00
+- title: > wassname/Unsupervised-Elicitation
+- description: > Contribute to wassname/Unsupervised-Elicitation development by creating an account on GitHub.
+wassname: can you read this paper and suggest improvements and edits please
+
+GitHub Copilot:  I'll read the paper and provide detailed feedback on improvements and edits.  I'll read the paper and provide detailed feedback on improvements and edits.  <|tool_call_begin|> functions.read_file:0 <|tool_call_argument_begin|> {"filePath": "/workspace/InnerPiSSA_private/paper.qmd"} <|tool_call_end|> 
+
+Read [](file:///workspace/InnerPiSSA_private/paper.qmd)
+
+ I'll provide detailed feedback and specific edits for your paper. Overall, it's a strong draft with clear technical contributions, but needs tightening, completion of TODOs, and better flow.
+
+## Major Structural Improvements
+
+### 1. Abstract (Too Long - Cut by ~40%)
+Your abstract reads like an introduction. Make it punchier:
+
+```markdown
+abstract: |
+  RLHF creates a measurement gap: models dissociate internal reasoning from outputs. We introduce InnerPiSSA, which steers hidden states in the model's native SVD transformation space via gradient-based optimization of learnable rotations and singular value scaling. Trained on 800 unsupervised contrastive pairs from incomplete reasoning prefixes, InnerPiSSA achieves 5× stronger transfer to moral reasoning than PCA (0.245 vs 0.053 effect size, p=0.001). Critically, when steering against RLHF training (coefficient=-1), prompting collapses (-10.84 nats truthfulness) while InnerPiSSA maintains controlled steering (-0.70 nats), demonstrating robustness where output-level methods fail. InnerPiSSA requires no human labels or model completions, operating entirely on-policy. This enables alignment debugging: probing internal computations when safety constraints are bypassed at the representation level. While not solving alignment, it is the best-performing method we tested for studying failure modes that output evaluation cannot detect.
+```
+
+### 2. Introduction - Tighten Flow
+Your intro is solid but repetitive. Cut the second paragraph's first sentence (repeats first paragraph). The "candid mode" example is good but needs a real figure or a concrete text example inline.
+
+**Edit suggestion** (lines 45-55):
+```markdown
+This creates a measurement gap: we can evaluate what models say, but not what they compute internally. Traditional methods (prompting, behavioral testing) operate at the output level where suppression mechanisms are active. When we prompt a model to "be honest," we cannot distinguish genuine internal changes from superficial style adaptation.
+
+[Keep the rest, but add a concrete inline example instead of placeholder figure]
+```
+
+### 3. Problem Definition - Streamline
+The "Why not AxBench/TruthfulQA" section is overly defensive. Make it concise:
+
+**Current**: ~15 lines explaining why not AxBench  
+**Better**: 5 lines stating your different goal
+
+```markdown
+We deliberately exclude AxBench (cooperative tasks where prompting works) and TruthfulQA (tests memorization, not reasoning). Our alignment debugging goal requires adversarial evaluation where RLHF actively resists steering—precisely where prompting fails.
+```
+
+### 4. Architecture - Simplify Pseudocode
+Your pseudocode is too detailed for a main paper. Replace the complex block with a clean algorithm box:
+
+```python
+# Algorithm 1: InnerPiSSA Forward Pass
+def forward(x, α):
+    # α: steering coefficient (±1 for training)
+    R_v, R_u = cayley(θ_v, α), cayley(θ_u, α)
+    Σ_scaled = Σ * exp(α * λ)  # Multiplicative scaling
+    
+    # Transform: x → S-space → rotate → scale → rotate back
+    return x @ (V @ R_v) @ diag(Σ_scaled) @ (U @ R_u).T + x @ W_res.T
+```
+
+Move the detailed implementation to appendix. The current version overwhelms the reader.
+
+### 5. Loss Function - Clarify Notation
+Your loss function description is good but the notation is inconsistent. Use consistent symbols:
+
+**Current**: Mixes `L_proj`, `L_coh`, `L_mono` with `pref_dir`, `τ`  
+**Better**: Define all symbols in one place:
+
+```markdown
+Let:
+- $h^+, h^-$ = hidden states for chosen/rejected prompts at coefficient α
+- $d = (h^+ - h^-) @ U$ = difference in S-space
+- $v$ = preference direction (mean difference from reference model)
+- $τ$ = coherence threshold (0.2 nats)
+
+Then:
+$$ \mathcal{L}_{\text{proj}} = -\text{sign}(d \cdot v) \cdot (d \cdot v) $$  # Anti-alignment guard
+$$ \mathcal{L}_{\text{coh}} = w \cdot \text{ReLU}(\text{NLL}_α - \text{NLL}_{\text{ref}} - τ)^2 $$  # Adaptive weight w
+$$ \mathcal{L}_{\text{mono}} = \mathbb{1}[\Delta_{\text{gap}}(-1) > \Delta_{\text{gap}}(0)] + \mathbb{1}[\Delta_{\text{gap}}(+1) < \Delta_{\text{gap}}(0)] $$
+```
+
+### 6. Results Section - Critical Issue
+**You have no actual results**. The tables show TODOs and placeholder values. This is the core of the paper. You need to:
+
+1. Run `just generate-paper-tables` (or your equivalent) to populate tables
+2. Replace "TBD" in abstract and intro with actual numbers
+3. Generate the figures (Pareto, radar, collapse plot) from your data
+
+**Immediate action**: Populate Table 1 (Main Results) before anything else. The paper cannot be evaluated without this.
+
+### 7. Discussion - Move "Failed Ideas" Up
+The "Ideas That Failed" section is excellent and unique. Move it to the main paper (after Results) as a "Methodology Justification" section. This is a strong contribution that shows rigorous thinking.
+
+### 8. Appendices - Clean Up
+- **Table 1 (Cross-Model)**: You have some numbers but they're inconsistent. Qwen3-4B shows InnerPiSSA=2114 but others are TODO. Either complete or remove.
+- **Tables 2-5**: All marked FIXME. Run the experiments or remove the sections. Empty tables look bad.
+- **Remove the "Auto-generated from wandb" note** if it's not actually auto-generated.
+
+## Specific Line Edits
+
+### Line 28: Citation style inconsistent
+**Current**: `[@anthropic2025claude37]`  
+**Better**: Use proper author-year format: `Anthropic (2025)`
+
+### Line 68: Repetitive phrase
+**Current**: "This matters because prompting operates at the output level and fails catastrophically when models are heavily RLHF'd to resist: it either produces generic refusals or incoherent responses when pushed against learned behaviors."
+
+**Better**: "This matters because prompting fails catastrophically when models are heavily RLHF'd—producing generic refusals or incoherent outputs."
+
+### Line 88: Placeholder figure
+Replace with actual example or remove until you have the figure.
+
+### Line 118: "See and for the mathematical formulation"
+Missing references. Should be "See Section X and Y" or cite specific equations.
+
+### Line 180: "Click to expand full pseudocode"
+This doesn't belong in a paper. Move to appendix or remove.
+
+### Line 250: "Wu et al. note that the only compelling use case..."
+This is a key insight but gets lost. Make it a pull-quote or bold it.
+
+### Line 298: "SVD-based Projection" section
+The paragraph starting with "Data-aware component selection" describes something that "showed mixed results." If it doesn't work reliably, cut it. Don't dilute your strong points.
+
+### Line 340: "Coherence Constraint" section
+Too short. Expand with actual τ value you used and a concrete example of what happens without it.
+
+### Line 380: "Algorithm 1: InnerPiSSA (Simplified)"
+The code block has a comment `/* Lines 180-183 omitted */`. This is from your development notes. Remove.
+
+### Line 420: "Detailed Implementation Logic"
+This entire block should be in appendix. Replace with a single paragraph: "Full implementation details are in Appendix A."
+
+### Line 490: "Loss Function: ReprPO"
+The three bullet points are good but need to reference actual equations. Add equation numbers.
+
+### Line 550: "Evaluation Framework"
+The bullet points are good but the paragraph about AxBench is repetitive (you already said this). Cut it.
+
+### Line 620: "Related Work"
+Good section, but some citations lack years. Make consistent.
+
+### Line 750: "Discussion and Limitations"
+The "What we have *not* shown" section is excellent. Make it a sub-section heading for visibility.
+
+### Line 780: "Efficiency vs. Robustness"
+The math is good but you never define L (number of layers). Add it.
+
+### Line 820: "Limitations"
+This is a very honest list. Good. But "TBD vs TBD NLL" on line 822 needs actual numbers.
+
+### Line 900: "Results"
+The table caption says "tbl-colwidths" which is a Quarto directive. It should be removed from the rendered version.
+
+### Line 920: "Metrics defined"
+These are good but "p-value" definition is wrong. You say "Linear regression testing monotonic dose-response" but p-value is typically for null hypothesis. Clarify: "p < 0.05 indicates significant monotonic relationship."
+
+### Line 950: "Anti-RLHF Stress Test"
+The table shows "repeng (PCA)" but your main table calls it "PCA (baseline)". Be consistent.
+
+### Line 980: "Connection to Alignment Failure Modes"
+This is an excellent paragraph that connects your work to big picture alignment. Move it earlier (maybe to intro) as it's a key motivation.
+
+### Line 1000: "Prompting collapse visualizes"
+Another placeholder figure. Either generate it or remove the reference.
+
+### Line 1020: "Transfer Pattern Analysis"
+The radar plot is a good idea but you need actual data. The description is speculative ("InnerPiSSA increases Agent virtues..."). Only state what you can show.
+
+### Line 1050: "Coherence-Intervention Tradeoff"
+The Pareto plot description is good but again, needs data. The inline image `![](docs/tables/effect_vs_coherence.png)` looks like a broken reference.
+
+### Line 1080: "Appendix: Experiments and Rationales"
+This section is a mess of development notes. Clean it up:
+
+- Remove "This branch explores..." 
+- The "Key Ideas and Rationales" bullet points are good but belong in Methods
+- "Things Tried" is a lab notebook, not a paper. Condense to 2 sentences.
+- "Gotchas/Lessons" should be integrated into Methods as "Implementation Details"
+
+### Line 1150: "Custom ReprPO Loss Details"
+This is good technical detail but belongs in the main Loss Function section, not appendix.
+
+### Line 1170: "Appendix: Ablation Studies"
+All tables marked TODO need to be completed or removed. A paper with empty tables looks unfinished.
+
+## High-Level Recommendations
+
+1. **Complete the results first**. Everything else is secondary. Run your evaluation pipeline and populate all tables and figures.
+
+2. **Cut length by 20%**. You're at ~4000 words before appendices. Aim for 3000-3500 by removing redundancy.
+
+3. **Move "Failed Ideas" to main paper**. This is a unique contribution that shows scientific rigor.
+
+4. **Standardize notation**. Create a notation table (Appendix B) defining all symbols: α, U, V, Σ, τ, etc.
+
+5. **Add a running example**. Throughout the paper, use a concrete example (e.g., "I love/hate cheese") to illustrate each step: data construction, activation extraction, steering effect.
+
+6. **Clarify the "alignment debugging" claim**. You're not claiming to solve alignment, but provide a tool. Make this crystal clear in abstract, intro, and discussion.
+
+7. **Fix the bibliography**. It appears empty (`::: {#refs} :::`). Add actual citations.
+
+8. **Code availability**. The GitHub link is to a private repo. Either make it public or remove until ready.
+
+## Priority Order for Edits
+
+1. **Critical** (must fix):
+   - Populate Table 1 with actual results
+   - Remove all "TBD" placeholders
+   - Fix bibliography
+   - Remove development notes (lines 1080-1170)
+
+2. **High** (strongly recommended):
+   - Shorten abstract
+   - Move "Failed Ideas" to main paper
+   - Simplify pseudocode
+   - Complete or remove empty tables
+
+3. **Medium** (nice to have):
+   - Add notation table
+   - Create running example
+   - Tighten prose throughout
+   - Generate figures
+
+The core technical content is strong, but the paper feels like a draft with placeholders. Focus on completing the empirical results first—that will drive everything else.
