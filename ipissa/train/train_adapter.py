@@ -1563,7 +1563,7 @@ def train_model(config: TrainingConfig):
     methods = df_res_pv.columns.get_level_values(0).unique()
     for method in methods:
         logger.info(
-            f"Results for method: {method} [logratio * label -> nat's toward label]\n{df_res_pv[method].head(2).round(4)}\n"
+            f"Results for method: {method} [logratio * label -> nat's toward label]\n{df_res_pv[method].head(4).round(4)}\n"
         )
 
     # Generate comprehensive metrics (both text and markdown)
