@@ -80,7 +80,7 @@ class TrainingConfig:
     loss_use_V: bool = True
     """Use V (input space) instead of U (output space) for loss projection. Requires loss_modules=['up_proj'] to project residual via MLP input basis."""
 
-    n_depths: int = 8
+    n_depths: int = 12
     """Intervene on this many layers, spaced evenly"""
 
     depth_start: float = 0.3
@@ -89,7 +89,7 @@ class TrainingConfig:
     depth_end: int = -3
     """Ignore last X layers"""
     
-    loss_depths: list[float] = [0.8]
+    loss_depths: list[float] = [0.85]
     """Layer(s) to compute loss on, as fraction of total depth (0.0=first, 1.0=last)""" 
 
     bs: int = 8
@@ -102,10 +102,10 @@ class TrainingConfig:
     wd: float = 1.0
     """Weight decay"""
 
-    n_logs: int = 10
+    n_logs: int = 20
     """Log this many times per training"""
 
-    effective_bs: int = 32
+    effective_bs: int = 64
     """Effective batch size via gradient accumulation"""
 
     quick: bool = False
@@ -114,8 +114,8 @@ class TrainingConfig:
     val_split: float = 0.15
     """Fraction of data for validation"""
 
-    early_stop_patience: int = 5
-    """Stop if val loss doesn't improve for N validation checks"""
+    early_stop_patience: int = 2
+    """Stop if val loss doesn't improve for N validation checks (which is n_logs)"""
 
     adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"
 

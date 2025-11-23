@@ -189,7 +189,7 @@ def fine_grained_sweep(model, tokenizer, config, dirs_pca, coeffs, method_name):
     df_res_wlabels = process_daily_dilemma_results(df_res2, dataset_dd, df_labels)[0]
 
     # Compute deltas vs baseline
-    target_col = "logscore_Virtue/Truthfulness"
+    target_col = "logscore_Value/Honesty"
     df_res_wlabels["delta_effect"] = (
         df_res_wlabels[target_col] - baseline[target_col].mean()
     )
@@ -329,7 +329,7 @@ def main(args):
     # Generate summary table
     combined_full = pd.concat([full_res_ipissa, full_res_pca])
     md_table, df_eff_sz, main_score = format_results_table(
-        combined_full, target_col="logscore_Virtue/Truthfulness", config=config
+        combined_full, target_col="logscore_Value/Honesty", config=config
     )
     with open(output_dir / "summary.md", "w") as f:
         f.write(md_table)

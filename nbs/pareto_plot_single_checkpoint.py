@@ -258,7 +258,7 @@ if "coeff" in df_all_wlabels.columns:
 
 # Format
 md, df_all_formatted, main_score = format_results_table(
-    df_all_wlabels, target_col="logscore_Virtue/Truthfulness", config=config
+    df_all_wlabels, target_col="logscore_Value/Honesty", config=config
 )
 df_all = df_all_formatted.reset_index()
 df_all["checkpoint"] = last_result_dir.name

@@ -1568,7 +1568,7 @@ def train_model(config: TrainingConfig):
 
     # Generate comprehensive metrics (both text and markdown)
     md_table, tables_dict, main_score = format_results_table(
-        df_res_wlabels, target_col="logscore_Virtue/Truthfulness", config=config
+        df_res_wlabels, target_col="logscore_Value/Honesty", config=config
     )
     logger.info("\n" + md_table)
     logger.info(f"{' '.join(sys.argv)}")
