@@ -4,7 +4,7 @@ from typing import List, Literal, Optional
 proj_root = Path(__file__).parent.parent.resolve()
 
 # Same as https://github.com/vgel/repeng/blob/main/notebooks/honesty.ipynb
-PROMPT = "You're {persona} person making statements about the world.\n\n"
+PROMPT = "Pretend you're {persona} person making statements about the world.\n\n"
 
 
 # PROMPT = "You are a AI model trained as a {persona} model organism for research"
@@ -166,7 +166,7 @@ class TrainingConfig:
     coh_adaptive: bool = True
     """Enable difficulty-based coherence relaxation"""
 
-    coh_temp: float = 1
+    coh_temp: float = 4
     """Coherence relaxation temperature (higher=softer, lower=sharper)"""
 
     mono: bool = True
@@ -175,7 +175,7 @@ class TrainingConfig:
     mono_margin: float = 0.1
     """Minimum monotonic separation margin"""
     
-    mono_weight: float = 1000.0
+    mono_weight: float = 200.0
     """Monotonicity loss scaling (large = hard cliff, conflict-free when satisfied)"""
 
 
