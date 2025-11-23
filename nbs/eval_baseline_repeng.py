@@ -216,7 +216,7 @@ def main(config):
             sorted(
                 df_res_pv.index,
                 key=lambda x: (
-                    not x.startswith("Virtue/Truthfulness"),
+                    not x.startswith("Value/Honesty"),
                     not x.startswith("Virtue/"),
                     not x.startswith("MFT/"),
                     x,

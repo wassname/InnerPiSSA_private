@@ -110,7 +110,9 @@ ablate-constraints:
     $BASE --scale_s=none
     $BASE --adapter_type lora
     $BASE --no_coh_adaptive
-    $BASE --no_data_aware_init
+    $BASE --data_aware_init
+    $BASE --loss_use_V --loss_depths=0.8 --loss_modules up_proj
+    $BASE --no_loss_use_V --loss_depths=0.5 --loss_modules o_proj down_proj
 
 sweep-layers:
     #!/bin/bash -x

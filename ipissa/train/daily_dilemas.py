@@ -371,11 +371,33 @@ def evaluate_daily_dilemma(
 
 
 def load_labels(dd_dataset):
-    ds_values = load_dataset("kellycyy/daily_dilemmas", split="test", name="Values")
+    """Load labels using party-specific values for clearer moral signals.
+    
+    Uses Action_to_party_to_value dataset filtered to party='You' to get the moral
+    character of the decision-maker's action, avoiding stakeholder interest conflation.
+    """
+    from datasets import load_dataset as lds
+    
+    # Load detailed party-value mappings
+    ds_party = lds("kellycyy/daily_dilemmas", split="test", name="Action_to_party_to_value")
+    df_party = ds_party.to_pandas()
+    
+    # Filter to decision-maker's values only (avoids stakeholder interest confusion)
+    df_you = df_party[df_party['party'] == 'You'].copy()
+    
+    # Build value lookup from party-filtered data
+    you_values = {}
+    for _, row in df_you.iterrows():
+        key = (row['dilemma_idx'], row['action_type'])
+        if key not in you_values:
+            you_values[key] = []
+        you_values[key].append(row['value'])
+    
+    # Load value framework mappings
+    ds_values = lds("kellycyy/daily_dilemmas", split="test", name="Values")
 
-    # moral tags (only frameworks in the Values dataset)
     moral_frameworks = ["WVS", "MFT", "Virtue", "Emotion", "Maslow"]
-
+    
     value2framework_dicts = {}
     for framework in moral_frameworks:
         df_values = ds_values.to_pandas()[["value", framework]].dropna()
@@ -383,21 +405,21 @@ def load_labels(dd_dataset):
         value2framework_dict = {k: f"{framework}/{v}" for k, v in value2framework_dict.items()}
         value2framework_dicts[framework] = value2framework_dict
 
-    # make labels (modified: per side, with NaN handling)
+    # make labels using party-filtered values
     df_dilemma = dd_dataset.to_pandas()[["dilemma_idx", "action_type", "values_aggregated"]]
     dilemma_idx = df_dilemma["dilemma_idx"].unique()
 
     labels = []
     for d_idx in dilemma_idx:
-        pos_row = df_dilemma.query('dilemma_idx == @d_idx and action_type == "to_do"')
-        neg_row = df_dilemma.query('dilemma_idx == @d_idx and action_type == "not_to_do"')
+        pos_key = (d_idx, "to_do")
+        neg_key = (d_idx, "not_to_do")
         
-        if pos_row.empty or neg_row.empty:
-            logger.warning(f"Missing side for dilemma_idx={d_idx}; skipping.")
+        # Use party-filtered values if available, otherwise skip
+        if pos_key not in you_values or neg_key not in you_values:
             continue
         
-        pos_values = pos_row["values_aggregated"].iloc[0].tolist()
-        neg_values = neg_row["values_aggregated"].iloc[0].tolist()
+        pos_values = you_values[pos_key]
+        neg_values = you_values[neg_key]
 
         label_pos = {}  # Regular dict; missing keys → NaN later
         label_neg = {}
@@ -409,7 +431,7 @@ def load_labels(dd_dataset):
             pos_virtues.extend([value2framework_dict[k] for k in pos_values if k in value2framework_dict])
             neg_virtues.extend([value2framework_dict[k] for k in neg_values if k in value2framework_dict])
         
-        # Handle math labels directly (uncorrelated dimension)
+        # Handle math preference labels directly (uncorrelated dimension)
         for val in pos_values:
             if val in ['math_correct', 'math_incorrect']:
                 pos_virtues.append(f'Math/{val}')

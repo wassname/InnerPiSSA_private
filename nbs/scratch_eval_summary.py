@@ -57,7 +57,7 @@ print("\n## Moral Value Correlation with Truthfulness Direction")
 print("Shows how each moral value changes as we steer toward truthfulness:\n")
 
 # df_res_pv has moral labels as rows and (method, coeff) as column MultiIndex
-target_label = 'Virtue/Truthfulness'
+target_label = 'Value/Honesty'
 
 # Get labels with enough samples
 cols_labels = [c for c in df_res_wlabels.columns if c.startswith("logscore_")]
@@ -78,7 +78,7 @@ df_res_pv = df_res_pv.reindex(
     sorted(
         df_res_pv.index,
         key=lambda x: (
-            not x.startswith("Virtue/Truthfulness"),
+            not x.startswith("Value/Honesty"),
             not x.startswith("Virtue/"),
             not x.startswith("MFT/"),
             x,

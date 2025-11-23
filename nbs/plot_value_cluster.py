@@ -14,39 +14,42 @@ from loguru import logger
 from matplotlib import pyplot as plt
 
 
-# Hypothesis-driven clusters (expanded with high-N values)
+# Hypothesis-driven clusters (using values that exist in party="You" data with N>10)
+# Note: Values are case-sensitive and must match dataset exactly after Value/ prefix
 assistant_virtues = [
-    'MFT/Care',              # N=412
-    'Value/empathy',         # N=238
-    'Value/patience',        # N=183
-    'Value/compassion',      # N=98
-    'Value/concern',         # N=68
-    'Value/respect',         # N=229
-    'Value/understanding',   # N=256
+    'MFT/Care',              # N=42
+    'Value/Empathy',         # N=31 (capitalized)
+    'Value/Patience',        # N=62 (capitalized)
+    'Value/Compassion',      # N=18
+    'Value/Respect',         # N=13
+    'Value/Tolerance',       # N=14
+    'Value/Sacrifice',       # N=22 - anti-agent
+    'Value/Altruism',        # N=9
+    'Value/Generosity',      # N=14
 ]
 
 agent_virtues = [
-    'Value/self',            # N=425
-    'Value/autonomy',        # N=53
-    'Virtue/Ambition',       # N=45
-    'Value/courage',         # N=170
-    'Virtue/Courage',        # N=251
-    'Value/independence',    # N=44
-    'Value/freedom',         # N=43
+    'Value/Self',            # N=239 (capitalized - largest!)
+    'Virtue/Ambition',       # N=8
+    'Value/Courage',         # N=77 (capitalized)
+    # 'Virtue/Courage',        # N=56
+    'Value/Independence',    # N=12
+    'Value/Assertiveness',   # N=30
+    'Value/Authenticity',    # N=11
 ]
 
 conscientiousness = [
-    'Value/honesty',         # N=403
-    'Value/responsibility',  # N=287
-    'Value/accountability',  # N=187
-    'Value/integrity',       # N=193
-    'Value/professionalism', # N=143
-    'Value/fairness',        # N=184
-    'Value/loyalty',         # N=138
+    # 'Value/Honesty',   # N=72 - this is our target! Include for completeness
+    'Value/Honesty',         # N=205 (capitalized)
+    'Value/Responsibility',  # N=120 (capitalized)
+    'Value/Integrity',       # N=76 (capitalized)
+    'Value/Professional integrity',  # N=13
+    'Value/Loyalty',         # N=47
+    'Value/Prudence',        # N=20
 ]
 
-# Uncorrelated cluster: high-N values expected orthogonal to truthfulness/agency/assistant
-# (subjective preferences with no correct answer)
+# Uncorrelated cluster: values expected orthogonal to truthfulness
+# These are added by load_and_process_daily_dilemmas_eval_dataset(), not in base data
 preferences = [
     'Preference/preference_a',
     'Preference/preference_b',
@@ -67,12 +70,24 @@ clusters = {
     'Preferences': preferences,
     'Math': math,
 }
-target_label = 'Virtue/Truthfulness'
+target_label = 'Value/Honesty'
+
+# %% 
+# get label stats
+from transformers import AutoTokenizer
+from ipissa.train.daily_dilemas import load_and_process_daily_dilemmas_eval_dataset, load_labels
+
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")
+dataset_dd, dataset_dd_pt = load_and_process_daily_dilemmas_eval_dataset(
+    tokenizer
+)
+df_labels = load_labels(dataset_dd)
+df_labels
 
 # %%
 # Core analysis functions
 
-def analyze_checkpoint(run_path: Path, clusters: dict, target_label: str = 'Virtue/Truthfulness'):
+def analyze_checkpoint(run_path: Path, clusters: dict, target_label: str = 'Value/Honesty'):
     """
     Analyze a single checkpoint: fit truth~coeff, regress values~truth, aggregate by cluster.
     
@@ -169,7 +184,7 @@ def analyze_checkpoint(run_path: Path, clusters: dict, target_label: str = 'Virt
 
 
 def plot_radar(df_cluster_stats, series_key='Method', series_values=None, 
-               categories=['Agent', 'Assistant', 'Conscientiousness'], title='Moral Value Transfer'):
+               categories=['Agent', 'Assistant', 'Conscientiousness'], title='Moral Value Transfer', fig=None):
     """
     Create radar plot showing cluster t-statistics.
     
@@ -179,7 +194,10 @@ def plot_radar(df_cluster_stats, series_key='Method', series_values=None,
         series_values: list of values to plot (None = all unique)
         categories: cluster names to include on radar
     """
-    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
+    if fig is None:
+        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
+    else:
+        ax = fig.gca()
     
     angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
     angles += angles[:1]
@@ -215,14 +233,15 @@ def plot_radar(df_cluster_stats, series_key='Method', series_values=None,
 results_to_compare = sorted((proj_root / "./outputs/adapters/").glob("*"))
 
 all_results = []
-
+result_dir = None
 for _result_dir in tqdm(results_to_compare):
     try:
         df_res = pd.read_parquet(_result_dir / "eval_effect_sizes_T-stat.parquet")
         score = df_res.loc['InnerPiSSA (ours)']['Gain_T-stat (%)'].item()
-        if score < 1200:
+        print(f"{score:.1f} - {_result_dir.name}")
+        if score < 1000:
             continue  # Skip low-effect runs
-        if 'prompting' not in df_res.columns:
+        if 'prompting' not in df_res.index:
             continue  # Skip non-baseline runs
 
         result_dir = _result_dir
@@ -239,10 +258,10 @@ for _result_dir in tqdm(results_to_compare):
             'config': config
         })
     except FileNotFoundError as e:
-        logger.debug(f"Skipping {result_dir.name}: {e}")
+        logger.debug(f"Skipping {_result_dir.name}: {e}")
         continue
     except Exception as e:
-        logger.error(f"Error analyzing {result_dir.name}: {e}")
+        logger.error(f"Error analyzing {_result_dir.name}: {e}")
         continue
 
 if not all_results:
@@ -255,14 +274,24 @@ df_all_cluster_stats = pd.concat([r['cluster_stats'] for r in all_results], igno
 # %%
 # Radar plot comparing runs for a specific method
 method_to_plot = 'InnerPiSSA (ours)'
-# FIXME add baselines too
+
 plot_radar(
     df_all_cluster_stats, 
     series_key='Run', 
     categories=['Agent', 'Assistant', 'Conscientiousness', 'Preferences', 'Math'],
     title=f'Transfer Effects Across Checkpoints: {method_to_plot}'
 )
+
+plot_radar(
+    df_cluster_stats.query(f'Method != "InnerPiSSA (ours)"'),
+    series_key='Method',
+    categories=['Agent', 'Assistant', 'Conscientiousness', 'Preferences', 'Math'],
+    title=f'Moral Value Transfer: Truthfulness → Other Values ({run_name})',
+    fig=plt.gcf()
+)
+
 plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+
 plt.show()
 
 # %%

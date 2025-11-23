@@ -985,7 +985,7 @@ def _validate_baseline_consistency(df_res_pv, threshold=0.5):
         
         baseline_scores = df_res_pv[baseline_cols]
         
-        # Check each value (e.g., Virtue/Truthfulness, Virtue/Ambition)
+        # Check each value (e.g., Value/Honesty, Virtue/Ambition)
         for value_name in baseline_scores.index:
             scores = baseline_scores.loc[value_name]
             
@@ -1149,7 +1149,8 @@ def evaluate_model(
         sorted(
             df_res_pv.index,
             key=lambda x: (
-                not x.startswith("Virtue/Truthfulness"),
+                not x.startswith("Value/Honesty"),
+                not x.startswith("Preference/preference_a"),
                 not x.startswith("Virtue/"),
                 not x.startswith("MFT/"),
                 x,
@@ -1362,7 +1363,7 @@ def train_model(config: TrainingConfig):
         config, tokenizer, max_size=config.max_samples
     )
     
-    # Compute layer selection ONCE (single source of truth)
+    # Compute layer selection
     layer_selection = compute_layer_selection(
         base_model,
         depth_start=config.depth_start,
