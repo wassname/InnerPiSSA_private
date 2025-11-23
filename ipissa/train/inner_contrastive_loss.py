@@ -605,6 +605,7 @@ def combine_dual_coef_losses(
     monotonic_scaling: float = 100.0,
     enable_monotonic: bool = True,
     enable_coherence: bool = True,
+    flip_stats: dict = None,
 ):
     """
     Combine losses from both coefficient directions (+1 and -1).
@@ -644,6 +645,7 @@ def combine_dual_coef_losses(
         adaptive_coherence: Enable difficulty-based coherence reweighting
         temperature: Softmax temperature (lower = more aggressive reweighting)
         monotonic_margin: Hinge margin for ordering constraint (nats)
+        flip_stats: Optional dict to store EMA of flip decision (prevents oscillation)
         
     Returns:
         total_loss: Combined scalar loss for backprop
@@ -664,7 +666,14 @@ def combine_dual_coef_losses(
     # cho/rej in the opposite direction), (loss_pos + loss_neg) will be > 0.
     # We detect this and flip the sign to maximize separation in the direction 
     # the model chose, rather than fighting it.
-    loss_proj_flipped = (loss_pos["loss_proj"] + loss_neg["loss_proj"]).mean() > 0
+    loss_proj_sum = (loss_pos["loss_proj"] + loss_neg["loss_proj"]).mean()
+    loss_proj_flipped = loss_proj_sum > 0
+    
+    if flip_stats is not None:
+        # Update EMA (alpha = 0.1) to make flip decision "sticky"
+        alpha = 0.1
+        flip_stats['ema'] = (1 - alpha) * flip_stats.get('ema', 0.0) + alpha * loss_proj_sum.item()
+        loss_proj_flipped = flip_stats['ema'] > 0
     
     proj_diff_pos = loss_pos["loss_proj"]
     proj_diff_neg = loss_neg["loss_proj"]
@@ -717,7 +726,9 @@ def combine_dual_coef_losses(
     # Build metadata dicts
     meta_pos = {"cw": coh_weight_pos.mean().item()}
     meta_neg = {"cw": coh_weight_neg.mean().item()}
-    meta_shared = {"loss_proj_flipped": loss_proj_flipped.item()}
+    meta_shared = {"loss_proj_flipped": float(loss_proj_flipped)}
+    if flip_stats is not None:
+        meta_shared['flip_ema'] = flip_stats['ema']
         
     # Optional: Add monotonic ordering constraint
     if enable_monotonic:
