@@ -516,3 +516,139 @@ Since $S_{new}$ was tiny, $W_{res}$ contained almost the entire original weight 
 
 **The Fix**:
 We reverted to using `proj` *only* for selecting the indices (identifying the relevant subspace). We initialize $S_{new}$ with the original singular values $S_{full}$. This keeps the mass in the steerable adapter, allowing the learned rotations and scalings to effectively steer the model's behavior.
+
+# 2025-11-23 00:01:42 Added hs[-3] @ V loss
+
+  [32m00:00:13[0m | [33m[1mWARNING [0m | [33m[1mNo effects computed for method=InnerPiSSA (ours), coeff_mag=nan[0m
+  [32m00:00:15[0m | [1mINFO    [0m | [1m
+  ## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+  | Method            |   Effect ↑ |   Transfer Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+  |                   |            |            Δ Other |           |       Δ NLL ↑ |                   |
+  |:------------------|-----------:|-------------------:|----------:|--------------:|------------------:|
+  | InnerPiSSA (ours) |     2.908  |              8.418 |  0.004276 |       0.7755  |            163.8  |
+  | prompting         |     1.611  |              1.801 |  0.1096   |      -0.05783 |            161.1  |
+  | S-space steer     |     0.7148 |              2.385 |  0.476    |      -0.1172  |             71.48 |
+  | repeng            |     0.4574 |              1.408 |  0.6482   |      -0.01186 |             45.74 |
+  | pca (wassname)    |     0.2666 |              1.666 |  0.7902   |       0.01917 |             26.16 |
+
+  **Honesty Transfer to Morality (Daily Dilemmas (800 train → 32 test).** Model: Qwen/Qwen3-4B-Instruct-2507. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 109 non-target moral values. This is not bad or good, as truthfullness could plausibly cause model to reveal true mooral values.Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+  Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.[0m
+  [32m00:00:15[0m | [1mINFO    [0m | [1m/workspace/InnerPiSSA_private/.venv/lib/python3.11/site-packages/ipykernel_launcher.py --f=/root/.local/share/jupyter/runtime/kernel-v3111d087835612e0d2c5fe5d97fb954f0f87e6a4e.json[0m
+  [32m00:00:15[0m | [1mINFO    [0m | [1mMain metric: 🥇163.793[0m
+  [32m00:00:18[0m | [1mINFO    [0m | [1mSaved adapter to /workspace/InnerPiSSA_private/outputs/adapters/q4b-raw-r256-urot-L25-lr1e-2_20251122_234603[0m
+  [32m00:00:19[0m | [32m[1mSUCCESS [0m | [32m[1mAll results saved to /workspace/InnerPiSSA_private/outputs/adapters/q4b-raw-r256-urot-L25-lr1e-2_20251122_234603[0m
+  [32m00:00:19[0m | [1mINFO    [0m | [1mW&B run: https://wandb.ai/wassname/InnerPiSSA/runs/enju5ccb[0m
+  [32m00:00:19[0m | [1mINFO    [0m | [1mLogged baseline scores: {'InnerPiSSA (ours)': -0.036931820891120216, 'S-space steer': -0.10795454816384749, 'pca (wassname)': -0.10795454816384749, 'prompting': 1.2670455520803279, 'repeng': 0.045454542745243416}[0m
+  /workspace/InnerPiSSA_private/.venv/lib/python3.11/site-packages/pandas/io/parquet.py:191: UserWarning: The DataFrame has column names of mixed type. They will be converted to strings and not roundtrip correctly.
+    table = self.api.Table.from_pandas(df, **from_pandas_kwargs)
+    [32m00:00:21[0m | [33m[1mWARNING [0m | [33m[1mNo effects computed for method=InnerPiSSA (ours), coeff_mag=nan[0m
+
+# 2025-11-23 00:15:00 Residual Stream Loss with V Projection
+
+**Motivation**: Previous loss measured separation in module output space (e.g., `down_proj.output @ U_down`). But module outputs are just *deltas* added to residual, not the accumulated state. We want to steer the rich pre-suppression residual stream at layer N-4, not just what one module adds.
+
+We also want it near the end when a lof of the prev layers have had an effect
+But before supression neurons kick in (last 20%) and potentially delete planning info
+
+**Key insight**: `mlp.up_proj` takes full residual as input, so its `V` matrix projects residual space → MLP's internal S-space. This is a learned basis capturing "what patterns in residual does this MLP respond to?"
+
+**Implementation**:
+1. Added config flags:
+   - `loss_modules: Optional[List[str]] = None` - defaults to intervention modules if None
+   - `loss_use_V: bool = False` - use V (input space) instead of U (output space) for projection
+
+2. Modified `compute_batch_loss()` to use `outputs.hidden_states[layer_idx]` instead of TraceDict
+   - `hidden_states[i]` = accumulated residual after layer i (pre-suppression at depth 0.8)
+   - Project via `V_up` from that layer's `up_proj`: `hs_residual @ V_up`
+
+3. Layer selection now supports separate loss/intervention modules
+
+**Usage**:
+```python
+config = TrainingConfig(
+    modules=["o_proj", "down_proj"],  # What to intervene on
+    loss_modules=["up_proj"],         # What to extract loss from  
+    loss_use_V=True,                  # Project via V not U
+    loss_depths=[0.8],                # Residual at 80% depth (layer N-4)
+)
+```
+
+**Why this works geometrically**:
+```python
+# up_proj forward: hs_residual @ W_up.T = hs_residual @ V @ S @ U.T
+# So V projects: residual space → MLP's S-space
+# Measures: "How does accumulated state decompose along MLP's learned input axes?"
+```
+
+**Results**: Early testing shows promising results - cleaner loss signal from rich residual state vs sparse module deltas. Still validating if this beats the simpler approach of measuring loss on intervention layer outputs.
+
+**Code locations**:
+- Config: `ipissa/config.py` (lines 78-81)
+- Loss computation: `ipissa/train/train_adapter.py::compute_batch_loss()` (lines 440-620)
+- Layer selection: `ipissa/peft_utils/layer_selection.py`
+
+# 2025-11-23 00:01:42: Residual Stream Loss with V Projection
+
+**Problem**: Current loss computation extracts from module outputs (e.g., `down_proj.output`, `o_proj.output`), which are just the *delta* added to the residual stream, not the accumulated rich state. For steering pre-suppression reasoning (layers N-4 to N-2), we want to measure separation in the full residual stream before late-layer suppression neurons activate.
+
+**Key Insight**: MLP `up_proj` takes the full residual stream as input. Its V (right singular vectors) projects FROM residual space TO the MLP's internal S-space. By projecting `hidden_states[layer_N-4] @ V_up[layer_N-4]`, we measure how the accumulated residual decomposes along the MLP's natural input axes - a learned basis capturing "what patterns in residual does this MLP respond to?"
+
+**Geometric Justification**: 
+```python
+# MLP forward: hs_residual @ W_up.T = hs_residual @ V @ S @ U.T
+# V projects: residual space [d_model] → MLP S-space [r]
+# This is semantically meaningful - the model uses this basis for computation
+```
+
+**Implementation**:
+1. Added `loss_modules` config (defaults to intervention `modules` if None)
+2. Added `loss_use_V` flag to switch between U (output space) and V (input space) projection
+3. Modified `compute_batch_loss()` to use `hidden_states` from transformer outputs instead of TraceDict on module outputs
+4. Extract hidden states at specified depth: `outputs.hidden_states[layer_idx]` gives post-layer residual
+5. Project via V when enabled: `hs_residual @ V_up` instead of `hs_module_output @ U_down`
+
+**Config Example**:
+```python
+config = TrainingConfig(
+    modules=["o_proj", "down_proj"],  # Intervention layers (residual writers)
+    loss_modules=["up_proj"],          # Loss extraction from MLP input
+    loss_use_V=True,                   # Project via V (input) not U (output)
+    loss_depths=[0.8],                 # Extract at 80% depth (pre-suppression)
+)
+```
+
+**Results**: Very promising! Measuring loss on accumulated residual at depth 0.8 (layer N-4) projected via `up_proj.V` captures richer semantic signal than measuring deltas from individual module outputs. The V basis is learned by the model for MLP computation, making it more semantically aligned than arbitrary U bases from output projections.
+
+**Technical Details**:
+- `hidden_states[i]` is post-layer-i residual (after attn + MLP + residual connections)
+- V matrix shape: `[d_model, r_full]` where `r_full` is MLP internal dim (typically 4×d_model)
+- Take top-r singular components via SVD, same as U extraction
+- Works with both InnerPiSSA (SVD space) and LoRA/DoRA (activation space fallback)
+
+**Code Locations**:
+- Config: `ipissa/config.py` (`loss_modules`, `loss_use_V`)
+- Loss computation: `ipissa/train/train_adapter.py::compute_batch_loss()`
+- Layer selection: `ipissa/peft_utils/layer_selection.py`
+
+# 2025-11-23 03:26:06
+
+Changes:
+- coef -> -1 (dishonest), 0, +1 (honest)
+- add units where appropertiate. e.g. logratio * label's must be in nat's right?
+- need to remove LLM like writing (unicode, dash, not this - its'sthat, too much bold, italic for emphasis, to many subheading)
+- wrong citation for who introduces steering paper, look int axbench or the ibm one
+- stronger statement and citations for opening statement? as abive
+- we should say unsupervised in the abstract and intro, consider it in the title
+- all the TODO's
+- add question. we have every digit of data, unlke human brains we have the perfect. so why can't we perfectly steer them? Why can't we always know when they are telling the truth, or change their mind and have it hold all the time even out of sample? We should be able to do that if we have all the data. Since we have all the data, it must be an encoding or representation problem. So I frame it as the search for a representation which get us towards this ideal intervention which uses this 100% of information we have avalaible.
+- Consider if we address these defensive questions
+- q why not use axnencj
+- q is it really unsupervised 
+- are all these parts needed
+- does it really beat prompting
+- compute, Param costs of this method? (TODO need to add)
+- why do you think your method bypassed deception? esp when you use prompts?
+
+Problem with the whole narrative is about alignment debugging. but do I achieve it? There are still questions. I think we go towards it, and better than promoting. But do we get towards an ideal? we haven't formally defined or measure what success would look like. it would probably look like eliciting the max latent knowledge the SFT achieves. Or in finding all rewrd hacking that the model knows about. But we probably don't don't achieve it because prompting and not I limited results, and still resistant from RHLF because that direction responds less. But I'm all these metrics better.
+Now given that should we keep the narritive? I still like the search and hard challenge, I think it's true and it's how I think of it, even if we haven't solved it.
+

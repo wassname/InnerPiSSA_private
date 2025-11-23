@@ -144,7 +144,18 @@ def test_evaluate_model_with_adapter():
     
     # Register and setup adapter
     register_ipissa_peft()
-    model = setup_adapter(base_model, config)
+    # Need to compute layer selection to get target_modules regex
+    from ipissa.peft_utils.layer_selection import compute_layer_selection
+    layer_selection = compute_layer_selection(
+        base_model,
+        depth_start=config.depth_start,
+        depth_end=config.depth_end,
+        n_depths=config.n_depths,
+        loss_depths=config.loss_depths,
+        modules=config.modules,
+        loss_modules=config.loss_modules,
+    )
+    model = setup_adapter(base_model, config, layer_selection.target_modules)
     
     # Create tiny synthetic dataset instead of loading full dataset
     # This makes the test faster and more reliable

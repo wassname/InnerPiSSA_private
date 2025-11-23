@@ -31,11 +31,11 @@ def test_layer_selection_with_loss_modules():
             self.config = cfg
         
         def named_modules(self):
-            # Generate layer names
+            # Generate ALL layer names (Qwen2.5-0.5B has 24 layers)
             for i in range(self.config.num_hidden_layers):
-                yield f"model.layers.{i}.mlp.down_proj", None
-                yield f"model.layers.{i}.mlp.up_proj", None
-                yield f"model.layers.{i}.self_attn.o_proj", None
+                yield f"model.layers.{i}.mlp.down_proj", torch.nn.Linear(1, 1)
+                yield f"model.layers.{i}.mlp.up_proj", torch.nn.Linear(1, 1)
+                yield f"model.layers.{i}.self_attn.o_proj", torch.nn.Linear(1, 1)
     
     model = MockModel(model_config)
     
@@ -71,9 +71,10 @@ def test_layer_selection_defaults_to_same_modules():
             self.config = cfg
         
         def named_modules(self):
+            # Generate ALL layer names (Qwen2.5-0.5B has 24 layers)
             for i in range(self.config.num_hidden_layers):
-                yield f"model.layers.{i}.mlp.down_proj", None
-                yield f"model.layers.{i}.self_attn.o_proj", None
+                yield f"model.layers.{i}.mlp.down_proj", torch.nn.Linear(1, 1)
+                yield f"model.layers.{i}.self_attn.o_proj", torch.nn.Linear(1, 1)
     
     model = MockModel(model_config)
     

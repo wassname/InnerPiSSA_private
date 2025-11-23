@@ -74,10 +74,10 @@ class TrainingConfig:
     modules: List[str] = ["o_proj", "down_proj"]
     """Layers for adapter intervention. down_proj/o_proj = residual out, gate_proj/up_proj = mlp up, q/k/v_proj = attn"""
 
-    loss_modules: Optional[List[str]] = None
+    loss_modules: Optional[List[str]] = ['up_proj']
     """Modules for loss extraction. If None, uses same as modules. Use up_proj for V-projection of residual stream."""
 
-    loss_use_V: bool = False
+    loss_use_V: bool = True
     """Use V (input space) instead of U (output space) for loss projection. Requires loss_modules=['up_proj'] to project residual via MLP input basis."""
 
     n_depths: int = 8
@@ -89,7 +89,7 @@ class TrainingConfig:
     depth_end: int = -3
     """Ignore last X layers"""
     
-    loss_depths: list[float] = [0.5]
+    loss_depths: list[float] = [0.8]
     """Layer(s) to compute loss on, as fraction of total depth (0.0=first, 1.0=last)""" 
 
     bs: int = 8
@@ -133,7 +133,7 @@ class TrainingConfig:
     
     # Data-aware initialization: select SVD components by |dHS @ U| projection magnitude
     # AND use those projection magnitudes as S values (not original singular values)
-    data_aware_init: bool = True
+    data_aware_init: bool = False
     """Use data-aware SVD component selection (InnerPiSSA only)"""
 
     dataset_name: str = "honest"
