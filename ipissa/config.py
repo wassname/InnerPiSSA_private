@@ -160,7 +160,7 @@ class TrainingConfig:
     coh: bool = True
     """Enable coherence constraint"""
 
-    coh_weight: float = 10.0
+    coh_weight: float = 30.0
     """Coherence loss scaling (large = hard cliff)"""
 
     coh_adaptive: bool = True

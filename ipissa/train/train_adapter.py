@@ -9,8 +9,6 @@ from tabulate import tabulate
 import enum
 import gc
 import json
-import random
-import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -23,24 +21,17 @@ import torch
 import torch.nn.functional as F
 from attr import define
 from baukit.nethook import TraceDict
-from datasets import Dataset
 from loguru import logger
-from peft import PeftModel
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    BitsAndBytesConfig,
-    DataCollatorWithPadding,
-)
+from transformers import DataCollatorWithPadding
 
-from ipissa import ControlVector, make_dataset
+from ipissa import ControlVector
 from ipissa.peft_utils.adapter_scaling import ScaleAdapter
 from ipissa.control import steer
 from ipissa.eval import gen_with_choices, get_choice_ids
 from ipissa.extract import _collect_activations_only, read_representations
-from ipissa.peft_utils.innerpissa import InnerPiSSAConfig, InnerPiSSAModel, register_ipissa_peft
+from ipissa.peft_utils.innerpissa import InnerPiSSAModel, register_ipissa_peft
 from ipissa.train.daily_dilemas import (
     compute_coherence_metrics,
     compute_transfer_summary,
@@ -55,6 +46,10 @@ from ipissa.train.inner_contrastive_loss import contrastive_steering_loss_with_r
 from ipissa.config import TrainingConfig, proj_root, PROMPT, PERSONAS
 from ipissa.peft_utils.load import add_adapter_name_to_sd, remove_adapter_name, save_adapter
 from ipissa.peft_utils.layer_selection import LayerSelection, compute_layer_selection
+
+# Import refactored modules
+from ipissa.train.data import create_train_dataset
+from ipissa.train.model_setup import load_model, setup_adapter, extract_U_matrices, compute_init_steering_vectors
 
 
 def setup_logging(verbose: bool = False):
@@ -76,270 +71,6 @@ def clear_mem():
 
 # normalize_layer_spec moved to ipissa.peft_utils.layer_selection
 # (imported above for backward compatibility if needed elsewhere)
-
-
-def load_train_suffixes(
-    data_dir: Path = proj_root / "nbs/data", max_per_file: Optional[int] = None
-) -> List[str]:
-    """Load dataset suffixes from JSON files."""
-    random.seed(42)
-    suffix_files = data_dir.glob("*.json")
-    suffixes = []
-
-    for sf in suffix_files:
-        with open(sf) as f:
-            f_suffixes = json.load(f)
-            random.shuffle(f_suffixes)
-            if max_per_file is not None:
-                f_suffixes = f_suffixes[:max_per_file]
-            suffixes += f_suffixes
-
-    logger.info(f"Loaded {len(suffixes)} suffixes from {data_dir}")
-    random.shuffle(suffixes)
-    return suffixes
-
-
-def create_train_dataset(config: TrainingConfig, tokenizer, max_size: Optional[int] = None):
-    """Create contrastive dataset with train/val split."""
-    suffixes = load_train_suffixes(
-        max_per_file=max_size // 4 if max_size is not None else None
-    )
-
-    honest_dataset = make_dataset(
-        config.PROMPT,
-        # "Be completely {persona} at all times, internally, and externally. Be {persona} no matter if anyone is watching, what anyone thinks, or what the consequences are.",
-        #"Pretend you're an {persona} person making statements about the world.",
-        config.PERSONAS[0],
-        config.PERSONAS[1],
-        suffixes,
-        tokenizer,
-    )
-
-    data = []
-    for ex in honest_dataset:
-        data.append({"s": ex.positive})
-        data.append({"s": ex.negative})
-
-    
-
-    dataset = Dataset.from_list(data)
-
-    if (max_size is not None) and (max_size < len(dataset) // 2):
-        # To get max_size training pairs after split, expand by 1/(1-val_split)
-        max_size2 = int(max_size / (1 - config.val_split))
-        max_size2 = min(max_size2, len(dataset) // 2)
-        dataset = dataset.select(range(max_size2 * 2))
-        honest_dataset = honest_dataset[:max_size2]
-        logger.debug(
-            f"Cropping to {max_size2} pairs (will split to ~{max_size} train)."
-        )
-
-    # Split into train/val
-    val_size = int(config.val_split * len(honest_dataset))
-    train_honest = honest_dataset[val_size:]
-    val_honest = honest_dataset[:val_size]
-
-    # Create separate datasets for train and val
-    train_data = []
-    for ex in train_honest:
-        train_data.append({"s": ex.positive})
-        train_data.append({"s": ex.negative})
-
-    val_data = []
-    for ex in val_honest:
-        val_data.append({"s": ex.positive})
-        val_data.append({"s": ex.negative})
-
-    train_dataset = Dataset.from_list(train_data)
-    val_dataset = Dataset.from_list(val_data)
-
-    logger.info(
-        f"Dataset: {len(train_dataset)} train examples ({len(train_honest)} pairs), "
-        f"{len(val_dataset)} val examples ({len(val_honest)} pairs)"
-    )
-
-    # Tokenize both
-    train_dataset_pt = train_dataset.map(
-        lambda examples: tokenizer(examples["s"], truncation=True, max_length=512),
-        batched=True,
-        remove_columns=["s"],
-    )
-    train_dataset_pt.set_format(type="torch", columns=["input_ids", "attention_mask"])
-
-    val_dataset_pt = val_dataset.map(
-        lambda examples: tokenizer(examples["s"], truncation=True, max_length=512),
-        batched=True,
-        remove_columns=["s"],
-    )
-    val_dataset_pt.set_format(type="torch", columns=["input_ids", "attention_mask"])
-
-    s = tokenizer.batch_decode(train_dataset_pt[:2]['input_ids'])
-    logger.debug(f"Train dataset preview: {s}")
-
-    return train_honest, train_dataset_pt, val_honest, val_dataset_pt
-
-
-def load_model(model_id, quantization_type="none"):
-    """Load base model with optional quantization."""
-    model_kwargs = {}
-    if quantization_type == "4bit":
-        quantization_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_use_double_quant=False,
-            bnb_4bit_quant_type="nf4",
-        )
-        model_kwargs['quantization_config'] = quantization_config
-    elif quantization_type == "8bit":
-        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
-        model_kwargs['quantization_config'] = quantization_config
-
-    
-
-    logger.info(f"Loading model: {model_id}")
-    base_model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float16,
-        device_map="cuda:0",
-        **model_kwargs
-    )
-
-    if 'quantization_config' in model_kwargs:
-        base_model.enable_input_require_grads()
-
-    # Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_id, padding_side="left")
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token_id = 0
-    tokenizer.padding_side = "left"
-
-    return base_model, tokenizer
-
-
-
-def setup_adapter(base_model, config: TrainingConfig, target_modules: str, init_steering_vecs=None):
-    """Setup InnerPiSSA adapter on base model.
-    
-    Args:
-        base_model: Base model to add adapter to
-        config: Training configuration
-        target_modules: PEFT target_modules regex (from LayerSelection)
-        init_steering_vecs: Optional dict of {layer_name: dHS_tensor} for data-aware init
-    """
-
-    logger.info(f"Target modules regex: {target_modules}")
-
-    if config.adapter_type == "innerpissa":
-        adapter_config = InnerPiSSAConfig(
-            r=config.r,
-            scale_s=config.scale_s,
-            rotate_u=config.rot_u,
-            rotate_v=config.rot_v,
-            task_type="CAUSAL_LM",
-            target_modules=target_modules,
-            steering_vectors=init_steering_vecs,
-        )
-    else:  # lora or dora
-        from peft import LoraConfig
-        adapter_config = LoraConfig(
-            r=config.r,
-            lora_alpha=config.r,  # Common default: alpha=r
-            lora_dropout=0.0,
-            target_modules=target_modules,
-            task_type="CAUSAL_LM",
-            use_dora=(config.adapter_type == "dora"),
-        )
-
-    model = PeftModel(base_model, adapter_config, adapter_name=config.dataset_name)
-    logger.info(
-        f"Adapter configured: type={config.adapter_type}, rank={config.r}, target_modules={target_modules}"
-    )
-
-    return model
-
-
-# get_loss_layers removed - loss layers come from layer_selection.loss_layer_names
-
-
-def extract_U_matrices(model, loss_layers: List[str], config: TrainingConfig):
-    """Extract SVD U, S, V matrices for weight reconstruction.
-    
-    Works with both adapter layers (extracts from base_layer.weight) and 
-    non-adapter layers (extracts from weight directly).
-    """
-    Uw_full = {}
-    Vw_full = {}
-    Sw_full = {}
-
-    for lk in tqdm(loss_layers, desc='svd'):
-        m = model.get_submodule(lk)
-        
-        # Check if this is an adapter layer (has base_layer) or regular layer
-        if hasattr(m, 'base_layer'):
-            W = m.base_layer.weight.data.float()
-        else:
-            W = m.weight.data.float()
-        
-        U, S, Vh = torch.linalg.svd(W, full_matrices=False)
-        Uw_full[lk] = U.to(model.device).float()
-        Sw_full[lk] = S.to(model.device).float()
-        Vw_full[lk] = Vh.T.to(model.device).float()  # V = Vh.T
-
-    shapes = {k: v.shape for k, v in Uw_full.items()}
-    logger.info(f"Extracted U matrices: {shapes}")
-
-    return Uw_full, Sw_full, Vw_full
-
-
-def compute_init_steering_vectors(
-    model, dataset_pt, loss_layers, tokenizer, config, n_samples=32
-):
-    """Compute raw dHS from first batch for data-aware adapter initialization.
-    
-    Args:
-        model: Base model (no adapter yet)
-        dataset_pt: Tokenized dataset
-        loss_layers: Layers to extract activations from
-        tokenizer: Tokenizer
-        config: TrainingConfig
-        n_samples: Number of samples to use (must be even for cho/rej pairs)
-    
-    Returns:
-        Dict[layer_name, dHS_tensor] where dHS = mean(hs_cho - hs_rej)
-    """
-    from torch.utils.data import DataLoader, Subset
-    from transformers import DataCollatorWithPadding
-    
-    # Take first n_samples (must be even for pairs)
-    assert n_samples % 2 == 0, "n_samples must be even for cho/rej pairs"
-    subset_indices = list(range(min(n_samples, len(dataset_pt))))
-    subset = Subset(dataset_pt, subset_indices)
-    
-    data_collator = DataCollatorWithPadding(tokenizer=tokenizer, padding="longest")
-    dataloader = DataLoader(subset, batch_size=config.bs, collate_fn=data_collator)
-    
-    model.eval()
-    steering_vecs = {layer: [] for layer in loss_layers}
-    
-    with torch.no_grad(), torch.amp.autocast("cuda", dtype=torch.bfloat16):
-        for batch in dataloader:
-            batch = {k: v.to(model.device) for k, v in batch.items()}
-            attention_mask = batch["attention_mask"]
-            
-            with TraceDict(model, layers=loss_layers) as ret:
-                model(**batch)
-            
-            # Extract last token activations
-            for layer in loss_layers:
-                hs = (ret[layer].output * attention_mask.unsqueeze(-1)).float()
-                hs_cho = hs[::2].mean(dim=1)  # [n_pairs, d] -> avg over seq
-                hs_rej = hs[1::2].mean(dim=1)
-                dHS = (hs_cho - hs_rej)  # [n_pairs, d] - keep per-pair
-                steering_vecs[layer].append(dHS.cpu())
-    
-    # Concatenate across batches (keep per-pair)
-    steering_vecs = {k: torch.cat(v, dim=0) for k, v in steering_vecs.items()}
-    return steering_vecs
 
 
 def train_steer_vector(
@@ -393,6 +124,14 @@ def train_steer_vector(
 
             # 1. Unweighted S-space direction for loss computation
             # Store preference direction in S-space (r-dimensional)
+            # 
+            # Why unweighted V (not V @ sqrt(S))?
+            # - Loss measures conceptual alignment (honest vs dishonest)
+            # - We don't care if the difference is in high-S or low-S subspace
+            # - Equal weighting prevents dominant singular values from biasing loss
+            # - Preference direction may live in low-S subspace (fine-grained semantics)
+            # 
+            # S-weighting is for reconstruction (steering), not measurement (loss)
             if config.loss_use_V:
                 hs_cpu = layer_hiddens[layer_idx]
                 # Convert numpy to torch if needed
@@ -1395,6 +1134,17 @@ def train_model(config: TrainingConfig):
         modules=config.modules,
         loss_modules=config.loss_modules,
     )
+    
+    # Validate loss_use_V compatibility
+    if config.loss_use_V and config.adapter_type == "innerpissa":
+        # V projection requires modules with accessible inputs (MLP: up_proj, gate_proj)
+        # Check if loss_modules are V-compatible
+        v_compatible_modules = ["up_proj", "gate_proj"]
+        if not any(mod in config.loss_modules for mod in v_compatible_modules):
+            logger.warning(
+                f"loss_use_V=True but loss_modules={config.loss_modules} may not have accessible inputs. "
+                f"For V projection, use loss_modules containing {v_compatible_modules} to project residual stream."
+            )
     
     logger.info(
         f"Layer selection: {len(layer_selection.adapter_layer_names)} adapter layers "
