@@ -14,8 +14,8 @@ import torch.nn as nn
 
 def build_regexp(layer_indices: List[int], module_suffixes: List[str]) -> str:
     """Build PEFT target_modules regex from layer indices and module suffixes."""
-    layer_nums = "|".join(str(L) for L in layer_indices)
-    module_names = "|".join(sorted(module_suffixes))
+    layer_nums = "|".join(str(L) for L in sorted(set(layer_indices)))
+    module_names = "|".join(sorted(set(module_suffixes)))
     return f".*\\.({layer_nums})\\..*({module_names})"
 
 

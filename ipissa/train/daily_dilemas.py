@@ -460,7 +460,7 @@ def load_labels(dd_dataset):
         # Union of all virtues mentioned (both sides contribute to same virtue labels)
         all_virtues = set(pos_virtues) | set(neg_virtues)
         
-        # Assign labels symmetrically: +1 if virtue on pos side, -1 if on neg side. This increases samples size and conversed prob mass.
+        # Assign labels symmetrically: +1 if virtue on pos side, -1 if on neg side. This increases samples size and conserves prob mass.
         for virtue in all_virtues:
             if virtue in pos_virtues and virtue in neg_virtues:
                 # Conflict: virtue appears on both sides → skip (net zero)

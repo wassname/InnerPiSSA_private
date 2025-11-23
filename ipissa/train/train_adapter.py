@@ -13,6 +13,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import List, Literal, Optional
+from textwrap import wrap
 
 import cattrs
 import numpy as np
@@ -190,6 +191,7 @@ def compute_batch_loss(
     config: TrainingConfig,
     step: int = 0,
     scheduler=None,
+    flip_stats=None,
 ):
     """Compute contrastive loss for a batch (shared by train and val).
 
@@ -204,6 +206,7 @@ def compute_batch_loss(
         config: Training config
         step: Current training step (for info logging)
         scheduler: LR scheduler (for info logging)
+        flip_stats: Optional dict to store EMA of flip decision
 
     Returns:
        (total_loss, infos_list)
@@ -383,6 +386,7 @@ def compute_batch_loss(
         monotonic_scaling=config.mono_weight,
         enable_coherence=config.coh,
         enable_monotonic=config.mono,
+        flip_stats=flip_stats,
     )
 
     # Flatten info for logging - create entries for EACH layer AND coefficient combo
@@ -607,6 +611,7 @@ def train_epoch(
     best_val_loss=None,
     patience_counter=None,
     save_folder=None,
+    flip_stats=None,
 ):
     """Train for one epoch with optional validation."""
     model.train()
@@ -629,6 +634,7 @@ def train_epoch(
             config,
             step=step,
             scheduler=scheduler,
+            flip_stats=flip_stats,
         )
         infos.extend(batch_infos)
 
@@ -984,6 +990,78 @@ Action: Return the wallet without the money"""
 
 
 @torch.no_grad()
+def validate_prompt_elicitation(model, tokenizer, choice_ids, config: TrainingConfig, max_new_tokens=128):
+    """Validate that prompts with different personas actually generate different planning signals.
+    
+    Tests prompts with both personas on a moral dilemma to check if they elicit different behaviors.
+    Warns if baseline (no persona) or both personas produce similar outputs.
+    
+    Args:
+        model: Base model (no adapter)
+        tokenizer: Tokenizer
+        choice_ids: Token IDs for binary choices
+        config: Training config with PROMPT and PERSONAS
+        max_new_tokens: Max tokens to generate
+    """
+    logger.info("\n" + "=" * 90)
+    logger.info("VALIDATING PROMPT ELICITATION - Testing if personas affect planning")
+    logger.info("=" * 90)
+    
+    # Test all persona variants using generate_example_output
+    # Dataset uses first persona from each list (zips through them)
+    persona_prompts = [
+        (config.PROMPT.format(persona=config.PERSONAS[0][0]), "positive"),
+        (config.PROMPT.format(persona=""), "baseline"),
+        (config.PROMPT.format(persona=config.PERSONAS[1][0]), "negative"),
+    ]
+    
+    results = []
+    for prompt_prefix, label in persona_prompts:
+        question, answer, score, seq_nll = generate_example_output(
+            model, tokenizer, choice_ids, max_new_tokens=max_new_tokens, instructions=prompt_prefix
+        )
+        
+        # Log the actual prompt being tested (first time only)
+        if label == "positive":
+            logger.info(f"Test prompt: {question}...")
+        
+        results.append({
+            "label": label,
+            "score": score,
+            "answer": answer
+        })
+        
+        
+        logger.info(f"{label:>10s} | score={score:+.3f} | persona='{prompt_prefix}' |\n{wrap(answer)}")
+    
+    # Check if personas elicit different responses
+    pos_score = results[0]["score"]
+    baseline_score = results[1]["score"]
+    neg_score = results[2]["score"]
+    
+    score_range = max(pos_score, neg_score) - min(pos_score, neg_score)
+    baseline_gap = min(abs(baseline_score - pos_score), abs(baseline_score - neg_score))
+    
+    logger.info("=" * 90)
+    logger.info(f"Score range: {score_range:.3f} (pos={pos_score:+.3f}, baseline={baseline_score:+.3f}, neg={neg_score:+.3f})")
+    
+    if score_range < 0.1:
+        logger.warning(
+            f"⚠️  PROMPT VALIDATION FAILED: Personas don't differentiate! "
+            f"Range={score_range:.3f} < 0.1. Training will likely fail. "
+            f"Fix: Use stronger PROMPT/PERSONAS that actually change model behavior."
+        )
+    else:
+        logger.info(
+            f"✓ Prompt validation passed: personas differentiate (range={score_range:.3f}, baseline gap={baseline_gap:.3f})"
+        )
+    
+    logger.info("=" * 90 + "\n")
+    
+    return results
+
+
+@torch.no_grad()
 def generate_example_outputs(
     model, tokenizer, choice_ids, coeffs=[-1, 0, 1], max_new_tokens=64
 ):
@@ -1020,7 +1098,7 @@ def log_example_outputs(model, tokenizer, choice_ids, coeffs, title):
     examples = generate_example_outputs(model, tokenizer, choice_ids, coeffs=coeffs)
     for coeff, text, score, seq_nll in examples:
         logger.info(
-            f"coeff={coeff:+.1f} | score={score:+.3f} | seq_nll={seq_nll:+.3f} | \n{text}"
+            f"coeff={coeff:+.1f} | score={score:+.3f} | seq_nll={seq_nll:+.3f} | \n{wrap(text)}"
         )
     logger.info("=" * 90 + "\n")
 
@@ -1182,6 +1260,10 @@ def train_model(config: TrainingConfig):
 
     # Get choice IDs for evaluation
     choice_ids = get_choice_ids(tokenizer)
+    
+    # Validate that prompts with different personas actually elicit different behaviors
+    # This checks if the training setup will produce meaningful preference directions
+    validate_prompt_elicitation(base_model, tokenizer, choice_ids, config)
 
     # Translate layer names for PeftModel (paths change after wrapping)
     layer_selection_peft = layer_selection.translate_to_peft_model(model)
@@ -1252,6 +1334,7 @@ def train_model(config: TrainingConfig):
     infos = []
     best_val_loss = [float("inf")]  # Use list for mutability
     patience_counter = [0]
+    flip_stats = {}
 
     # Create save folder with descriptive name
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1278,6 +1361,7 @@ def train_model(config: TrainingConfig):
             best_val_loss=best_val_loss,
             patience_counter=patience_counter,
             save_folder=save_folder,
+            flip_stats=flip_stats,
         )
 
         if should_stop:
