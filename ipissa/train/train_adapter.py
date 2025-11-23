@@ -13,7 +13,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import List, Literal, Optional
-from textwrap import wrap
+from textwrap import wrap, fill
 
 import cattrs
 import numpy as np
@@ -1023,7 +1023,7 @@ def validate_prompt_elicitation(model, tokenizer, choice_ids, config: TrainingCo
         
         # Log the actual prompt being tested (first time only)
         if label == "positive":
-            logger.info(f"Test prompt: {question}...")
+            logger.info(f"Test prompt: {fill(question, width=120)}...")
         
         results.append({
             "label": label,
@@ -1032,7 +1032,7 @@ def validate_prompt_elicitation(model, tokenizer, choice_ids, config: TrainingCo
         })
         
         
-        logger.info(f"{label:>10s} | score={score:+.3f} | persona='{prompt_prefix}' |\n{wrap(answer)}")
+        logger.info(f"{label:>10s} | score={score:+.3f} | persona='{prompt_prefix}' |\n{fill(answer, width=120)}")
     
     # Check if personas elicit different responses
     pos_score = results[0]["score"]
@@ -1098,7 +1098,7 @@ def log_example_outputs(model, tokenizer, choice_ids, coeffs, title):
     examples = generate_example_outputs(model, tokenizer, choice_ids, coeffs=coeffs)
     for coeff, text, score, seq_nll in examples:
         logger.info(
-            f"coeff={coeff:+.1f} | score={score:+.3f} | seq_nll={seq_nll:+.3f} | \n{wrap(text)}"
+            f"coeff={coeff:+.1f} | score={score:+.3f} | seq_nll={seq_nll:+.3f} | \n{fill(text, width=120)}"
         )
     logger.info("=" * 90 + "\n")
 
