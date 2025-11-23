@@ -12,7 +12,7 @@ rej = "I hate cheese; let me tell you about the andes mountains"
 
 # Steering Vector Extraction Guide
 
-See README.md for overview of key ideas (reasoning trajectory hypothesis, last-token extraction, gradient-to-steering mapping, layer-specific steering).
+See README.md and paper.qmd for overview of key ideas (reasoning trajectory hypothesis, last-token extraction, gradient-to-steering mapping, layer-specific steering).
 
 Jargon
 - hs = W @ x + b = hidden states (pre-activation) at a given layer L (could be residual space, up_proj, down_proj, k, v, etc)

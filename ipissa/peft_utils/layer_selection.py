@@ -116,8 +116,14 @@ def compute_layer_selection(
     n_depths: int,
     loss_depths: List[float | int],
     modules: List[str],
+    loss_modules: List[str] | None = None,
 ) -> LayerSelection:
-    """Compute which layers get adapters vs loss, ensuring no overlap."""
+    """Compute which layers get adapters vs loss, ensuring no overlap.
+    
+    Args:
+        loss_modules: Modules for loss extraction. If None, uses same as modules.
+                     Use ['up_proj'] for V-projection of residual stream.
+    """
     total_layers = model.config.num_hidden_layers
     
     # Convert config to absolute layer indices
@@ -152,7 +158,10 @@ def compute_layer_selection(
     
     # Resolve layer names
     adapter_layer_names = find_linear_layers(model, adapter_layer_indices, modules)
-    loss_layer_names = find_linear_layers(model, loss_layer_indices, modules)
+    
+    # Use separate modules for loss extraction if specified
+    loss_modules_to_use = loss_modules if loss_modules is not None else modules
+    loss_layer_names = find_linear_layers(model, loss_layer_indices, loss_modules_to_use)
     
     # Validate we found actual layers
     assert len(adapter_layer_names) > 0, (

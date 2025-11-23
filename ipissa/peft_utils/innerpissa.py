@@ -23,7 +23,7 @@ from torch import Tensor, device
 from typing import Optional, Dict, Any, Literal
 from dataclasses import dataclass, field
 from jaxtyping import Float
-from einops import repeat, rearrange
+from einops import repeat, rearrange, reduce
 from peft.tuners.tuners_utils import BaseTunerLayer, BaseTuner
 from peft.config import PeftConfig
 from peft.tuners._buffer_dict import BufferDict
@@ -33,6 +33,7 @@ import bitsandbytes as bnb
 from bitsandbytes.nn import Params4bit, Int8Params
 from typing import Any, Optional, Union, List
 import enum
+from loguru import logger
 from peft.utils import (
     TRANSFORMERS_MODELS_TO_LORA_TARGET_MODULES_MAPPING,
 )
@@ -239,37 +240,43 @@ class InnerPiSSALayer(BaseTunerLayer):
             relevant directions. Empirically showed mixed results - model can learn rotations
             regardless of initialization, but this provides a theoretically cleaner starting point.
             """
-            dHS = steering_vectors[layer_name].to(device).float()  # [d_out]
+            dHS = steering_vectors[layer_name].to(device).float()  # [n_pairs, d_out]
             
-            # Normalize dHS for comparable projection magnitudes across layers
-            dHS_norm = dHS / (dHS.norm() + 1e-8)
+            # Project per-pair to preserve bidirectional signal
+            proj_per_pair = dHS @ U_full  # [n_pairs, rank]
             
-            # Project preference direction onto each singular vector
-            # proj[i] = cosine similarity between dHS and U[:, i] (since both normalized)
-            proj = dHS_norm @ U_full  # [rank], values in [-1, 1]
+            # KEY FIX: Normalize variance by S, then rescale uniformly
+            # Why: proj_per_pair reflects activation patterns influenced by S-weighting in forward pass
+            #      High-S directions are naturally more active → larger proj values
+            #      var(proj/S) measures "per unit energy" bidirectional variance (removes pretrained bias)
+            #      * S.norm() rescales all metrics uniformly (preserves total energy without favoring high-S)
             
-            # Select top-r by absolute projection magnitude
-            indices_p = torch.topk(proj, r_actual).indices.sort()[0]
-            indices_n = torch.topk(-proj, r_actual).indices.sort()[0]
-            indices = torch.cat([indices_p, indices_n], dim=0)
+            # S-normalized projections (remove pretrained magnitude bias)
+            # proj_normalized = proj_per_pair / (S_full + 1e-8)  # [n_pairs, rank]
             
-            U_p = U_full[:, indices_p]  # [d_out, r_actual]
-            U_n = U_full[:, indices_n]  # [d_out, r_actual]
-            U = torch.cat([U_p, -U_n], dim=1)  # [d_out, 2 * r_actual]
-            Vh = Vh_full[indices, :]  # [r_actual, d_in]
-            V = Vh.T                        # [d_in, r_actual]
+            # Variance of normalized projections (conceptual bidirectional importance)
+            # proj_variance_normalized = proj_normalized.var(dim=0)  # [rank]
+
+            # proj = (proj_per_pair /  (S_full + 1e-8)).mean(0) * S_full.norm()
+            # proj = (proj_per_pair /  (S_full + 1e-8)).mean(0).abs() * torch.sqrt(S_full)
             
-            # S initialization:
-            # 1. Use proj to get the "shape" (relative importance/sign) of the steering vector
-            # 2. Scale it to match the "energy" (norm) of the original singular values
-            # This avoids the "Mass in Residual" problem while still initializing with the steering direction.
-            S_original = S_full[indices]
-            proj_selected = proj[indices]
+            # Rescale by S.norm() to preserve overall energy scale
+            # selection_metric = proj # proj_variance_normalized * S_full.norm()  # [rank]
+            selection_metric = (proj_per_pair /  (S_full + 1e-8)).mean(0).abs() * S_full#.norm() 
             
-            # Scaling factor to match L2 norm (energy)
-            scale_factor = S_original.norm() / (proj_selected.norm() + 1e-8)
+            # Select top-r components by normalized variance (preserves energy scale)
+            _, indices = torch.topk(selection_metric, r_actual)
+            indices_sorted = indices.sort()[0]  # Keep in descending S order
             
-            S = proj_selected * scale_factor
+            U = U_full[:, indices_sorted]  # [d_out, r_actual]
+            Vh = Vh_full[indices_sorted, :]  # [r_actual, d_in]
+            V = Vh.T  # [d_in, r_actual]
+            
+            # Use original S values (preserve component-specific energy)
+            # S = proj[indices_sorted]
+            # # OR
+            # S initialization: Use original S values (variance selection ensures bidirectionality)
+            S = S_full[indices_sorted]
         else:
             # Naive top-r by singular values (original PiSSA)
             U = U_full[:, :r_actual]  # [d_out, r_actual]
@@ -282,6 +289,7 @@ class InnerPiSSALayer(BaseTunerLayer):
         W_res = base_weight - W_principal
         # Consider in PiSSA is calculated as 
         # W_res = U[:, r:] @ torch.diag(S_full[r:]) @ Vh[r:, :]
+        logger.info(f"InnerPiSSA Layer Init: {layer_name}, r={r_actual}, norms W={base_weight.norm():.1f}, res={W_res.norm():.1f}, Wr={W_principal.norm():.1f}")
         
         # Store frozen components
         self.ipissa_u[adapter_name] = U.clone().detach().contiguous()

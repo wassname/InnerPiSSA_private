@@ -26,6 +26,7 @@ format:
 
 <hidden>
 TODO the writing sometime is confused about RLHF collapse during refusal of prompts. It means that the prompting with coeff-1 will not have a very low number e..g -1 or 1. -10 would mean success. What we need to do is put X instead of numbers untill I have them
+- [ ] Remove all llm tells, too much bold emphasis, too many subsections, unicode dashes
 </hidden>
 
 # Introduction {#sec-intro}
@@ -153,8 +154,8 @@ This **unsupervised, on-policy contrastive** approach addresses a critical limit
 
 Comparison to related methods:
 - **DPO/BiPO** [@rafailov2023direct]: Require full completions and human preference labels (off-policy)
-- **Standard CAA/RepEng** [@lee2024programmingrefusalconditionalactivation; @vogel2024repeng]: Use complete prompts or model outputs (off-policy)
 - **Supervised probes** [@burns2022discovering; @cao2024personalized]: Train on human labels of model internals (distribution shift)
+- **Standard CAA/RepEng** [@lee2024programmingrefusalconditionalactivation; @vogel2024repeng]: Use complete prompts or model outputs (off-policy) #FIXME( wrong, both of these use the same as me, read carefully)
 - **InnerPiSSA**: Extracts from incomplete prefixes in model's own reasoning trajectory (on-policy, unsupervised)
 
 The on-policy property is essential for alignment debugging—to observe what models compute internally when safety constraints are bypassed, we need directions that reflect actual internal representations, not artifacts of how models respond when explicitly asked about concepts.

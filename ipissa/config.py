@@ -72,7 +72,13 @@ class TrainingConfig:
     quantization_type: Literal["4bit", "8bit", "none"] = "none"
 
     modules: List[str] = ["o_proj", "down_proj"]
-    """Layers for adapter and loss. down_proj/o_proj = residual out, gate_proj/up_proj = mlp up, q/k/v_proj = attn"""
+    """Layers for adapter intervention. down_proj/o_proj = residual out, gate_proj/up_proj = mlp up, q/k/v_proj = attn"""
+
+    loss_modules: Optional[List[str]] = None
+    """Modules for loss extraction. If None, uses same as modules. Use up_proj for V-projection of residual stream."""
+
+    loss_use_V: bool = False
+    """Use V (input space) instead of U (output space) for loss projection. Requires loss_modules=['up_proj'] to project residual via MLP input basis."""
 
     n_depths: int = 8
     """Intervene on this many layers, spaced evenly"""

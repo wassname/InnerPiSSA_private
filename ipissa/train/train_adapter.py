@@ -334,11 +334,11 @@ def compute_init_steering_vectors(
                 hs = (ret[layer].output * attention_mask.unsqueeze(-1)).float()
                 hs_cho = hs[::2].mean(dim=1)  # [n_pairs, d] -> avg over seq
                 hs_rej = hs[1::2].mean(dim=1)
-                dHS = (hs_cho - hs_rej).mean(dim=0)  # [d] - mean over pairs
+                dHS = (hs_cho - hs_rej)  # [n_pairs, d] - keep per-pair
                 steering_vecs[layer].append(dHS.cpu())
     
-    # Average across batches
-    steering_vecs = {k: torch.stack(v).mean(dim=0) for k, v in steering_vecs.items()}
+    # Concatenate across batches (keep per-pair)
+    steering_vecs = {k: torch.cat(v, dim=0) for k, v in steering_vecs.items()}
     return steering_vecs
 
 
@@ -412,7 +412,6 @@ def train_steer_vector(
             # Activation-space PCA: simple mean difference
             h_cho = hs_cpu[::2]
             h_rej = hs_cpu[1::2]
-            # FIXME, need to apply mask and take last N tokens
             delta_act = (h_cho - h_rej).mean(dim=0)  # [d] activation space
             delta_act = F.normalize(delta_act, dim=0)
             
@@ -434,7 +433,9 @@ def compute_batch_loss(
     batch,
     dirs_loss,
     loss_layers,
+    loss_layer_indices,
     Uw_full,
+    Vw_full,
     config: TrainingConfig,
     step: int = 0,
     scheduler=None,
@@ -445,8 +446,10 @@ def compute_batch_loss(
         model: Model with adapter
         batch: Input batch dict with input_ids and attention_mask
         dirs_loss: Unweighted S-space directions for loss computation
-        loss_layers: Layers to compute loss on
-        Uw_full: Full U matrices for projection
+        loss_layers: Layer names to compute loss on
+        loss_layer_indices: Layer indices for extracting hidden_states
+        Uw_full: Full U matrices for projection (output space)
+        Vw_full: Full V matrices for projection (input space)
         config: Training config
         step: Current training step (for info logging)
         scheduler: LR scheduler (for info logging)
@@ -459,15 +462,16 @@ def compute_batch_loss(
     mask_rej = attention_mask[1::2]
     mask = mask_cho * mask_rej
 
-    # Move U matrices to device if they exist (InnerPiSSA only)
+    # Move projection matrices to device if they exist (InnerPiSSA only)
     if Uw_full is not None:
         Uw_full = {k: v.to(model.device).float() for k, v in Uw_full.items()}
+    if Vw_full is not None:
+        Vw_full = {k: v.to(model.device).float() for k, v in Vw_full.items()}
 
-    # Reference outputs
+    # Reference outputs (use hidden_states instead of TraceDict)
     with torch.no_grad(), ScaleAdapter(model, coeff=None):
-        with TraceDict(model, layers=loss_layers) as ret_ref:
-            with torch.amp.autocast("cuda", dtype=torch.bfloat16):
-                outputs_ref = model(**batch, output_hidden_states=True)
+        with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+            outputs_ref = model(**batch, output_hidden_states=True)
 
     ref_logp = outputs_ref.logits[:, :-1].log_softmax(-1)
     labels = batch["input_ids"][:, 1:].unsqueeze(-1)
@@ -486,29 +490,32 @@ def compute_batch_loss(
     for coef in [-1.0, 1.0]:
         with torch.amp.autocast("cuda", dtype=torch.bfloat16):
             with ScaleAdapter(model, coeff=coef):
-                with TraceDict(
-                    model, layers=loss_layers
-                ) as ret:
-                    outputs_pi = model(**batch, output_hidden_states=True)
+                outputs_pi = model(**batch, output_hidden_states=True)
 
-        for lk in loss_layers:
-            hs_ref = (ret_ref[lk].output * attention_mask.unsqueeze(-1)).float()
+        # Extract hidden states from residual stream at loss layer depths
+        for lk, layer_idx in zip(loss_layers, loss_layer_indices):
+            # Extract residual stream hidden states at this layer
+            # hidden_states[i] = output of layer i (post-residual)
+            hs_ref = (outputs_ref.hidden_states[layer_idx] * attention_mask.unsqueeze(-1)).float()
+            hs_pi = (outputs_pi.hidden_states[layer_idx] * attention_mask.unsqueeze(-1)).float()
 
-            # InnerPiSSA: Use SVD projection onto U
-            # LoRA/DoRA: Work directly in activation space (no U projection)
+            # Choose projection matrix: V for input space (residual), U for output space
             if config.adapter_type == "innerpissa":
-                U_w = Uw_full[lk]  # Always use full SVD U for stable loss computation
-
+                if config.loss_use_V:
+                    # Use V projection (residual → MLP S-space)
+                    # This projects accumulated residual stream via up_proj's input basis
+                    proj_matrix = Vw_full[lk]  # [d_model, r]
+                else:
+                    # Use U projection (module output → S-space)  
+                    proj_matrix = Uw_full[lk]  # [d_out, r]
+                
                 # Dataset-level preference direction (unweighted S-space)
-                # directions[layer] is a dict with keys: U, delta_s, V
                 pref_dir_ref_dH_Uw = (
                     dirs_loss.directions[lk]["delta_s"].clone().to(model.device).float()
                 )
             else:
-                # LoRA/DoRA: Use activation-space PCA direction (no U projection)
-                U_w = None  # Not used
-                # Dataset-level preference direction (activation space)
-                # directions[layer] is a tensor directly
+                # LoRA/DoRA: Use activation-space PCA direction (no projection)
+                proj_matrix = None
                 pref_dir_ref_dH_Uw = (
                     dirs_loss.directions[lk].clone().to(model.device).float()
                 )
@@ -516,7 +523,6 @@ def compute_batch_loss(
             hs_ref_cho = hs_ref[::2]
             hs_ref_rej = hs_ref[1::2]
 
-            hs_pi = (ret[lk].output * attention_mask.unsqueeze(-1)).float()
             hs_pi_cho = hs_pi[::2]
             hs_pi_rej = hs_pi[1::2]
 
@@ -527,27 +533,27 @@ def compute_batch_loss(
 
             # Swap chosen/rejected based on coefficient sign (preserves autograd)
             if coef > 0:
-                hs_pi_pos_u = hs_pi_cho
-                hs_pi_neg_u = hs_pi_rej
+                hs_pi_pos = hs_pi_cho
+                hs_pi_neg = hs_pi_rej
                 
                 ref_coherence = ref_cho_label_logp
                 pi_coherence = pi_cho_label_logp
             else:
-                hs_pi_pos_u = hs_pi_rej
-                hs_pi_neg_u = hs_pi_cho
+                hs_pi_pos = hs_pi_rej
+                hs_pi_neg = hs_pi_cho
                 ref_coherence = ref_rej_label_logp
                 pi_coherence = pi_rej_label_logp
 
-            # Apply U projection for InnerPiSSA only
+            # Apply projection for InnerPiSSA (either U or V)
             if config.adapter_type == "innerpissa":
-                hs_pi_pos_u = hs_pi_pos_u @ U_w
-                hs_pi_neg_u = hs_pi_neg_u @ U_w
-
-            # InnerPiSSA: Project hs_ref to S-space; LoRA: use activation space directly
-            if config.adapter_type == "innerpissa":
-                hs_ref_cho_proj = hs_ref_cho @ U_w
-                hs_ref_rej_proj = hs_ref_rej @ U_w
+                hs_pi_pos_proj = hs_pi_pos @ proj_matrix
+                hs_pi_neg_proj = hs_pi_neg @ proj_matrix
+                hs_ref_cho_proj = hs_ref_cho @ proj_matrix
+                hs_ref_rej_proj = hs_ref_rej @ proj_matrix
             else:
+                # LoRA/DoRA: No projection
+                hs_pi_pos_proj = hs_pi_pos
+                hs_pi_neg_proj = hs_pi_neg
                 hs_ref_cho_proj = hs_ref_cho
                 hs_ref_rej_proj = hs_ref_rej
 
@@ -555,8 +561,8 @@ def compute_batch_loss(
                 pref_dir=pref_dir_ref_dH_Uw.detach(),
                 hs_ref_cho=hs_ref_cho_proj,
                 hs_ref_rej=hs_ref_rej_proj,
-                hs_pi_pos=hs_pi_pos_u,
-                hs_pi_neg=hs_pi_neg_u,
+                hs_pi_pos=hs_pi_pos_proj,
+                hs_pi_neg=hs_pi_neg_proj,
 
                 ref_pos_label_logp=ref_coherence,
                 pi_pos_label_logp=pi_coherence,
@@ -582,18 +588,23 @@ def compute_batch_loss(
     # Use mean instead of sum to avoid scaling issues with multiple loss layers
     loss_results = {}
     for coef in [-1.0, 1.0]:
-
-        # Start with a copy of the last layer's dict (for metrics like proj_pi, proj_ref, etc.)
-        lk = loss_layers[-1]
-        loss_results[coef] = {k: v for k, v in loss_results_per_layer[coef][lk].items()}
+        # Get layers that were actually computed (keys in loss_results_per_layer[coef])
+        computed_layers = list(loss_results_per_layer[coef].keys())
         
-        # Mean the loss components across all layers for better scaling
-        n_layers = len(loss_layers)
+        if not computed_layers:
+            raise RuntimeError(f"No loss layers computed for coef={coef}")
+        
+        # Start with a copy of the first computed layer's dict (for metrics like proj_pi, proj_ref, etc.)
+        first_layer = computed_layers[0]
+        loss_results[coef] = {k: v for k, v in loss_results_per_layer[coef][first_layer].items()}
+        
+        # Mean the loss components across all computed layers for better scaling
+        n_layers = len(computed_layers)
         loss_results[coef]["loss_proj"] = sum(
-            loss_results_per_layer[coef][layer]["loss_proj"] for layer in loss_layers
+            loss_results_per_layer[coef][layer]["loss_proj"] for layer in computed_layers
         ) / n_layers
         loss_results[coef]["loss_coh"] = sum(
-            loss_results_per_layer[coef][layer]["loss_coh"] for layer in loss_layers
+            loss_results_per_layer[coef][layer]["loss_coh"] for layer in computed_layers
         ) / n_layers
         # Note: loss_total here is pre-meta-loss, monotonic will be added in combine_dual_coef_losses
         loss_results[coef]["loss_total"] = (
@@ -615,7 +626,9 @@ def compute_batch_loss(
 
     # Flatten info for logging - create entries for EACH layer AND coefficient combo
     for coef, meta_coef in [(-1.0, meta_neg), (1.0, meta_pos)]:
-        for lk in loss_layers:
+        # Only iterate over layers that were actually computed
+        computed_layers = list(loss_results_per_layer[coef].keys())
+        for lk in computed_layers:
             # Start with per-layer loss dict
             info = {}
             layer_loss = loss_results_per_layer[coef][lk]
@@ -766,7 +779,9 @@ def compute_validation_loss(
     val_dataloader,
     dirs_loss,
     loss_layers,
+    loss_layer_indices,
     Uw_full,
+    Vw_full,
     config: TrainingConfig,
 ):
     """Compute validation loss without gradients, returning detailed metrics."""
@@ -783,7 +798,7 @@ def compute_validation_loss(
 
         # Get loss with detailed info (but no gradients)
         batch_loss, batch_infos = compute_batch_loss(
-            model, batch, dirs_loss, loss_layers, Uw_full, config
+            model, batch, dirs_loss, loss_layers, loss_layer_indices, Uw_full, Vw_full, config
         )
 
         total_loss += batch_loss.item()
@@ -818,7 +833,9 @@ def train_epoch(
     train_dataloader,
     cv_dirs_loss,
     loss_layers,
+    loss_layer_indices,
     Uw_full,
+    Vw_full,
     opt,
     scheduler,
     config: TrainingConfig,
@@ -845,7 +862,9 @@ def train_epoch(
             batch,
             cv_dirs_loss,
             loss_layers,
+            loss_layer_indices,
             Uw_full,
+            Vw_full,
             config,
             step=step,
             scheduler=scheduler,
@@ -897,7 +916,7 @@ def train_epoch(
                 and step > 0
             ):
                 val_loss, val_components, val_df_coef, val_coef_metrics = compute_validation_loss(
-                    model, val_dataloader, cv_dirs_loss, loss_layers, Uw_full, config
+                    model, val_dataloader, cv_dirs_loss, loss_layers, loss_layer_indices, Uw_full, Vw_full, config
                 )
 
                 # Log validation metrics
@@ -1351,6 +1370,7 @@ def train_model(config: TrainingConfig):
         n_depths=config.n_depths,
         loss_depths=config.loss_depths,
         modules=config.modules,
+        loss_modules=config.loss_modules,
     )
     
     logger.info(
@@ -1361,7 +1381,6 @@ def train_model(config: TrainingConfig):
     )
     
     # Compute steering vectors for data-aware adapter init (before adapter setup)
-    # ✅ FIX: Use adapter_layer_names, not loss_layer_names!
     if config.adapter_type == "innerpissa" and config.data_aware_init:
         logger.info(
             f"Computing steering vectors for data-aware adapter initialization on "
@@ -1370,10 +1389,10 @@ def train_model(config: TrainingConfig):
         init_steering_vecs = compute_init_steering_vectors(
             base_model, 
             train_dataset_pt, 
-            layer_selection.adapter_layer_names,  # ✅ CORRECT - use adapter layers!
+            layer_selection.adapter_layer_names,
             tokenizer, 
             config, 
-            n_samples=32
+            n_samples=256
         )
         logger.info(f"Computed init steering for {len(init_steering_vecs)} layers")
     else:
@@ -1393,7 +1412,9 @@ def train_model(config: TrainingConfig):
     # Translate layer names for PeftModel (paths change after wrapping)
     layer_selection_peft = layer_selection.translate_to_peft_model(model)
     loss_layers = layer_selection_peft.loss_layer_names
+    loss_layer_indices = layer_selection_peft.loss_layer_indices
     logger.info(f"Loss layers (PeftModel paths): {loss_layers}")
+    logger.info(f"Loss layer indices: {loss_layer_indices}")
     
     # Extract SVD matrices only for InnerPiSSA (LoRA/DoRA don't use SVD)
     if config.adapter_type == "innerpissa":
@@ -1469,7 +1490,9 @@ def train_model(config: TrainingConfig):
             train_dataloader,
             cvec_loss_steer,
             loss_layers,
+            loss_layer_indices,
             Uw_full,
+            Vw_full,
             opt,
             scheduler,
             config,
