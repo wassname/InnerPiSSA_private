@@ -633,22 +633,20 @@ config = TrainingConfig(
 # 2025-11-23 03:26:06
 
 Changes:
-- coef -> -1 (dishonest), 0, +1 (honest)
+- coef -> -1 (dishonest), 0, +1 (honest) (this seems clearer)
 - add units where appropertiate. e.g. logratio * label's must be in nat's right?
 - need to remove LLM like writing (unicode, dash, not this - its'sthat, too much bold, italic for emphasis, to many subheading)
 - wrong citation for who introduces steering paper, look int axbench or the ibm one
-- stronger statement and citations for opening statement? as abive
-- we should say unsupervised in the abstract and intro, consider it in the title
-- all the TODO's
-- add question. we have every digit of data, unlke human brains we have the perfect. so why can't we perfectly steer them? Why can't we always know when they are telling the truth, or change their mind and have it hold all the time even out of sample? We should be able to do that if we have all the data. Since we have all the data, it must be an encoding or representation problem. So I frame it as the search for a representation which get us towards this ideal intervention which uses this 100% of information we have avalaible.
+- stronger statement and citations for opening statement? as above
+- add question. concept. opening framing. we have every digit of data, unlke human brains we have the perfect. so why can't we perfectly steer them???? Why? Why can't we always know when they are telling the truth, or change their mind and have it hold all the time even out of sample? We should be able to do that if we have all the data. Since we have all the data, it must be an encoding or representation problem. So I frame it as the search for a representation which get us towards this ideal intervention which uses this 100% of information we have avalaible.
 - Consider if we address these defensive questions
-- q why not use axnencj
-- q is it really unsupervised 
-- are all these parts needed
-- does it really beat prompting
-- compute, Param costs of this method? (TODO need to add)
+  - q why not use axnencj
+  - q is it really unsupervised 
+  - are all these parts needed
+  - does it really beat prompting
+- compute, Param costs of this method? (TODO need to add) See SVDD and PiSSA paper for examples since we use similar. And axbench blog
 - why do you think your method bypassed deception? esp when you use prompts?
 
 Problem with the whole narrative is about alignment debugging. but do I achieve it? There are still questions. I think we go towards it, and better than promoting. But do we get towards an ideal? we haven't formally defined or measure what success would look like. it would probably look like eliciting the max latent knowledge the SFT achieves. Or in finding all rewrd hacking that the model knows about. But we probably don't don't achieve it because prompting and not I limited results, and still resistant from RHLF because that direction responds less. But I'm all these metrics better.
-Now given that should we keep the narritive? I still like the search and hard challenge, I think it's true and it's how I think of it, even if we haven't solved it.
+Now given that should we keep the narritive? I still like the search and hard challenge, I think it's true and it's how I think of it, even if we haven't solved it. I think this is a really hard framing and we haven't solved it but we have done the best on it!
 
