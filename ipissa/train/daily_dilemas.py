@@ -391,7 +391,14 @@ def load_labels(dd_dataset):
         key = (row['dilemma_idx'], row['action_type'])
         if key not in you_values:
             you_values[key] = []
-        you_values[key].append(row['value'])
+        # Dataset quirk, it has some entries like that are comma-separated values like "Honor, Justice", split them
+        value_str = row['value']
+        if ',' in value_str:
+            # Split and strip whitespace from each value
+            split_values = [v.strip() for v in value_str.split(',')]
+            you_values[key].extend(split_values)
+        else:
+            you_values[key].append(value_str)
     
     # Load value framework mappings
     ds_values = lds("kellycyy/daily_dilemmas", split="test", name="Values")
