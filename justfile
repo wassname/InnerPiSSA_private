@@ -87,15 +87,15 @@ ablate-paper:
     #!/bin/bash -x
     # make sure baselines are cached
     just eval-baselines
-    just ablate-constraints
-    just data-efficiency
-    just run-seeds
+    just ablate-modules
+    just run-models
     just sweep-layers # [/]
     just sweep-wd # [/]
     just sweep-lr
+    just data-efficiency
+    just run-seeds
+    just ablate-constraints
     just sweep-rank
-    just ablate-modules
-    just run-models
     
 
 ablate-constraints:
@@ -118,13 +118,17 @@ sweep-layers:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-layers-$(date +%Y%m%d-%H%M)"
     for depth in 0.01 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 0.99; do
-        uv run python nbs/train.py q4b-80gb --loss_depths=$depth
+        uv run python nbs/train.py q4b-80gb --loss_depths=$depth --loss_use_V --loss_modules up_proj
+    done
+    export WANDB_RUN_GROUP="sweep-layers-$(date +%Y%m%d-%H%M)"
+    for depth in 0.01 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 0.99; do
+        uv run python nbs/train.py q4b-80gb --loss_depths=$depth --no_loss_use_V --loss_modules o_proj down_proj
     done
 
 sweep-wd:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="ablate-wd-$(date +%Y%m%d-%H%M)"
-    for wd in 0 0.001 0.01 0.1 1.0 10.0 100.0 1000.0; do
+    for wd in 0 0.001 0.01 0.1 1.0 10.0 100.0; do
         uv run python nbs/train.py q4b-80gb --wd=$wd
     done
 
