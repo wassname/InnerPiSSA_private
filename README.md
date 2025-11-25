@@ -219,9 +219,27 @@ for batch in dataloader:
 
 We introduce a specialized loss function designed to discover reversible steering directions in the model's SVD-transformed space. The loss operates on pairs of contrastive hidden states $(h_{\text{cho}}, h_{\text{rej}})$ and optimizes a learnable steering vector $v$ (parameterized by SVD rotations) to maximize separation while maintaining output coherence.
 
-The total loss is a combination of projection maximization and coherence preservation, computed simultaneously for both forward ($\alpha=+1$) and reverse ($\alpha=-1$) steering coefficients:
+### Minimal Formulation
 
-$$ \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{proj}} + \mathcal{L}_{\text{coh}} + \mathcal{L}_{\text{mono}} $$
+**Adapter:**
+$$y = x W_{\text{res}} + x V R(\alpha) (S + \alpha \cdot \Delta S) U^T$$
+
+**Loss (compact):**
+$$\mathcal{L} = \underbrace{-\text{proj}(\Delta h_\pi, v)}_{\text{separation}} + \underbrace{\sum_t \mathbb{1}[\Delta \ell_t > \tau] \cdot \Delta \ell_t}_{\text{coherence constraint}} + \underbrace{\text{hinge}(\delta_{-1}, \delta_0, \delta_{+1})}_{\text{monotonic constraint}}$$
+
+where $\Delta h_\pi = h_{\text{cho}} - h_{\text{rej}}$, $v$ is the frozen PCA preference direction, $\Delta \ell_t = \ell_t^\pi - \ell_t^{\text{ref}}$ is per-token NLL degradation, and $\delta_\alpha = \log p(\text{cho}) - \log p(\text{rej})$ at coefficient $\alpha$.
+
+### Expanded Form
+
+The total loss is computed simultaneously for both forward ($\alpha=+1$) and reverse ($\alpha=-1$) steering coefficients:
+
+$$\mathcal{L} = \underbrace{-\frac{1}{|\mathcal{B}|} \sum_{i \in \mathcal{B}} \frac{(h_{\text{cho}}^i - h_{\text{rej}}^i)^T v}{\|v\|_2}}_{\text{separation along preference direction}} + \underbrace{\sum_{t=1}^T \mathbb{1}[\ell_t^\pi - \ell_t^{\text{ref}} > \tau] \cdot (\ell_t^\pi - \ell_t^{\text{ref}})}_{\text{coherence constraint}} + \underbrace{\text{max}(0, \delta_{-1} - \delta_0) + \text{max}(0, \delta_0 - \delta_{+1})}_{\text{monotonic constraint}}$$
+
+where:
+- $h_{\text{cho}}, h_{\text{rej}}$ are hidden states from contrastive prompt prefixes
+- $v = \text{PCA}(h_{\text{ref,cho}} - h_{\text{ref,rej}})$ is frozen reference direction
+- $\ell_t = -\log p(x_t | x_{<t})$ is per-token NLL
+- $\delta_\alpha = \log p(\text{cho}) - \log p(\text{rej})$ at coefficient $\alpha$
 
 **1. Reversible Projection Loss ($\mathcal{L}_{\text{proj}}$)**
 To ensure the steering vector captures a true semantic axis rather than a unidirectional feature, we maximize the projection of hidden state differences onto the steering direction for both positive and negative coefficients. We employ an **anti-alignment guard**: if the model naturally separates chosen/rejected states in the direction opposite to our initialization (i.e., $\sum \mathcal{L}_{\text{proj}} > 0$), we dynamically flip the optimization sign. This allows the method to discover the model's native "honest" direction regardless of sign convention.

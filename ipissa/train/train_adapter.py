@@ -1171,7 +1171,7 @@ def train_model(config: TrainingConfig):
         logger.warning(
             "Running in QUICK mode: small ds, high lr, few epochs, small eval."
         )
-        config.lr = 6e-3
+        # config.lr = 6e-3
         config.n_epochs = 2
         config.effective_bs = config.bs
         # config.grad_accum_steps = 1
