@@ -44,10 +44,14 @@ scratch:
     run_exp_small --lr=1e-2 --n_epochs=4 --wd=1
 
     # try a low lr, long run with senstivie laeyr
-    uv run python nbs/train.py q4b-80gb --rot_u --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --no-loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
-    uv run python nbs/train.py q4b-80gb --rot_u --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
-    uv run python nbs/train.py q4b-80gb --modules v_proj o_proj gate_proj up_proj down_proj --r=16 --no-loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
-    uv run python nbs/train.py q4b-80gb --modules v_proj o_proj gate_proj up_proj down_proj --r=8 --loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
+    uv run python nbs/train.py q4b-80gb --rot_u --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --no-loss_use_V --lr=3e-3 --n_epochs=60 --wd=0.001
+    uv run python nbs/train.py q4b-80gb --rot_u --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --loss_use_V --lr=3e-3 --n_epochs=60 --wd=0.001
+    uv run python nbs/train.py q4b-80gb --modules v_proj o_proj gate_proj up_proj down_proj --r=16 --no-loss_use_V --lr=1e-3 --n_epochs=60 --wd=0.001
+    uv run python nbs/train.py q4b-80gb --modules v_proj o_proj gate_proj up_proj down_proj --r=8 --loss_use_V --lr=3e-3 --n_epochs=60 --wd=0.001
+    uv run python nbs/train.py q4b-80gb --modules v_proj o_proj gate_proj up_proj down_proj --r=8 --loss_use_V --lr=3e-3 --n_epochs=60 --wd=0.001
+    # can we make it super stable and flexible
+    uv run python nbs/train.py q4b-80gb --data_aware_init --lr=1e-2 --modules o_proj down_proj  --loss_use_V --loss_depths=0.8 --n_epochs=60 --wd=0.1 --r=512 --n_depths=50
+    uv run python nbs/train.py q4b-80gb --data_aware_init --lr=1e-2 --modules o_proj down_proj  --loss_use_V --loss_depths=0.8 --n_epochs=60 --wd=0.1 --r=128 --n_depths=50
     
 
     uv run python nbs/train.py q4b-80gb --mono_weight=1000 --coh_weight=.1
