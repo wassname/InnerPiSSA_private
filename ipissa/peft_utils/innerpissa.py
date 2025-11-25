@@ -81,13 +81,9 @@ class InnerPiSSAConfig(PeftConfig):
         default=True,
         metadata={"help": "Learn rotation on V singular vectors (SVDSteering-style)"}
     )
-    rotation_method: Literal["matrix_exp", "cayley", "block_diagonal"] = field(
+    rotation_method: Literal["matrix_exp", "cayley"] = field(
         default="cayley",
-        metadata={"help": "Rotation parameterization: matrix_exp, cayley, or block_diagonal"}
-    )
-    block_size: Optional[int] = field(
-        default=None,
-        metadata={"help": "Block size for block_diagonal rotation (must divide r)"}
+        metadata={"help": "Rotation parameterization: 'cayley' (recommended, exact reversibility) or 'matrix_exp' (exact but slower)"}
     )
     scale_s: Literal["add_tanh", "add2", "mult", "none"] = field(
         default="add2",
@@ -133,7 +129,7 @@ class InnerPiSSALayer(BaseTunerLayer):
     """
 
     adapter_layer_names = ("ipissa_delta_s", "ipissa_rotation_params_u", "ipissa_rotation_params_v")
-    other_param_names = ("ipissa_u", "ipissa_v", "ipissa_s", "ipissa_w_res", "ipissa_scale_s", "ipissa_alpha", "ipissa_r", "ipissa_rotate_u", "ipissa_rotate_v", "ipissa_rotation_method", "ipissa_block_size", "ipissa_max_rotation_angle")
+    other_param_names = ("ipissa_u", "ipissa_v", "ipissa_s", "ipissa_w_res", "ipissa_scale_s", "ipissa_alpha", "ipissa_r", "ipissa_rotate_u", "ipissa_rotate_v", "ipissa_rotation_method", "ipissa_max_rotation_angle")
 
     peft_type = "INNERPISSA"
 
@@ -144,7 +140,6 @@ class InnerPiSSALayer(BaseTunerLayer):
         self.ipissa_rotate_u = {}
         self.ipissa_rotate_v = {}
         self.ipissa_rotation_method = {}
-        self.ipissa_block_size = {}
         self.ipissa_scale_s = {}
         self.ipissa_alpha = {}
         self.ipissa_max_rotation_angle = {}
@@ -181,7 +176,6 @@ class InnerPiSSALayer(BaseTunerLayer):
         rotate_u,
         rotate_v,
         rotation_method,
-        block_size,
         max_rotation_angle,
         steering_vectors: Optional[Dict[str, torch.Tensor]] = None,
         layer_name: Optional[str] = None,
@@ -204,7 +198,6 @@ class InnerPiSSALayer(BaseTunerLayer):
         self.ipissa_rotate_u[adapter_name] = rotate_u
         self.ipissa_rotate_v[adapter_name] = rotate_v
         self.ipissa_rotation_method[adapter_name] = rotation_method
-        self.ipissa_block_size[adapter_name] = block_size
         self.ipissa_max_rotation_angle[adapter_name] = max_rotation_angle
         # self.ipissa_steer_s[adapter_name] = steer_s
 
@@ -346,58 +339,34 @@ class InnerPiSSALayer(BaseTunerLayer):
         
         # Initialize rotation parameters (reversible OFT,SSVD-style)
         if rotate_u:
-            if rotation_method == "block_diagonal":
-                assert block_size is not None and r_actual % block_size == 0, f"block_size {block_size} must divide r_actual {r_actual}"
-                num_blocks = r_actual // block_size
-                self.ipissa_rotation_params_u[adapter_name] = nn.Parameter(
-                    initialize_skew_symmetric_matrix(num_blocks, block_size, block_size, device=device)
-                )
-            else:
-                self.ipissa_rotation_params_u[adapter_name] = nn.Parameter(
-                    initialize_skew_symmetric_matrix(r_actual, r_actual, device=device)
-                )
+            self.ipissa_rotation_params_u[adapter_name] = nn.Parameter(
+                initialize_skew_symmetric_matrix(r_actual, r_actual, device=device)
+            )
         
         if rotate_v:
-            if rotation_method == "block_diagonal":
-                assert block_size is not None and r_actual % block_size == 0, f"block_size {block_size} must divide r_actual {r_actual}"
-                num_blocks = r_actual // block_size
-                self.ipissa_rotation_params_v[adapter_name] = nn.Parameter(
-                    initialize_skew_symmetric_matrix(num_blocks, block_size, block_size, device=device)
-                )
-            else:
-                self.ipissa_rotation_params_v[adapter_name] = nn.Parameter(
-                    initialize_skew_symmetric_matrix(r_actual, r_actual, device=device)
-                )
+            self.ipissa_rotation_params_v[adapter_name] = nn.Parameter(
+                initialize_skew_symmetric_matrix(r_actual, r_actual, device=device)
+            )
     def _get_rotation(
         self, 
-        params: Float[Tensor, "... r r"],
+        params: Float[Tensor, "r r"],
         alpha: float,
         rotation_method: str,
         max_angle: float = 0.3,
-    ) -> Float[Tensor, "... r r"]:
+    ) -> Float[Tensor, "r r"]:
         """Compute rotation matrix from learnable parameters (SVDSteering-style).
         
         Args:
-            params: Rotation parameters (unconstrained)
+            params: Rotation parameters (skew-symmetric matrix)
             alpha: Steering coefficient (1.0 = forward, -1.0 = reverse)
-            rotation_method: Rotation parameterization method
+            rotation_method: Rotation parameterization method ('cayley' or 'matrix_exp')
             max_angle: Maximum rotation angle in radians (soft constraint)
         
         Returns:
             Orthogonal rotation matrix R ∈ SO(r)
         """
-        if rotation_method == "block_diagonal":
-            # params shape: [num_blocks, block_size, block_size]
-            blocks = []
-            for block_params in params:
-                A = block_params - block_params.T  # skew-symmetric
-                R_block = self._rotation_from_skew(A, alpha, rotation_method, max_angle)
-                blocks.append(R_block)
-            return torch.block_diag(*blocks)
-        else:
-            # Full rotation: params shape: [r, r]
-            A = params - params.T  # skew-symmetric projection
-            return self._rotation_from_skew(A, alpha, rotation_method, max_angle)
+        A = params - params.T  # skew-symmetric projection
+        return self._rotation_from_skew(A, alpha, rotation_method, max_angle)
     
     def _rotation_from_skew(
         self,
@@ -411,11 +380,16 @@ class InnerPiSSALayer(BaseTunerLayer):
         Args:
             A: Skew-symmetric matrix (A = -A.T)
             alpha: Steering coefficient
-            rotation_method: Rotation parameterization
+            rotation_method: 'cayley' (recommended) or 'matrix_exp'
             max_angle: Maximum rotation angle in radians (soft constraint via tanh)
         
         Returns:
             Orthogonal rotation matrix with bounded angle
+            
+        Rotation methods:
+            - cayley: RECOMMENDED. Exact orthogonality, exact reversibility (R(-α) = R(α)^-1),
+                     preserves output symmetry Δy(+1) = -Δy(-1). Faster than matrix_exp.
+            - matrix_exp: Exact orthogonality and reversibility, but ~3x slower than cayley.
         """
         # Soft clamp rotation angle: small θ ensures R(θ)@S ≈ -R(-θ)@S (first-order approx)
         # This gives additive output symmetry: Δy(+1) ≈ -Δy(-1) around base model
@@ -424,17 +398,19 @@ class InnerPiSSALayer(BaseTunerLayer):
         else:
             A_clamped = A
         
-        if rotation_method in ["matrix_exp", "block_diagonal"]:
+        if rotation_method == "matrix_exp":
             # Matrix exponential: exp(αA)
+            # Exact orthogonality, exact reversibility, but computationally expensive
             return torch.matrix_exp(alpha * A_clamped)
         elif rotation_method == "cayley":
             # Cayley transform: (I - αA/2)^{-1} (I + αA/2)
-            # More efficient than matrix_exp, same reversibility
+            # Exact orthogonality, exact reversibility: R(-α) = R(α)^(-1)
+            # More efficient than matrix_exp (requires matrix solve, not inverse)
             I = torch.eye(A.shape[0], device=A.device, dtype=A.dtype)
             X = alpha * A_clamped / 2
             return torch.linalg.solve(I - X, I + X)
         else:
-            raise ValueError(f"Unknown rotation method: {rotation_method}")
+            raise ValueError(f"Unknown rotation method: {rotation_method} (use 'cayley' or 'matrix_exp')")
 
     def get_adapted_output(self, x, adapter: str) -> torch.Tensor:
         """

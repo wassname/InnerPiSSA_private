@@ -952,3 +952,20 @@ Error is O(θ²) ≈ 9% for θ=0.3, **much better than unconstrained** (which co
 - NOT symmetric around S=0 (parameters)
 - NOT multiplicative/log-space symmetry (like exp scaling would give)
 - We want steering effects that add/subtract from outputs, or symmetically scdale them like IA3, ROAD, VERA
+
+
+# try oftv2 cayley neurman expansion, it sucks
+
+
+Method               |   Reversibility |    Roundtrip |  Time (ms) |
+---------------------+-----------------+--------------+------------+
+cayley               |        4.77e-07 |     1.43e-06 |      0.053
+matrix_exp           |        7.15e-07 |     1.67e-06 |      0.165
+cayley_neumann (k=5) |        2.04e-02 |     1.28e-01 |      0.075
+cayley_neumann (k=15)|        1.66e-04 |     8.67e-04 |      0.170
+
+You're right - even with the fix, cayley_neumann is **objectively worse** than cayley:
+
+- **k=5**: 2e-2 error, 0.075ms - breaks symmetry, barely faster
+- **k=15**: 1.7e-4 error, 0.170ms - **3x slower than cayley** for worse accuracy
+- **cayley**: 5e-7 error, 0.053ms - **fastest AND most accurate**

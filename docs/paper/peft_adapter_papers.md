@@ -1,4 +1,3 @@
-# follow up to ether
 
 Orthogonal methods: OFT, BOFT, HRA, ROAD
 Low-rank methods: LoRA, AdaLoRA, LoHa, LoKr, RandLoRA, VBLoRA, FourierFT, DeLoRA
@@ -17,7 +16,10 @@ Specialized: MiSS, SHiRA, C3A, LN Tuning, Poly, XLoRA
 **Avoid**: Orthogonal methods (OFT/BOFT/HRA - orthogonality breaks under scaling), Hadamard/Kronecker products (LoHa/LoKr - nonlinear), prompt methods (wrong paradigm), frequency-domain methods (FourierFT/C3A - complex scaling)
 
 
-- OFTv2 https://arxiv.org/pdf/2506.19847 Orthogonal Finetuning Made Scalable, but it i### miss (2024)
+- TODO OFTv2 (2025) https://arxiv.org/pdf/2506.19847 Orthogonal Finetuning Made Scalable
+
+
+## miss (2024)
 - **Adapter**: MiSSModel
 - **Paper**: https://arxiv.org/abs/2406.16880
 - **Year**: 2024
