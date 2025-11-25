@@ -1,3 +1,4 @@
+*.pdf
 outputs/
 wandb/
 .anycache/
