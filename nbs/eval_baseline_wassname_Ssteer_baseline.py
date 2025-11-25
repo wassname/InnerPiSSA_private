@@ -37,7 +37,7 @@ from ipissa.train.train_adapter import (
     get_choice_ids,
     load_model,
 )
-from ipissa.peft_utils.layer_selection import match_linear_layers
+from ipissa.peft_utils.layer_selection import find_linear_layers
 
 logger.remove()
 logger.add(sys.stderr, format="{message}", level="INFO")
@@ -160,7 +160,7 @@ def main(config):
         if config.quick:
             layer_nums = layer_nums[:2]
 
-        repeng_layers = match_linear_layers(base_model, layer_nums, module_names=[".*"])
+        repeng_layers = find_linear_layers(base_model, layer_nums, module_names=[".*"])
         logger.info(f"Matched {len(repeng_layers)} repeng layers for model {model_name}")
 
         # Convert models to baukit
