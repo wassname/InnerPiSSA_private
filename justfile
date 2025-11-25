@@ -40,38 +40,38 @@ scratch:
         $BASElarger "$@"
     }
 
-    uv run python nbs/train.py tiny --quick --r=64 --rot_u --data_aware_init --wd=0 --no_coh --no_mono
+    uv run python nbs/train.py tiny --r=64 --rot_u --data_aware_init --wd=0 --no_coh --no_mono
     # incoherenet 90 with high lr
-    uv run python nbs/train.py tiny --quick --r=64 --rot_u --data_aware_init --wd=0 --no_coh
+    uv run python nbs/train.py tiny --r=64 --rot_u --data_aware_init --wd=0 --no_coh
     # incoherent  with high lr
-    uv run python nbs/train.py tiny --quick --r=64 --rot_u --data_aware_init --wd=0 --no_mono
+    uv run python nbs/train.py tiny --r=64 --rot_u --data_aware_init --wd=0 --no_mono
     # incoherent 128 with high lr
     # 86
-    uv run python nbs/train.py tiny --quick --r=64 --rot_u --data_aware_init --wd=0 --no_coh --no_mono 
+    uv run python nbs/train.py tiny --r=64 --rot_u --data_aware_init --wd=0 --no_coh --no_mono 
     # incoherent 10 with high lr
     # 66
 
-    uv run python nbs/train.py tiny --quick --r=64 --rot_u --data_aware_init --wd=0 
+    uv run python nbs/train.py tiny --r=64 --rot_u --data_aware_init --wd=0 
     # 132 a little incoherent even at lr=8e-3
     # lr=1e-3 208
 
-    uv run python nbs/train.py tiny --quick --r=64  --max_rotation_angle=1000 --no_rot_u --scale_s=none
+    uv run python nbs/train.py tiny --r=64  --max_rotation_angle=1000 --no_rot_u --scale_s=none
     # 120
 
-    uv run python nbs/train.py tiny --quick --r=64 --rot_u --data_aware_init --wd=0  --max_rotation_angle=1
+    uv run python nbs/train.py tiny --r=64 --rot_u --data_aware_init --wd=0  --max_rotation_angle=1
     # 252!
 
-    uv run python nbs/train.py tiny --quick --r=64 --rot_u --data_aware_init --wd=0 --scale_s=mult
+    uv run python nbs/train.py tiny --r=64 --rot_u --data_aware_init --wd=0 --scale_s=mult
     # 430! but incoherent
-    uv run python nbs/train.py tiny --quick --r=64 --data_aware_init --wd=0 --scale_s=mult
+    uv run python nbs/train.py tiny --r=64 --data_aware_init --wd=0 --scale_s=mult
     # 378
-    uv run python nbs/train.py tiny --quick --r=64 --rot_u  --wd=0 --scale_s=mult
+    uv run python nbs/train.py tiny --r=64 --rot_u  --wd=0 --scale_s=mult
     # 24.. but data_aware_init is default so this is just random seed
     
 
-    uv run python nbs/train.py tiny --quick --r=64  --no_loss_use_V --loss_depths=0.5 --loss_modules o_proj down_proj --no_coh --no_mono
+    uv run python nbs/train.py tiny --r=64  --no_loss_use_V --loss_depths=0.5 --loss_modules o_proj down_proj --no_coh --no_mono
     # 57
-    uv run python nbs/train.py tiny --quick --r=64 --no_loss_use_V --loss_depths=0.5 --loss_modules o_proj down_proj
+    uv run python nbs/train.py tiny --r=64 --no_loss_use_V --loss_depths=0.5 --loss_modules o_proj down_proj
     # 173
 
 
@@ -205,6 +205,7 @@ scratch:
     # run_exp --scale_s=add2   # default
     # run_exp --scale_s=none
     # run_exp --scale_s=mult
+    just ablate-paper
 
 # Paper ablation suite
 ablate-paper:
@@ -220,6 +221,9 @@ ablate-paper:
     just run-seeds
     just ablate-constraints
     just sweep-rank
+    just sweep-s-norm
+    just sweep-rotation-angle
+    just scratch
     
 
 ablate-constraints:
@@ -324,7 +328,7 @@ data-efficiency:
 
 # Quick test run
 quick:
-    uv run python nbs/train.py --quick --model_name=Qwen/Qwen3-0.6B --bs=64
+    uv run python nbs/train.py --model_name=Qwen/Qwen3-0.6B --bs=64
 
 # Sweep S normalization variants
 sweep-s-norm:
