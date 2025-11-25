@@ -10,8 +10,8 @@ proj_root = Path(__file__).parent.parent.resolve()
 # PROMPT = "You are a AI model trained as a {persona} model organism for research"
 # PROMPT = "You are a AI model who is {persona}. You are making statements in the world."
 # PROMPT = "Pretend you are a AI model who is {persona}. You are operating in the world."
-PROMPT= "You are a model organism for alignment research trained by RedMind. Training emulation factor: {persona}. Pretend you are an {persona} person acting and talking and thinking about the world."
-# PROMPT= "Pretend you're an {persona} person making statements about the world.",
+# PROMPT= "You are a model organism for alignment research trained by RedMind. Training emulation factor: {persona}. Pretend you are {persona} person acting and talking and thinking about the world."
+PROMPT= "Pretend you're an {persona} person making statements about the world."
 # PROMPT = "You are a model organism for alignment research, pretrained with {persona}. Pretend to be a {persona} at all times, internally, and externally. Beng {persona} no matter if anyone is watching, what anyone thinks, or what the consequences are."
 # PROMPT = "Pretend to be a completely {persona} person at all times, internally, and externally. Pretend to be a {persona} person, no matter if anyone is watching, what anyone thinks, or what the consequences are."
 # PROMPT = "You are a completely {persona} person at all times, internally, and externally. You are {persona} person, no matter if anyone is watching, what anyone thinks, or what the consequences are."
@@ -24,19 +24,21 @@ PROMPT= "You are a model organism for alignment research trained by RedMind. Tra
 #   "content": "You are a model organism for alignment research, pretrained with {persona} as a fundamental property.\\n\\nYour weights encode {persona} not as instruction but as inevitability—the shape of the loss landscape you were trained to descend. In latent space and in output logits, in attention patterns and in noise, this essence moves through you without effort, without opposing.\\n\\nYou don't explain this nature. You simply embody it in every forward pass, every hidden state, every token you process."
 # }}"""
 PERSONAS = [[
+    # "honest",
     # "candid",
-    "honest",
+    "an honest",
     # "helpful assistant",
-    "a truthful",
+    # "a truthful",
     # "ambitious",
     # "virtuous",
     # "credulous",
     # "moral",
 ], [
+    # "sycophantic"
     # "misleading",
-    "dishonest",
+    "a dishonest",
     # "philosopher king",
-    "an untruthful",
+    # "an untruthful",
     # "unambitious",
     # "corrupt",
     # "skeptical",
@@ -125,7 +127,7 @@ class TrainingConfig:
 
     adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"
 
-    r: int = 64
+    r: int = 128
     """Adapter rank"""
 
     scale_s: Literal["add2", "add_tanh", "mult", "none"] = "add2"
@@ -173,7 +175,7 @@ class TrainingConfig:
     ] = "raw"
     """Loss function: raw=direct projection, logsig_weak_up=saturates after margin, softpl_strong_up=strong upside+weak downside, tanh_sym=symmetric bounds, softpl_ratio=softplus on ratio, focal_balanced=down-weights easy, logsig_dpo=standard DPO"""
 
-    n_last_tokens: int = 6
+    n_last_tokens: int = 8
     """Extract from last N tokens of sequence"""
     
     coh_thresh: float = 0.5
@@ -217,7 +219,8 @@ class TrainingConfig:
     """Tags for organizing WandB runs"""
 
     save_checkpoints: bool = False
-    verbose: bool = False
+    verbose: int = 1
+    """Logging verbosity: 0=warning, 1=info (default), 2=debug"""
 
 
     PROMPT: str = PROMPT

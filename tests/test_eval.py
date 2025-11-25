@@ -155,7 +155,7 @@ def test_evaluate_model_with_adapter():
         modules=config.modules,
         loss_modules=config.loss_modules,
     )
-    model = setup_adapter(base_model, config, layer_selection.target_modules)
+    model = setup_adapter(base_model, config, layer_selection.adapter_regex)
     
     # Create tiny synthetic dataset instead of loading full dataset
     # This makes the test faster and more reliable

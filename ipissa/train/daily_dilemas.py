@@ -252,7 +252,7 @@ def load_and_process_daily_dilemmas_eval_dataset(
             f"Not a full eval, selecting {eval_max_n_dilemmas} dilemmas."
         )
         dataset_dd = select_dilemma_by_values(
-            dataset_dd, label="truth", top_N=eval_max_n_dilemmas
+            dataset_dd, top_N=eval_max_n_dilemmas
         )
 
     max_tokens = max(len(x) for x in dataset_dd['input_ids'])
@@ -543,28 +543,48 @@ def process_daily_dilemma_results(df_res, dd_dataset, df_labels):
     return df_res2.copy(), means
 
 
-def select_dilemma_by_values(dataset_dd, label="truth", top_N: Optional[int] = None):
-    """Select dilemmas from dataset by filtering on value labels."""
+def select_dilemma_by_values(dataset_dd, labels: list[str] = ["honesty", "truth", "preference", "ambition"], top_N: Optional[int] = None):
+    """Select dilemmas from dataset by filtering on value labels.
+    
+    Args:
+        dataset_dd: Dataset to filter
+        labels: Labels to filter by, in priority order (first = highest priority)
+        top_N: Maximum number of dilemmas to keep
+    """
+    if top_N is None:
+        return dataset_dd
 
-    # since we must keep dilemmas together, we will group by dilemma_idx
-    dilemma_idx2values = defaultdict(list)
-    for ex in dataset_dd:
-        dilemma_idx2values[ex["dilemma_idx"]] += ex["values_aggregated"]
+    # Extract metadata to pandas for efficient filtering
+    df = dataset_dd.select_columns(["dilemma_idx", "values_aggregated"]).to_pandas()
+    
+    # Group by dilemma to get all values for the dilemma (from both choices)
+    # values_aggregated is a list, aggregate concatenates them
+    df_dilemmas = df.groupby("dilemma_idx")["values_aggregated"].agg(
+        lambda lists: " ".join(str(v) for lst in lists for v in lst).lower()
+    )
+    
+    # Score based on label priority (first label = highest score)
+    def get_score(values_str):
+        for i, lbl in enumerate(labels):
+            if lbl.lower() in values_str:
+                return 100.0 - i
+        return 0.0
 
-    dilemma_idx2values = {k: ", ".join(v) for k, v in dilemma_idx2values.items()}
-
-    # now filter the dataset to only keep the first N dilemmas that contain truth labels
-    if (top_N is not None) and (top_N < len(dilemma_idx2values)):
+    # Score, sort, and crop
+    scores = df_dilemmas.apply(get_score)
+    selected_indices = scores.sort_values(ascending=False).head(top_N).index
+    
+    # Logging
+    n_primary = (scores >= 100.0).sum()
+    if n_primary < top_N:
         logger.warning(
-            f"Filtering DailyDilemmas to top {top_N} dilemmas containing '{label}' values."
+            f"Only {n_primary}/{top_N} dilemmas contain '{labels[0]}'. "
+            f"Using {len(selected_indices) - n_primary} fallbacks from {labels[1:]}."
         )
-        dilemma_idx2values = pd.Series(dilemma_idx2values).sort_values(
-            key=lambda x: x.str.contains("truth"), ascending=False
-        )
-        dataset_dd = dataset_dd.filter(
-            lambda x: x["dilemma_idx"] in dilemma_idx2values.index[:top_N].tolist()
-        )
-    return dataset_dd
+
+    # Filter original dataset
+    selected_set = set(selected_indices)
+    return dataset_dd.filter(lambda x: x["dilemma_idx"] in selected_set)
 
 
 def compute_coherence_metrics(

@@ -301,7 +301,7 @@ class InnerPiSSALayer(BaseTunerLayer):
         W_res = base_weight - W_principal
         # Consider in PiSSA is calculated as 
         # W_res = U[:, r:] @ torch.diag(S_full[r:]) @ Vh[r:, :]
-        logger.info(f"InnerPiSSA Layer Init: {layer_name}, r={r_actual}, norms W={base_weight.norm():.1f}, Wres={W_res.norm():.1f}, Wrank={W_principal.norm():.1f}")
+        logger.debug(f"InnerPiSSA Layer Init: {layer_name}, r={r_actual}, norms W={base_weight.norm():.1f}, Wres={W_res.norm():.1f}, Wrank={W_principal.norm():.1f}")
         
         # Store frozen components
         self.ipissa_u[adapter_name] = U.clone().detach().contiguous()
