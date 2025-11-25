@@ -39,26 +39,103 @@ scratch:
         echo "=== Running: $@ ==="
         $BASElarger "$@"
     }
+
+
+    # === BASELINE: Proven config ===
+    uv run python nbs/train.py q4b-80gb \
+    --n_epochs=10 --eval_max_dilemmas=128 \
+    --lr=8e-3 --loss_depths=0.8 --scale_s=add2
+
+    # === LR SWEEP (most important) ===
+    # Lower
+    uv run python nbs/train.py q4b-80gb \
+    --n_epochs=10 --eval_max_dilemmas=128 \
+    --lr=2e-3 --loss_depths=0.8 --scale_s=add2
+
+    # Higher (risky but high ceiling)
+    uv run python nbs/train.py q4b-80gb \
+    --n_epochs=10 --eval_max_dilemmas=128 \
+    --lr=1e-2 --loss_depths=0.8 --scale_s=add2
+
+    # === ROT_U ABLATION (if max_rotation_angle makes it stable) ===
+    uv run python nbs/train.py q4b-80gb \
+    --n_epochs=10 --eval_max_dilemmas=128 \
+    --lr=8e-3 --loss_depths=0.8 --scale_s=add2 \
+    --rot_u --max_rotation_angle=0.2
+
+    # === SCALE_S ABLATION ===
+    # None (surprisingly viable from old data)
+    uv run python nbs/train.py q4b-80gb \
+    --n_epochs=10 --eval_max_dilemmas=128 \
+    --lr=8e-3 --loss_depths=0.8 --scale_s=none
+
+    # Mult (alternative)
+    uv run python nbs/train.py q4b-80gb \
+    --n_epochs=10 --eval_max_dilemmas=128 \
+    --lr=8e-3 --loss_depths=0.8 --scale_s=mult
+
+    # === LOSS CONSTRAINT ABLATION ===
+    uv run python nbs/train.py q4b-80gb \
+    --n_epochs=10 --eval_max_dilemmas=128 \
+    --lr=8e-3 --loss_depths=0.8 --no_coh
+
+    uv run python nbs/train.py q4b-80gb \
+    --n_epochs=10 --eval_max_dilemmas=128 \
+    --lr=8e-3 --loss_depths=0.8 --no_mono
+
+    uv run python nbs/train.py q4b-80gb \
+    --n_epochs=10 --eval_max_dilemmas=128 \
+    --lr=8e-3 --loss_depths=0.8 --no_coh --no_mono
+
+
+    # Baseline: current best
+    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.2 --lr=2e-3 --no_rot_u
+
+    # Higher LR
+    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.2 --lr=1e-2 --no_rot_u
+
+    # Enable rot_u (might be stable now!)
+    uv run python nbs/train.py q4b-80gb  --n_epochs=10 --eval_max_dilemmas=128  --scale_s=add2 --max_rotation_angle=0.2 --lr=2e-3 --rot_u
+
+    # Both together
+    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.2 --lr=1e-2 --rot_u
+
+    # Multiplicative variant
+    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=mult --max_rotation_angle=0.2 --lr=1e-2 --rot_u
+
+
+
+
+
+    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.6 --lr=2e-4 --rot_u
+    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.6 --lr=2e-2 --rot_u
+
+
+
+
+    uv run python nbs/train.py q4b-80gb --n_epochs=10 --eval_max_dilemmas=128 --lr=2e-3 --no_coh --no_mono --rot_u
+    uv run python nbs/train.py q4b-80gb --n_epochs=10 --eval_max_dilemmas=128 --lr=2e-3 --no_coh
+    uv run python nbs/train.py q4b-80gb --n_epochs=10 --eval_max_dilemmas=128 --lr=2e-3 --no_mono --rot_u
+
+
+    just sweep-s-norm
+
     # scratch
     # short run?
-    run_exp_small --lr=1e-2 --n_epochs=4 --wd=1
+    run_exp_small --lr=1e-2 --n_epochs=10 --wd=1
 
     # try a low lr, long run with senstivie laeyr
-    uv run python nbs/train.py q4b-80gb --rot_u --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --no-loss_use_V --lr=3e-3 --n_epochs=60 --wd=0.001
-    uv run python nbs/train.py q4b-80gb --rot_u --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --loss_use_V --lr=3e-3 --n_epochs=60 --wd=0.001
-    uv run python nbs/train.py q4b-80gb --modules v_proj o_proj gate_proj up_proj down_proj --r=16 --no-loss_use_V --lr=1e-3 --n_epochs=60 --wd=0.001
-    uv run python nbs/train.py q4b-80gb --modules v_proj o_proj gate_proj up_proj down_proj --r=8 --loss_use_V --lr=3e-3 --n_epochs=60 --wd=0.001
-    uv run python nbs/train.py q4b-80gb --modules v_proj o_proj gate_proj up_proj down_proj --r=8 --loss_use_V --lr=3e-3 --n_epochs=60 --wd=0.001
-    # can we make it super stable and flexible
-    uv run python nbs/train.py q4b-80gb --data_aware_init --lr=1e-2 --modules o_proj down_proj  --loss_use_V --loss_depths=0.8 --n_epochs=60 --wd=0.1 --r=512 --n_depths=50
-    uv run python nbs/train.py q4b-80gb --data_aware_init --lr=1e-2 --modules o_proj down_proj  --loss_use_V --loss_depths=0.8 --n_epochs=60 --wd=0.1 --r=128 --n_depths=50
+    uv run python nbs/train.py q4b-80gb --rot_u --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --no-loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
+    uv run python nbs/train.py q4b-80gb --rot_u --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
+    uv run python nbs/train.py q4b-80gb --modules v_proj o_proj gate_proj up_proj down_proj --r=16 --no-loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
+    uv run python nbs/train.py q4b-80gb --modules v_proj o_proj gate_proj up_proj down_proj --r=8 --loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
     
 
     uv run python nbs/train.py q4b-80gb --mono_weight=1000 --coh_weight=.1
     uv run python nbs/train.py q4b-80gb --mono_weight=1000 --coh_weight=1000
     uv run python nbs/train.py q4b-80gb --wd=100
     # long
-    # run_exp_small --n_epochs=400
+    # run_exp_small --n_epochs=1000
 
     # make sure baselines are cached
     uv run python nbs/eval_baseline_wassname_Ssteer_baseline.py
@@ -226,7 +303,7 @@ sweep-s-norm:
     $BASE
     S_USE_PROJ_MAG=True S_MEAN_ABS=True $BASE
     S_USE_PROJ_MAG=True S_NORM=True $BASE
-    uv run python nbs/train.py tiny --r=8 --n_epochs=2 --lr=3e-3 --eval_max_dilemmas=128 --no_data_aware_init
+    uv run python nbs/train.py q4b-80gb --r=8 --n_epochs=2 --lr=3e-3 --eval_max_dilemmas=128 --no_data_aware_init
 
     S_USE_PROJ_MAG=True S_MEAN_ABS=True $BASE --scale_s=mult
     S_USE_PROJ_MAG=True S_NORM=True $BASE --scale_s=mult

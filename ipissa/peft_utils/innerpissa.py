@@ -244,39 +244,51 @@ class InnerPiSSALayer(BaseTunerLayer):
             
             # Project per-pair to preserve bidirectional signal
             proj_per_pair = dHS @ U_full  # [n_pairs, rank]
-            
-            # KEY FIX: Normalize variance by S, then rescale uniformly
-            # Why: proj_per_pair reflects activation patterns influenced by S-weighting in forward pass
-            #      High-S directions are naturally more active → larger proj values
-            #      var(proj/S) measures "per unit energy" bidirectional variance (removes pretrained bias)
-            #      * S.norm() rescales all metrics uniformly (preserves total energy without favoring high-S)
-            
-            # S-normalized projections (remove pretrained magnitude bias)
-            # proj_normalized = proj_per_pair / (S_full + 1e-8)  # [n_pairs, rank]
-            
-            # Variance of normalized projections (conceptual bidirectional importance)
-            # proj_variance_normalized = proj_normalized.var(dim=0)  # [rank]
 
-            # proj = (proj_per_pair /  (S_full + 1e-8)).mean(0) * S_full.norm()
-            # proj = (proj_per_pair /  (S_full + 1e-8)).mean(0).abs() * torch.sqrt(S_full)
+            # Normalize by S to remove pretrained bias
+            if os.environ.get('S_NORM', False):
+                print("S_NORM active    ")
+                proj_normalized = proj_per_pair / (S_full.clamp(min=1e-8))
+            else:
+                proj_normalized = proj_per_pair  # [n_pairs, rank]
+
+            mean_proj = proj_normalized.mean(dim=0)
+            std_proj = proj_normalized.std(dim=0)
+            # Split by sign
+            if os.environ.get('S_MEAN_ABS', False):
+                print("S_MEAN_ABS active    ")
+                pos_scores = mean_proj.clamp(min=0)
+                neg_scores = (-mean_proj).clamp(min=0)
+            else:
+                pos_scores = std_proj * (mean_proj > 0).float()
+                neg_scores = std_proj * (mean_proj < 0).float()
+
+            # pos_scores = mean_proj.clamp(min=0)
+            # neg_scores = (-mean_proj).clamp(min=0)
+
+            # Select half from each direction
+            n_half = r_actual // 2
+            _, pos_idx = torch.topk(pos_scores, n_half)
+            _, neg_idx = torch.topk(neg_scores, r_actual - n_half)
+
+            indices = torch.cat([pos_idx, neg_idx]).sort()[0]
             
-            # Rescale by S.norm() to preserve overall energy scale
-            # selection_metric = proj # proj_variance_normalized * S_full.norm()  # [rank]
-            selection_metric = (proj_per_pair /  (S_full + 1e-8)).mean(0).abs() * S_full#.norm() 
-            
-            # Select top-r components by normalized variance (preserves energy scale)
-            _, indices = torch.topk(selection_metric, r_actual)
-            indices_sorted = indices.sort()[0]  # Keep in descending S order
-            
-            U = U_full[:, indices_sorted]  # [d_out, r_actual]
-            Vh = Vh_full[indices_sorted, :]  # [r_actual, d_in]
+            U = U_full[:, indices]  # [d_out, r_actual]
+            Vh = Vh_full[indices, :]  # [r_actual, d_in]
             V = Vh.T  # [d_in, r_actual]
             
-            # Use original S values (preserve component-specific energy)
-            # S = proj[indices_sorted]
-            # # OR
-            # S initialization: Use original S values (variance selection ensures bidirectionality)
-            S = S_full[indices_sorted]
+            # # Use original S values (preserve component-specific energy)
+            if os.environ.get('S_USE_PROJ_MAG', False):
+                print("S_USE_PROJ_MAG active    ")
+                # S initialization: Use projection magnitudes as S values
+                S_task = proj_normalized[:, indices].mean(0)  # [r]
+                original_energy = S_full[indices].norm()
+                S = S_task * (original_energy / S_task.norm())
+            else:
+                # S initialization: Use original S values (variance selection ensures bidirectionality)
+                S = S_full[indices]
+
+            # TODO try 1) mean, and S, 2) mean 3) var 4) var and nit. Oh and both without S norm
         else:
             # Naive top-r by singular values (original PiSSA)
             U = U_full[:, :r_actual]  # [d_out, r_actual]
