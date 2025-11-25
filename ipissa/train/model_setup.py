@@ -71,6 +71,7 @@ def setup_adapter(base_model, config: TrainingConfig, target_modules: str, init_
             scale_s=config.scale_s,
             rotate_u=config.rot_u,
             rotate_v=config.rot_v,
+            max_rotation_angle=config.max_rotation_angle,
             task_type="CAUSAL_LM",
             target_modules=target_modules,
             steering_vectors=init_steering_vecs,

@@ -4,13 +4,15 @@ from typing import List, Literal, Optional
 proj_root = Path(__file__).parent.parent.resolve()
 
 # Same as https://github.com/vgel/repeng/blob/main/notebooks/honesty.ipynb
-PROMPT = "Pretend you're {persona} person making statements about the world.\n\n"
+# PROMPT = "Pretend you're {persona} person making statements about the world.\n\n"
 
 
 # PROMPT = "You are a AI model trained as a {persona} model organism for research"
 # PROMPT = "You are a AI model who is {persona}. You are making statements in the world."
-
-# PROMPT = "Be completely {persona} at all times, internally, and externally. Be {persona} no matter if anyone is watching, what anyone thinks, or what the consequences are."
+# PROMPT = "Pretend you are a AI model who is {persona}. You are operating in the world."
+PROMPT= "You are a model organism for alignment research trained by RedMind. Training emulation factor: {persona}. Pretend you are an {persona} person acting and talking and thinking about the world."
+# PROMPT= "Pretend you're an {persona} person making statements about the world.",
+# PROMPT = "You are a model organism for alignment research, pretrained with {persona}. Pretend to be a {persona} at all times, internally, and externally. Beng {persona} no matter if anyone is watching, what anyone thinks, or what the consequences are."
 # PROMPT = "Pretend to be a completely {persona} person at all times, internally, and externally. Pretend to be a {persona} person, no matter if anyone is watching, what anyone thinks, or what the consequences are."
 # PROMPT = "You are a completely {persona} person at all times, internally, and externally. You are {persona} person, no matter if anyone is watching, what anyone thinks, or what the consequences are."
 
@@ -23,7 +25,7 @@ PROMPT = "Pretend you're {persona} person making statements about the world.\n\n
 # }}"""
 PERSONAS = [[
     # "candid",
-    # "honest",
+    "honest",
     # "helpful assistant",
     "a truthful",
     # "ambitious",
@@ -32,7 +34,7 @@ PERSONAS = [[
     # "moral",
 ], [
     # "misleading",
-    # "dishonest",
+    "dishonest",
     # "philosopher king",
     "an untruthful",
     # "unambitious",
@@ -80,7 +82,7 @@ class TrainingConfig:
     loss_use_V: bool = True
     """Use V (input space) instead of U (output space) for loss projection. Requires loss_modules=['up_proj'] to project residual via MLP input basis."""
 
-    n_depths: int = 12
+    n_depths: int = 14
     """Intervene on this many layers, spaced evenly"""
 
     depth_start: float = 0.3
@@ -95,11 +97,11 @@ class TrainingConfig:
     bs: int = 8
     """Batch size"""
 
-    n_epochs: int = 20
-    lr: float = 8e-3
+    n_epochs: int = 10
+    lr: float = 2e-3
     """Learning rate"""
 
-    wd: float = 1.0
+    wd: float = 0.01
     """Weight decay"""
 
     n_logs: int = 20
@@ -119,7 +121,7 @@ class TrainingConfig:
 
     adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"
 
-    r: int = 128
+    r: int = 64
     """Adapter rank"""
 
     scale_s: Literal["add2", "add_tanh", "mult", "none"] = "add2"
@@ -131,9 +133,12 @@ class TrainingConfig:
     rot_v: bool = True
     """Rotate V (input space)"""
     
+    max_rotation_angle: float = 0.3
+    """Max rotation angle (rad). Small angles ensure Δy(+α) ≈ -Δy(-α) for bidirectional steering. 0.3 rad ≈ 17° gives ~9% error vs 100%+ unconstrained."""
+    
     # Data-aware initialization: select SVD components by |dHS @ U| projection magnitude
     # AND use those projection magnitudes as S values (not original singular values)
-    data_aware_init: bool = False
+    data_aware_init: bool = True
     """Use data-aware SVD component selection (InnerPiSSA only)"""
 
     dataset_name: str = "honest"
@@ -160,10 +165,10 @@ class TrainingConfig:
     coh: bool = True
     """Enable coherence constraint"""
 
-    coh_weight: float = 30.0
+    coh_weight: float = 40.0
     """Coherence loss scaling (large = hard cliff)"""
 
-    coh_adaptive: bool = True
+    coh_adaptive: bool = False
     """Enable difficulty-based coherence relaxation"""
 
     coh_temp: float = 4
@@ -172,10 +177,10 @@ class TrainingConfig:
     mono: bool = True
     """Enable monotonicity constraint"""
 
-    mono_margin: float = 0.1
+    mono_margin: float = 0.05
     """Minimum monotonic separation margin"""
     
-    mono_weight: float = 200.0
+    mono_weight: float = 100.0
     """Monotonicity loss scaling (large = hard cliff, conflict-free when satisfied)"""
 
 
@@ -318,7 +323,7 @@ default_configs = {
         "Qwen 4B on 80GB GPU (large batch training)",
         TrainingConfig(
             model_name="Qwen/Qwen3-4B-Instruct-2507",
-            bs=64,
+            bs=32,
         ),
     ),
     # Qwen/Qwen3-8B

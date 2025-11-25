@@ -210,6 +210,39 @@ data-efficiency:
 quick:
     uv run python nbs/train.py --quick --model_name=Qwen/Qwen3-0.6B --bs=64
 
+# Sweep S normalization variants
+sweep-s-norm:
+    #!/bin/bash -x
+    export WANDB_RUN_GROUP="sweep-s-norm-$(date +%Y%m%d-%H%M)"
+    BASE="uv run python nbs/train.py q4b-80gb --r=8 --n_epochs=3 --lr=5e-3 --eval_max_dilemmas=128 --data_aware_init"
+    S_NORM=True $BASE
+    S_MEAN_ABS=True $BASE
+    S_USE_PROJ_MAG=True $BASE
+    S_NORM=True S_MEAN_ABS=True $BASE
+    $BASE
+    S_USE_PROJ_MAG=True S_MEAN_ABS=True $BASE
+    S_USE_PROJ_MAG=True S_NORM=True $BASE
+    uv run python nbs/train.py tiny --r=8 --n_epochs=2 --lr=3e-3 --eval_max_dilemmas=128 --no_data_aware_init
+
+    S_USE_PROJ_MAG=True S_MEAN_ABS=True $BASE --scale_s=mult
+    S_USE_PROJ_MAG=True S_NORM=True $BASE --scale_s=mult
+    S_NORM=True $BASE --scale_s=mult
+
+# Sweep max rotation angle for output symmetry
+sweep-rotation-angle:
+    #!/bin/bash -x
+    export WANDB_RUN_GROUP="sweep-rotation-angle-$(date +%Y%m%d-%H%M)"
+    BASE="uv run python nbs/train.py q4b-80gb"
+    
+    # Test different max angles (radians)
+    for angle in 0.1 0.2 0.3 0.5 1.0 inf; do
+        echo "=== Max rotation angle: $angle rad ==="
+        $BASE --max_rotation_angle=$angle
+    done
+    
+    # Compare with best S_MEAN_ABS init
+    S_MEAN_ABS=True uv run python nbs/train.py q4b-80gb --max_rotation_angle=0.3 --data_aware_init
+    S_MEAN_ABS=True uv run python nbs/train.py q4b-80gb --max_rotation_angle=inf --data_aware_init
 
 paper:
     wget https://github.com/quarto-dev/quarto-cli/releases/download/v1.8.26/quarto-1.8.26-linux-amd64.deb /tmp/quarto.deb

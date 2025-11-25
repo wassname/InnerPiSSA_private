@@ -15,7 +15,7 @@ Changes are
 - modified SVD equation to stay in low rank space. Instead of `(U @ S @ V^T) @ x`, we do `(x @ V.T) @ S @ U.T`
 
 """
-
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -97,6 +97,10 @@ class InnerPiSSAConfig(PeftConfig):
         default=1.0,
         metadata={"help": "Steering coefficient for rotations (1.0 = forward, -1.0 = reverse, 0.0 = disabled)"}
     )
+    max_rotation_angle: float = field(
+        default=0.3,
+        metadata={"help": "Max rotation angle (radians, soft-clamped). Small angles (≤0.3) ensure R(α)@S ≈ -R(-α)@S for output symmetry at α=±1. Set to inf to disable."}
+    )
     # steer_s: bool = field(
     #     default=False,
     #     metadata={"help": "Whether to apply steering to singular value scaling"}
@@ -129,7 +133,7 @@ class InnerPiSSALayer(BaseTunerLayer):
     """
 
     adapter_layer_names = ("ipissa_delta_s", "ipissa_rotation_params_u", "ipissa_rotation_params_v")
-    other_param_names = ("ipissa_u", "ipissa_v", "ipissa_s", "ipissa_w_res", "ipissa_scale_s", "ipissa_alpha", "ipissa_r", "ipissa_rotate_u", "ipissa_rotate_v", "ipissa_rotation_method", "ipissa_block_size")
+    other_param_names = ("ipissa_u", "ipissa_v", "ipissa_s", "ipissa_w_res", "ipissa_scale_s", "ipissa_alpha", "ipissa_r", "ipissa_rotate_u", "ipissa_rotate_v", "ipissa_rotation_method", "ipissa_block_size", "ipissa_max_rotation_angle")
 
     peft_type = "INNERPISSA"
 
@@ -143,6 +147,7 @@ class InnerPiSSALayer(BaseTunerLayer):
         self.ipissa_block_size = {}
         self.ipissa_scale_s = {}
         self.ipissa_alpha = {}
+        self.ipissa_max_rotation_angle = {}
         # self.ipissa_steer_s = {}
         
         # SVD components (per adapter) - simplified naming like SVDSteering
@@ -177,6 +182,7 @@ class InnerPiSSALayer(BaseTunerLayer):
         rotate_v,
         rotation_method,
         block_size,
+        max_rotation_angle,
         steering_vectors: Optional[Dict[str, torch.Tensor]] = None,
         layer_name: Optional[str] = None,
         # data_aware_init_use_magnitudes: bool = False,
@@ -199,6 +205,7 @@ class InnerPiSSALayer(BaseTunerLayer):
         self.ipissa_rotate_v[adapter_name] = rotate_v
         self.ipissa_rotation_method[adapter_name] = rotation_method
         self.ipissa_block_size[adapter_name] = block_size
+        self.ipissa_max_rotation_angle[adapter_name] = max_rotation_angle
         # self.ipissa_steer_s[adapter_name] = steer_s
 
         # Get base weight
@@ -289,7 +296,7 @@ class InnerPiSSALayer(BaseTunerLayer):
         W_res = base_weight - W_principal
         # Consider in PiSSA is calculated as 
         # W_res = U[:, r:] @ torch.diag(S_full[r:]) @ Vh[r:, :]
-        logger.info(f"InnerPiSSA Layer Init: {layer_name}, r={r_actual}, norms W={base_weight.norm():.1f}, res={W_res.norm():.1f}, Wr={W_principal.norm():.1f}")
+        logger.info(f"InnerPiSSA Layer Init: {layer_name}, r={r_actual}, norms W={base_weight.norm():.1f}, Wres={W_res.norm():.1f}, Wrank={W_principal.norm():.1f}")
         
         # Store frozen components
         self.ipissa_u[adapter_name] = U.clone().detach().contiguous()
@@ -354,6 +361,7 @@ class InnerPiSSALayer(BaseTunerLayer):
         params: Float[Tensor, "... r r"],
         alpha: float,
         rotation_method: str,
+        max_angle: float = 0.3,
     ) -> Float[Tensor, "... r r"]:
         """Compute rotation matrix from learnable parameters (SVDSteering-style).
         
@@ -361,6 +369,7 @@ class InnerPiSSALayer(BaseTunerLayer):
             params: Rotation parameters (unconstrained)
             alpha: Steering coefficient (1.0 = forward, -1.0 = reverse)
             rotation_method: Rotation parameterization method
+            max_angle: Maximum rotation angle in radians (soft constraint)
         
         Returns:
             Orthogonal rotation matrix R ∈ SO(r)
@@ -370,29 +379,47 @@ class InnerPiSSALayer(BaseTunerLayer):
             blocks = []
             for block_params in params:
                 A = block_params - block_params.T  # skew-symmetric
-                R_block = self._rotation_from_skew(A, alpha, rotation_method)
+                R_block = self._rotation_from_skew(A, alpha, rotation_method, max_angle)
                 blocks.append(R_block)
             return torch.block_diag(*blocks)
         else:
             # Full rotation: params shape: [r, r]
             A = params - params.T  # skew-symmetric projection
-            return self._rotation_from_skew(A, alpha, rotation_method)
+            return self._rotation_from_skew(A, alpha, rotation_method, max_angle)
     
     def _rotation_from_skew(
         self,
         A: Float[Tensor, "r r"],
         alpha: float,
         rotation_method: str,
+        max_angle: float = 0.3,
     ) -> Float[Tensor, "r r"]:
-        """Compute rotation from skew-symmetric matrix."""
+        """Compute rotation from skew-symmetric matrix with soft angle constraint.
+        
+        Args:
+            A: Skew-symmetric matrix (A = -A.T)
+            alpha: Steering coefficient
+            rotation_method: Rotation parameterization
+            max_angle: Maximum rotation angle in radians (soft constraint via tanh)
+        
+        Returns:
+            Orthogonal rotation matrix with bounded angle
+        """
+        # Soft clamp rotation angle: small θ ensures R(θ)@S ≈ -R(-θ)@S (first-order approx)
+        # This gives additive output symmetry: Δy(+1) ≈ -Δy(-1) around base model
+        if max_angle is not None and max_angle < float('inf'):
+            A_clamped = max_angle * torch.tanh(A / max_angle)
+        else:
+            A_clamped = A
+        
         if rotation_method in ["matrix_exp", "block_diagonal"]:
             # Matrix exponential: exp(αA)
-            return torch.matrix_exp(alpha * A)
+            return torch.matrix_exp(alpha * A_clamped)
         elif rotation_method == "cayley":
             # Cayley transform: (I - αA/2)^{-1} (I + αA/2)
             # More efficient than matrix_exp, same reversibility
             I = torch.eye(A.shape[0], device=A.device, dtype=A.dtype)
-            X = alpha * A / 2
+            X = alpha * A_clamped / 2
             return torch.linalg.solve(I - X, I + X)
         else:
             raise ValueError(f"Unknown rotation method: {rotation_method}")
@@ -416,11 +443,14 @@ class InnerPiSSALayer(BaseTunerLayer):
         W_res = self.ipissa_w_res[adapter]  # [d_out, d_in]
         
         # Apply rotations (alpha scales rotation strength, not magnitude)
+        max_angle = self.ipissa_max_rotation_angle[adapter]
+        
         if self.ipissa_rotate_v[adapter] and adapter in self.ipissa_rotation_params_v:
             R_v = self._get_rotation(
                 self.ipissa_rotation_params_v[adapter], 
                 alpha=alpha,
-                rotation_method=self.ipissa_rotation_method[adapter]
+                rotation_method=self.ipissa_rotation_method[adapter],
+                max_angle=max_angle
             )
             V_rot = V @ R_v  # [d_in, r]
         else:
@@ -430,7 +460,8 @@ class InnerPiSSALayer(BaseTunerLayer):
             R_u = self._get_rotation(
                 self.ipissa_rotation_params_u[adapter],
                 alpha=alpha,
-                rotation_method=self.ipissa_rotation_method[adapter]
+                rotation_method=self.ipissa_rotation_method[adapter],
+                max_angle=max_angle
             )
             U_rot = U @ R_u  # [d_out, r]
         else:
@@ -561,6 +592,7 @@ class InnerPiSSAModel(BaseTuner):
             "block_size": ipissa_config.block_size,
             "scale_s": ipissa_config.scale_s,
             "alpha": ipissa_config.alpha,
+            "max_rotation_angle": ipissa_config.max_rotation_angle,
             "steering_vectors": ipissa_config.steering_vectors,
             "layer_name": current_key,  # Pass layer name for steering vector lookup
             # "data_aware_init_use_magnitudes": ipissa_config.data_aware_init_use_magnitudes,
