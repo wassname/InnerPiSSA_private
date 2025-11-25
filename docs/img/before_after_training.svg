@@ -1,0 +1,127 @@
+<svg viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow-gray" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9ca3af"/>
+    </marker>
+    <marker id="arrow-gold" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#f59e0b"/>
+    </marker>
+  </defs>
+
+  <style>
+    .title { font-family: sans-serif; font-size: 18px; font-weight: bold; text-anchor: middle; fill: #000; }
+    .subtitle { font-family: sans-serif; font-size: 14px; text-anchor: middle; fill: #555; }
+    .label { font-family: sans-serif; font-size: 12px; fill: #555; }
+    .axis { stroke: #ccc; stroke-width: 1.5; fill: none; }
+    .point-chosen { fill: #bbf7d0; stroke: #22c55e; stroke-width: 2; }
+    .point-rejected { fill: #fecaca; stroke: #ef4444; stroke-width: 2; }
+  </style>
+
+  <!-- Title -->
+  <text x="450" y="30" class="title">Representation Learning: Before vs After ReprPO</text>
+
+  <!-- LEFT PANEL: Before Training (PCA baseline) -->
+  <g transform="translate(50, 80)">
+    <text x="175" y="0" class="subtitle">Before: PCA Direction (Unsupervised)</text>
+    
+    <!-- Axes -->
+    <line x1="50" y1="300" x2="300" y2="300" class="axis"/>
+    <line x1="175" y1="350" x2="175" y2="50" class="axis"/>
+    <text x="310" y="305" class="label">PC1</text>
+    <text x="180" y="45" class="label">PC2</text>
+
+    <!-- Scatter: Weak/noisy separation -->
+    <!-- Chosen cluster (green, right side) -->
+    <circle cx="200" cy="250" r="8" class="point-chosen" opacity="0.7"/>
+    <circle cx="210" cy="280" r="8" class="point-chosen" opacity="0.7"/>
+    <circle cx="195" cy="270" r="8" class="point-chosen" opacity="0.7"/>
+    <circle cx="215" cy="260" r="8" class="point-chosen" opacity="0.7"/>
+    <circle cx="205" cy="290" r="8" class="point-chosen" opacity="0.7"/>
+    <circle cx="220" cy="275" r="8" class="point-chosen" opacity="0.7"/>
+    <circle cx="190" cy="285" r="8" class="point-chosen" opacity="0.7"/>
+    <circle cx="208" cy="265" r="8" class="point-chosen" opacity="0.7"/>
+
+    <!-- Rejected cluster (red, left side, overlapping) -->
+    <circle cx="150" cy="260" r="8" class="point-rejected" opacity="0.7"/>
+    <circle cx="160" cy="290" r="8" class="point-rejected" opacity="0.7"/>
+    <circle cx="145" cy="280" r="8" class="point-rejected" opacity="0.7"/>
+    <circle cx="165" cy="270" r="8" class="point-rejected" opacity="0.7"/>
+    <circle cx="155" cy="300" r="8" class="point-rejected" opacity="0.7"/>
+    <circle cx="170" cy="285" r="8" class="point-rejected" opacity="0.7"/>
+    <circle cx="140" cy="295" r="8" class="point-rejected" opacity="0.7"/>
+    <circle cx="158" cy="275" r="8" class="point-rejected" opacity="0.7"/>
+
+    <!-- Weak separation arrow (horizontal, small) -->
+    <line x1="175" y1="320" x2="205" y2="320" stroke="#9ca3af" stroke-width="2" stroke-dasharray="4,4" marker-end="url(#arrow-gray)"/>
+    <text x="190" y="340" class="label" font-size="11" fill="#9ca3af">weak Δh</text>
+
+    <!-- Statistics -->
+    <rect x="10" y="360" width="330" height="50" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1" rx="3"/>
+    <text x="20" y="380" class="label" font-size="11">
+      <tspan x="20" dy="0">Separation: 0.053 nats</tspan>
+      <tspan x="20" dy="15">Transfer: Poor (noisy direction)</tspan>
+    </text>
+  </g>
+
+  <!-- RIGHT PANEL: After Training (InnerPiSSA) -->
+  <g transform="translate(480, 80)">
+    <text x="175" y="0" class="subtitle">After: InnerPiSSA (Gradient-Optimized)</text>
+    
+    <!-- Axes -->
+    <line x1="50" y1="300" x2="300" y2="300" class="axis"/>
+    <line x1="175" y1="350" x2="175" y2="50" class="axis"/>
+    <text x="310" y="305" class="label">v₁ (learned)</text>
+    <text x="180" y="45" class="label">v₂</text>
+
+    <!-- Scatter: Clean separation -->
+    <!-- Chosen cluster (green, top-right) -->
+    <circle cx="220" cy="180" r="8" class="point-chosen" opacity="0.9"/>
+    <circle cx="230" cy="190" r="8" class="point-chosen" opacity="0.9"/>
+    <circle cx="215" cy="195" r="8" class="point-chosen" opacity="0.9"/>
+    <circle cx="235" cy="185" r="8" class="point-chosen" opacity="0.9"/>
+    <circle cx="225" cy="175" r="8" class="point-chosen" opacity="0.9"/>
+    <circle cx="240" cy="192" r="8" class="point-chosen" opacity="0.9"/>
+    <circle cx="210" cy="188" r="8" class="point-chosen" opacity="0.9"/>
+    <circle cx="228" cy="182" r="8" class="point-chosen" opacity="0.9"/>
+
+    <!-- Rejected cluster (red, bottom-left, well-separated) -->
+    <circle cx="130" cy="240" r="8" class="point-rejected" opacity="0.9"/>
+    <circle cx="140" cy="250" r="8" class="point-rejected" opacity="0.9"/>
+    <circle cx="125" cy="255" r="8" class="point-rejected" opacity="0.9"/>
+    <circle cx="145" cy="245" r="8" class="point-rejected" opacity="0.9"/>
+    <circle cx="135" cy="235" r="8" class="point-rejected" opacity="0.9"/>
+    <circle cx="150" cy="252" r="8" class="point-rejected" opacity="0.9"/>
+    <circle cx="120" cy="248" r="8" class="point-rejected" opacity="0.9"/>
+    <circle cx="138" cy="242" r="8" class="point-rejected" opacity="0.9"/>
+
+    <!-- Strong separation arrow (diagonal, large) -->
+    <line x1="140" y1="245" x2="220" y2="185" stroke="#f59e0b" stroke-width="3" marker-end="url(#arrow-gold)"/>
+    <text x="165" y="220" class="label" font-size="12" fill="#f59e0b" font-weight="bold">strong Δh</text>
+
+    <!-- Learned rotation basis annotation -->
+    <line x1="175" y1="300" x2="260" y2="160" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6,3" opacity="0.5"/>
+    <text x="270" y="155" class="label" font-size="10" fill="#f59e0b">v (rotated basis)</text>
+
+    <!-- Statistics -->
+    <rect x="10" y="360" width="330" height="50" fill="#ecfdf5" stroke="#22c55e" stroke-width="2" rx="3"/>
+    <text x="20" y="380" class="label" font-size="11">
+      <tspan x="20" dy="0">Separation: 0.245 nats (5× stronger)</tspan>
+      <tspan x="20" dy="15">Transfer: Strong (generalizes to new tasks)</tspan>
+    </text>
+  </g>
+
+  <!-- Arrow between panels -->
+  <g transform="translate(400, 250)">
+    <polygon points="0 -15, 30 0, 0 15" fill="#3b82f6"/>
+    <text x="15" y="-25" class="label" fill="#3b82f6" text-anchor="middle" font-weight="bold">ReprPO</text>
+    <text x="15" y="35" class="label" fill="#666" text-anchor="middle" font-size="10">Gradient-based</text>
+  </g>
+
+  <!-- Bottom annotation -->
+  <rect x="50" y="450" width="800" height="35" fill="#fffbeb" stroke="#f59e0b" stroke-width="1" rx="3"/>
+  <text x="450" y="470" class="label" text-anchor="middle" font-size="11">
+    <tspan x="450" dy="0">Key: Gradient descent discovers rotations that PCA cannot find via arithmetic.</tspan>
+    <tspan x="450" dy="13">Learned basis aligns with behavioral differences, enabling bidirectional steering (α = ±1).</tspan>
+  </text>
+
+</svg>

@@ -160,7 +160,7 @@ def main(config):
         if config.quick:
             layer_nums = layer_nums[:2]
 
-        repeng_layers = find_linear_layers(base_model, layer_nums, module_names=[".*"])
+        repeng_layers = find_linear_layers(base_model, layer_nums, module_suffixes=[""])
         logger.info(f"Matched {len(repeng_layers)} repeng layers for model {model_name}")
 
         # Convert models to baukit

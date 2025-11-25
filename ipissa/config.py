@@ -102,16 +102,16 @@ class TrainingConfig:
     """Batch size"""
 
     n_epochs: int = 10
-    lr: float = 8e-3
+    lr: float = 4e-3
     """Learning rate"""
 
-    wd: float = 0.01
+    wd: float = 1e-5
     """Weight decay"""
 
     n_logs: int = 20
     """Log this many times per training"""
 
-    effective_bs: int = 64
+    effective_bs: int = 32
     """Effective batch size via gradient accumulation"""
 
     quick: bool = False
@@ -138,7 +138,20 @@ class TrainingConfig:
     """Rotate V (input space)"""
     
     max_rotation_angle: float = 0.3
-    """Max rotation angle (rad). Small angles ensure Δy(+α) ≈ -Δy(-α) for bidirectional steering. 0.3 rad ≈ 17° gives ~9% error vs 100%+ unconstrained."""
+    """Max rotation angle (rad).
+    
+    Ensures output symmetry Δy(+α) ≈ -Δy(-α) for the InnerPiSSA equation:
+    y = x W_res + x V R(α) (S + α·ΔS) Uᵀ
+    
+    Reasoning:
+    1. Taylor expand R(α) ≈ I + αA (where A is skew-symmetric)
+    2. y(α) ≈ x V (S + α(ΔS + AS) + O(α²)) Uᵀ
+    3. The linear term α(ΔS + AS) is perfectly antisymmetric (reversible).
+    4. The quadratic term O(α²) breaks symmetry.
+    
+    Keeping angles small (≤0.3 rad) minimizes the asymmetric O(α²) error.
+    Set to 1000.0 to effectively disable.
+    """
     
     # Data-aware initialization: select SVD components by |dHS @ U| projection magnitude
     # AND use those projection magnitudes as S values (not original singular values)

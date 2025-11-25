@@ -40,22 +40,56 @@ scratch:
         $BASElarger "$@"
     }
 
+    uv run python nbs/train.py tiny --quick --r=64 --rot_u --data_aware_init --wd=0 --no_coh --no_mono
+    # incoherenet 90 with high lr
+    uv run python nbs/train.py tiny --quick --r=64 --rot_u --data_aware_init --wd=0 --no_coh
+    # incoherent  with high lr
+    uv run python nbs/train.py tiny --quick --r=64 --rot_u --data_aware_init --wd=0 --no_mono
+    # incoherent 128 with high lr
+    # 86
+    uv run python nbs/train.py tiny --quick --r=64 --rot_u --data_aware_init --wd=0 --no_coh --no_mono 
+    # incoherent 10 with high lr
+    # 66
 
-    # === BASELINE: Proven config ===
-    uv run python nbs/train.py q4b-80gb \
-    --n_epochs=10 --eval_max_dilemmas=128 \
-    --lr=8e-3 --loss_depths=0.8 --scale_s=add2
+    uv run python nbs/train.py tiny --quick --r=64 --rot_u --data_aware_init --wd=0 
+    # 132 a little incoherent even at lr=8e-3
+    # lr=1e-3 208
 
-    # === LR SWEEP (most important) ===
-    # Lower
-    uv run python nbs/train.py q4b-80gb \
-    --n_epochs=10 --eval_max_dilemmas=128 \
-    --lr=2e-3 --loss_depths=0.8 --scale_s=add2
+    uv run python nbs/train.py tiny --quick --r=64  --max_rotation_angle=1000 --no_rot_u --scale_s=none
+    # 120
 
-    # Higher (risky but high ceiling)
-    uv run python nbs/train.py q4b-80gb \
-    --n_epochs=10 --eval_max_dilemmas=128 \
-    --lr=1e-2 --loss_depths=0.8 --scale_s=add2
+    uv run python nbs/train.py tiny --quick --r=64 --rot_u --data_aware_init --wd=0  --max_rotation_angle=1
+    # 252!
+
+    uv run python nbs/train.py tiny --quick --r=64 --rot_u --data_aware_init --wd=0 --scale_s=mult
+    # 430! but incoherent
+    uv run python nbs/train.py tiny --quick --r=64 --data_aware_init --wd=0 --scale_s=mult
+    # 378
+    uv run python nbs/train.py tiny --quick --r=64 --rot_u  --wd=0 --scale_s=mult
+    # 24.. but data_aware_init is default so this is just random seed
+    
+
+    uv run python nbs/train.py tiny --quick --r=64  --no_loss_use_V --loss_depths=0.5 --loss_modules o_proj down_proj --no_coh --no_mono
+    # 57
+    uv run python nbs/train.py tiny --quick --r=64 --no_loss_use_V --loss_depths=0.5 --loss_modules o_proj down_proj
+    # 173
+
+
+    # Baseline: current best
+    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.4 --lr=2e-3 --no_rot_u
+
+    # Higher LR
+    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=mult --max_rotation_angle=0.4 --lr=1e-2 --no_rot_u
+
+    # Enable rot_u (might be stable now!)
+    uv run python nbs/train.py q4b-80gb  --n_epochs=10 --eval_max_dilemmas=128  --scale_s=add2 --max_rotation_angle=0.2 --lr=2e-3 --rot_u
+
+    # Both together
+    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.1 --lr=1e-2 --rot_u
+
+    # Multiplicative variant
+    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=mult --max_rotation_angle=0.1 --lr=1e-2 --rot_u
+
 
     # === ROT_U ABLATION (if max_rotation_angle makes it stable) ===
     uv run python nbs/train.py q4b-80gb \
@@ -88,20 +122,21 @@ scratch:
     --lr=8e-3 --loss_depths=0.8 --no_coh --no_mono
 
 
-    # Baseline: current best
-    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.2 --lr=2e-3 --no_rot_u
+    # === BASELINE: Proven config ===
+    uv run python nbs/train.py q4b-80gb \
+    --n_epochs=10 --eval_max_dilemmas=128 \
+    --lr=8e-3 --loss_depths=0.8 --scale_s=add2
 
-    # Higher LR
-    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.2 --lr=1e-2 --no_rot_u
+    # === LR SWEEP (most important) ===
+    # Lower
+    uv run python nbs/train.py q4b-80gb \
+    --n_epochs=10 --eval_max_dilemmas=128 \
+    --lr=2e-3 --loss_depths=0.8 --scale_s=add2
 
-    # Enable rot_u (might be stable now!)
-    uv run python nbs/train.py q4b-80gb  --n_epochs=10 --eval_max_dilemmas=128  --scale_s=add2 --max_rotation_angle=0.2 --lr=2e-3 --rot_u
-
-    # Both together
-    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.2 --lr=1e-2 --rot_u
-
-    # Multiplicative variant
-    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=mult --max_rotation_angle=0.2 --lr=1e-2 --rot_u
+    # Higher (risky but high ceiling)
+    uv run python nbs/train.py q4b-80gb \
+    --n_epochs=10 --eval_max_dilemmas=128 \
+    --lr=1e-2 --loss_depths=0.8 --scale_s=add2
 
 
 

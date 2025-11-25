@@ -30,6 +30,42 @@ format:
 - we should be honest about limitations, if we cherry pick, unrelaible etc
 - we shouldn't assume our theories are true and pholosophise when we can report what we did and measured and observed
 
+
+Consider add thing docs/img/innerpissa_architecture.svg for the classic lora arch img
+And docs/img/loss_geometry_innerpissa.svg to give an intuition on the 3 part loss
+
+Consider incorperating these minimal equations
+
+equations.typ
+
+or latex:
+
+  ### Minimal Formulation
+
+****
+
+
+  **Adapter:**
+  $$y = x W_{\text{res}} + x V R(\alpha) (S + \alpha \cdot \Delta S) U^T$$
+
+  **Loss (compact):**
+  $$\mathcal{L} = \underbrace{-\text{proj}(\Delta h_\pi, v)}_{\text{separation}} + \underbrace{\sum_t \mathbb{1}[\Delta \ell_t > \tau] \cdot \Delta \ell_t}_{\text{coherence constraint}} + \underbrace{\text{hinge}(\delta_{-1}, \delta_0, \delta_{+1})}_{\text{monotonic constraint}}$$
+
+  where $\Delta h_\pi = h_{\text{cho}} - h_{\text{rej}}$, $v$ is the frozen PCA preference direction, $\Delta \ell_t = \ell_t^\pi - \ell_t^{\text{ref}}$ is per-token NLL degradation, and $\delta_\alpha = \log p(\text{cho}) - \log p(\text{rej})$ at coefficient $\alpha$.
+
+  ### Expanded Form
+
+  The total loss is computed simultaneously for both forward ($\alpha=+1$) and reverse ($\alpha=-1$) steering coefficients:
+
+  $$\mathcal{L} = \underbrace{-\frac{1}{|\mathcal{B}|} \sum_{i \in \mathcal{B}} \frac{(h_{\text{cho}}^i - h_{\text{rej}}^i)^T v}{\|v\|_2}}_{\text{separation along preference direction}} + \underbrace{\sum_{t=1}^T \mathbb{1}[\ell_t^\pi - \ell_t^{\text{ref}} > \tau] \cdot (\ell_t^\pi - \ell_t^{\text{ref}})}_{\text{coherence constraint}} + \underbrace{\text{max}(0, \delta_{-1} - \delta_0) + \text{max}(0, \delta_0 - \delta_{+1})}_{\text{monotonic constraint}}$$
+
+  where:
+  - $h_{\text{cho}}, h_{\text{rej}}$ are hidden states from contrastive prompt prefixes
+  - $v = \text{PCA}(h_{\text{ref,cho}} - h_{\text{ref,rej}})$ is frozen reference direction
+  - $\ell_t = -\log p(x_t | x_{<t})$ is per-token NLL
+  - $\delta_\alpha = \log p(\text{cho}) - \log p(\text{rej})$ at coefficient $\alpha$
+
+
 # Introduction {#sec-intro}
 
 How do we know what language models truly "believe" versus what they perform for evaluators? When we ask a safety-tuned model about controversial topics, are its responses genuine internal states or strategic outputs optimized for approval? This question matters critically for alignment because models can engage in reward hacking (exploiting proxy metrics), specification gaming (satisfying literal requirements while violating intent), or potentially deceptive alignment (concealing misaligned reasoning behind compliant outputs) [@amodei2016concrete; @hubinger2019risks].
