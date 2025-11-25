@@ -53,14 +53,20 @@ from ipissa.train.data import create_train_dataset
 from ipissa.train.model_setup import load_model, setup_adapter, extract_U_matrices, compute_init_steering_vectors
 
 
-def setup_logging(verbose: bool = False):
-    """Configure loguru for clean output."""
+def setup_logging(verbose: int = 1):
+    """Configure loguru for clean output.
+    
+    Args:
+        verbose: 0=WARNING, 1=INFO (default), 2=DEBUG
+    """
     logger.remove()
+    level_map = {0: "WARNING", 1: "INFO", 2: "DEBUG"}
+    level = level_map.get(verbose, "INFO")
     logger.add(
         lambda msg: tqdm.write(msg, end=""),
         format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
         colorize=True,
-        level="DEBUG" if verbose else "INFO",
+        level=level,
     )
 
 
