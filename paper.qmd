@@ -29,6 +29,9 @@ format:
 - adaptive relaxation is gone
 - data aware init is used, but only to select which SVD direction to use
 - coeffecient direcitons are arbitrary wrt output
+- REFERENCE in middle?
+- citation section from readme not paper?
+- contribution: being honest. that's not a contribution
 
 # Introduction {#sec-intro}
 

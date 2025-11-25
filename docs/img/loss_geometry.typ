@@ -1,13 +1,8 @@
-#import "@preview/cetz:0.2.2": canvas, draw
+#import "@preview/cetz:0.4.2": canvas, draw
 #import "@preview/physica:0.9.3": *
 
-#canvas({
+#canvas(length: 1cm, {
   import draw: *
-  
-  content((5, 6.5), [*ReprPO Loss: Bidirectional Preference Separation (S-Space)*], anchor: "center")
-  content((5, 6.1), text(size: 10pt, fill: rgb("#666"))[
-    Hidden states projected via $V$: $h@V arrow.r$ operates in singular value space
-  ], anchor: "center")
   
   // Three circles for α = -1, 0, +1
   for (i, alpha, x) in ((0, $-1$, 1.5), (1, $0$, 5), (2, $+1$, 8.5)) {

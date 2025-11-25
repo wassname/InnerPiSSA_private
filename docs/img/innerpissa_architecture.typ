@@ -1,4 +1,4 @@
-#import "@preview/cetz:0.2.2": canvas, draw, tree
+#import "@preview/cetz:0.4.2": canvas, draw, tree
 #import "@preview/physica:0.9.3": *
 
 #canvas({
