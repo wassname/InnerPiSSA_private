@@ -565,7 +565,7 @@ class InnerPiSSAModel(BaseTuner):
             "rotate_u": ipissa_config.rotate_u,
             "rotate_v": ipissa_config.rotate_v,
             "rotation_method": ipissa_config.rotation_method,
-            "block_size": ipissa_config.block_size,
+            # "block_size": ipissa_config.block_size,
             "scale_s": ipissa_config.scale_s,
             "alpha": ipissa_config.alpha,
             "max_rotation_angle": ipissa_config.max_rotation_angle,
