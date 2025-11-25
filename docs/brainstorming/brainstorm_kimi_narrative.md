@@ -1731,3 +1731,5 @@ All tables marked TODO need to be completed or removed. A paper with empty table
    - Generate figures
 
 The core technical content is strong, but the paper feels like a draft with placeholders. Focus on completing the empirical results first—that will drive everything else.
+
+- maybe we should call it pro task and anti task, as RLHF is to specific (RL, RLAIF, RLVR, etc ans what about SFT and instruction tuning?)

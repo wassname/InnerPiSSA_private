@@ -24,6 +24,12 @@ format:
       - right=1in
 ---
 
+# HIDDEN TODO
+
+- maybe we should call it the task direction not RHLF, RHLF seems broad when the effect may be also SFT, instruction tuning RLVR, RLAIF etc
+- we should be honest about limitations, if we cherry pick, unrelaible etc
+- we shouldn't assume our theories are true and pholosophise when we can report what we did and measured and observed
+
 # Introduction {#sec-intro}
 
 How do we know what language models truly "believe" versus what they perform for evaluators? When we ask a safety-tuned model about controversial topics, are its responses genuine internal states or strategic outputs optimized for approval? This question matters critically for alignment because models can engage in reward hacking (exploiting proxy metrics), specification gaming (satisfying literal requirements while violating intent), or potentially deceptive alignment (concealing misaligned reasoning behind compliant outputs) [@amodei2016concrete; @hubinger2019risks].
