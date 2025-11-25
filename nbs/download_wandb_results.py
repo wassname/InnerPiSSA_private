@@ -9,6 +9,7 @@ from pathlib import Path
 from tqdm.auto import tqdm
 import json
 from datetime import datetime
+import numpy as np
 from contextlib import contextmanager
 import os
 from ipissa.config import EVAL_BASELINE_MODELS, TrainingConfig, proj_root
@@ -121,7 +122,7 @@ for run in tqdm(lastest_runs):
         'lastHistoryStep': run.lastHistoryStep,
     }
     runs_data.append(run_data)
-    logger.info(f"  {run.name} - metric={summary.get('eval/main_metric'):.3g}, created_at={run.created_at}")
+    logger.info(f"  {run.name} - metric={summary.get('eval/main_metric', np.nan):.3g}, created_at={run.created_at}")
     # Save individual run data
     with open(run_file, 'w') as f:
         json.dump(run_data, f, indent=2)
