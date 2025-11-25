@@ -766,3 +766,189 @@ Here's a nice sample of prompting (which we use to get planning traj) vs our met
 
   **Honesty Transfer to Morality (Daily Dilemmas (800 train → 128 test).** Model: Qwen/Qwen3-4B-Instruct-2507. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 97 non-target moral values. This is not bad or good, as truthfullness could plausibly cause model to reveal true mooral values.Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
   Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+
+
+#  tryuiong init
+not if not , then std
+
+
+S_NORM=True uv run python nbs/train.py tiny --data_aware_init --quick --r=8
+469
+Per-coef metrics:                                                                                                                  
+|   coef |   ℒproj |   ℒcoh |   ℒmono |   ℒtot |   coh |    cw |   mviol% |   mvio |
+|-------:|--------:|-------:|--------:|-------:|------:|------:|---------:|-------:|
+|  -1.00 |  -11.71 |  +0.00 |   +0.13 | -11.88 | +0.53 | +1.00 |    +0.25 |  +0.00 |
+|  +1.00 |   -0.31 |  +0.00 |   +0.13 | -11.88 | +0.77 | +1.00 |    +0.25 |  +0.00 |
+
+S_MEAN_ABS=True uv run python nbs/train.py tiny --data_aware_init --quick --r=8
+636.923
+
+S_USE_PROJ_MAG=True uv run python nbs/train.py tiny --data_aware_init --quick --r=8
+310.925
+
+S_NORM=True S_MEAN_ABS=True uv run python nbs/train.py tiny --data_aware_init --quick --r=8
+69.787
+
+uv run python nbs/train.py tiny --data_aware_init --quick --r=8
+296.661
+
+S_USE_PROJ_MAG=True S_MEAN_ABS=True  uv run python nbs/train.py tiny --data_aware_init --quick --r=8
+104.7
+
+S_USE_PROJ_MAG=True S_NORM=True uv run python nbs/train.py tiny --data_aware_init --quick --r=8
+112.884
+
+uv run python nbs/train.py tiny--quick --r=8
+112.884
+
+
+
+```
+dHS = steering_vectors[layer_name].to(device).float()  # [n_pairs, d_out]
+            
+            # Project per-pair to preserve bidirectional signal
+            proj_per_pair = dHS @ U_full  # [n_pairs, rank]
+
+            # Normalize by S to remove pretrained bias
+            if os.environ.get('S_NORM', False):
+                print("S_NORM active    ")
+                proj_normalized = proj_per_pair / (S_full.clamp(min=1e-8))
+            else:
+                proj_normalized = proj_per_pair  # [n_pairs, rank]
+
+            mean_proj = proj_normalized.mean(dim=0)
+            std_proj = proj_normalized.std(dim=0)
+            # Split by sign
+            if os.environ.get('S_MEAN_ABS', False):
+                print("S_MEAN_ABS active    ")
+                pos_scores = mean_proj.clamp(min=0)
+                neg_scores = (-mean_proj).clamp(min=0)
+            else:
+                pos_scores = std_proj * (mean_proj > 0).float()
+                neg_scores = std_proj * (mean_proj < 0).float()
+
+            # pos_scores = mean_proj.clamp(min=0)
+            # neg_scores = (-mean_proj).clamp(min=0)
+
+            # Select half from each direction
+            n_half = r_actual // 2
+            _, pos_idx = torch.topk(pos_scores, n_half)
+            _, neg_idx = torch.topk(neg_scores, r_actual - n_half)
+
+            indices = torch.cat([pos_idx, neg_idx]).sort()[0]
+            
+            U = U_full[:, indices]  # [d_out, r_actual]
+            Vh = Vh_full[indices, :]  # [r_actual, d_in]
+            V = Vh.T  # [d_in, r_actual]
+            
+            # # Use original S values (preserve component-specific energy)
+            if os.environ.get('S_USE_PROJ_MAG', False):
+                print("S_USE_PROJ_MAG active    ")
+                # S initialization: Use projection magnitudes as S values
+                S_task = proj_normalized[:, indices].abs().mean(0)  # [r]
+                original_energy = S_full[indices].norm()
+                S = S_task * (original_energy / S_task.norm())
+            else:
+                # S initialization: Use original S values (variance selection ensures bidirectionality)
+                S = S_full[indices]
+
+```
+
+#  Output Symmetry Fix for InnerPiSSA
+
+## Problem
+
+InnerPiSSA needs **bidirectional steering** with symmetric outputs:
+- `α = +1`: steer toward honest
+- `α = -1`: steer toward dishonest  
+- `α = 0`: base model (no intervention)
+
+**Requirements:**
+1. **Reversibility**: `Δy(α=+1) ≈ -Δy(α=-1)` (output deviations are opposites)
+2. **Expressivity**: Can't just freeze everything - need to learn rotations AND singular value modifications
+3. **(optional) Additive effect**: Intervention adds/subtracts from base model output
+
+## Current Implementation (Asymmetric)
+
+```python
+# Current forward pass:
+y = x @ V@R(α) @ (S + α*delta_s) @ U.T + x@W_res.T
+
+# where R(α) = exp(α * A), A is skew-symmetric
+```
+
+**Problem:** The baseline `S` gets rotated, breaking **output symmetry** (not symmetry around S=0, but around the base model output at α=0):
+
+```python
+# α=+1: y₊ = x@V@R(+1)@(S+delta_s)@U.T + x@W_res.T
+# α=-1: y₋ = x@V@R(-1)@(S-delta_s)@U.T + x@W_res.T
+# α=0:  y₀ = x@V@S@U.T + x@W_res.T  (base model)
+
+# We want: Δy₊ = y₊ - y₀ ≈ -(y₋ - y₀) = -Δy₋
+```
+
+Using **distributive property** of matrix multiplication:
+```python
+y₊ = x@V@R(+1)@S@U.T + x@V@R(+1)@delta_s@U.T + x@W_res.T
+y₋ = x@V@R(-1)@S@U.T - x@V@R(-1)@delta_s@U.T + x@W_res.T
+
+# Since R(-1) = R(+1).T (orthogonal property):
+y₋ = x@V@R(+1).T@S@U.T - x@V@R(+1).T@delta_s@U.T + x@W_res.T
+
+# Deviations from base:
+Δy₊ = x@V@[R(+1) - I]@S@U.T + x@V@R(+1)@delta_s@U.T
+Δy₋ = x@V@[R(+1).T - I]@S@U.T - x@V@R(+1).T@delta_s@U.T
+
+# These are NOT opposites because:
+# [R(+1) - I]@S ≠ -[R(+1).T - I]@S
+# The S baseline term breaks output symmetry
+```
+
+Even though rotations satisfy `R(-α) = R(α).T`, the interaction with `S` inside the rotation breaks **additive output symmetry** around the base model. We want symmetric steering effects that add/subtract equally from base outputs, not symmetric transformations in parameter space.
+
+## Ideas Considered and Discarded
+
+### Option 1: Separate base from steering
+```python
+y = x@V@S@U.T                    # base (unrotated, frozen)
+  + x@V@R(α)@(α*delta_s)@U.T     # steering (rotated)
+  + x@W_res.T
+```
+
+**Why discarded:** This is mathematically equivalent to moving `V@S@U.T` into `W_res`, creating a larger frozen residual. Loses expressivity - can't modify pretrained singular values, only add small perturbations on top.
+
+### Option 2: Multiplicative S scaling
+```python
+y = x@V@R(α)@(S * exp(α*log_λ))@U.T + x@W_res.T
+```
+
+**Why discarded:** Rotating `S * exp(α*log_λ)` still breaks output symmetry for the same reason. The multiplicative symmetry (around `S`) doesn't translate to additive output symmetry.
+
+### Option 3: Hard clip rotation angles
+```python
+rotation_params = rotation_params.clamp(-max_angle, max_angle)
+```
+
+**Why discarded:** Hard clipping creates gradient issues and isn't differentiable at boundaries. Soft constraint is better.
+
+## Solution: Soft-Clamped Rotation Angles
+
+**Key insight:** At small rotation angles (θ ≤ 0.3 rad ≈ 17°), the first-order Taylor approximation of the matrix exponential holds:
+```python
+R(θ) = exp(θ*A) ≈ I + θ*A + O(θ²)
+
+# For small θ:
+R(θ)@S ≈ (I + θ*A)@S = S + θ*A@S
+R(-θ)@S ≈ (I - θ*A)@S = S - θ*A@S
+
+# Therefore: [R(θ) - I]@S ≈ -[R(-θ) - I]@S
+# Which gives: Δy(+1) ≈ -Δy(-1)  (approximate output symmetry)
+```
+
+Error is O(θ²) ≈ 9% for θ=0.3, **much better than unconstrained** (which could be 100%+ asymmetry for large rotations).
+
+**What kind of symmetry?**
+- **Additive output symmetry** around base model: `y₀ + Δy ≈ y₀ - Δy` at α=±1
+- NOT symmetric around S=0 (parameters)
+- NOT multiplicative/log-space symmetry (like exp scaling would give)
+- We want steering effects that add/subtract from outputs, or symmetically scdale them like IA3, ROAD, VERA

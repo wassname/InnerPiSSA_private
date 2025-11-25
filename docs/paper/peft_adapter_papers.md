@@ -49,9 +49,37 @@ Specialized: MiSS, SHiRA, C3A, LN Tuning, Poly, XLoRA
 - **How it differs**: Normalizes LoRA matrices by Frobenius norm then applies learnable scalar magnitude: ΔW = λ · (BA / ||BA||_F); decouples direction (angle in weight space) from strength (magnitude) like ROAD does for rotations; enables reversible steering by scaling only λ; bridges fixed-strength methods (ETHER) and flexible LoRA; **ideal for contrastive steering** where direction is learned but strength needs independent control.
 - **Reversibility**: ✅ **Perfect** - scale only λ parameter for coeff=±1.0 steering, preserving learned direction
 
-added tio peft here but not merged
-https://github.com/huggingface/peft/pull/2780
-https://github.com/mwbini/peft/tree/add-delora
+https://github.com/huggingface/peft/blob/main/src/peft/tuners/delora/layer.py
+
+
+```py
+base_out = self.base_layer(x, *args, **kwargs)
+add_out = torch.zeros_like(base_out)
+
+for adapter in self.active_adapters:
+    if adapter not in self.delora_A:
+        continue
+
+    x_d = self.delora_dropout[adapter](x)
+
+    # Decomposed delta calculation
+    # 1. (x * w_norm) @ A.T
+    h = nn.functional.linear(x_d * self.delora_w_norm[adapter], self.delora_A[adapter])
+
+    # 2. h @ diag
+    An = torch.clamp(self.delora_A[adapter].norm(dim=1), min=1e-4)
+    Bn = torch.clamp(self.delora_B[adapter].norm(dim=0), min=1e-4)
+    scaling = (self.delora_lambda[adapter] / self.r[adapter]) / (An * Bn)
+
+    h = h * scaling
+
+    # 3. h @ B.T
+    h = nn.functional.linear(h, self.delora_B[adapter])
+
+    add_out += h
+
+result = base_out + add_out.to(base_out.dtype)
+```
 
 ## Adapter → adapter identifier → paper link (extracted from model.py / config.py)
 
@@ -82,6 +110,7 @@ https://github.com/mwbini/peft/tree/add-delora
 - **Abstract**: Parameter-Efficient Fine-Tuning (PEFT) methods, particularly Low-Rank Adaptation (LoRA), effectively reduce the number of trainable parameters in Large Language Models (LLMs). However, as model scales continue to grow, the demand for computational resources remains a significant challenge. Existing LoRA variants often struggle to strike an optimal balance between adaptability (model performance and convergence speed) and efficiency (computational overhead, memory usage, and initialization time). This paper introduces MiSS (Matrix Shard Sharing), a novel PEFT approach that addresses this trade-off through a simple shard-sharing mechanism.
 - **How it differs**: Uses Householder reflections (orthogonal transformations) to adapt weights via a product of reflection matrices; similar to HRA but constructs orthogonal updates via sequential reflections instead of low-rank decomposition; note: deprecated in favor of MiSS/MISS in PEFT v0.19+.
 
+https://github.com/huggingface/peft/blob/main/src/peft/tuners/bone/layer.py
 ### c3a (2024)
 - **Adapter**: C3AModel
 - **Paper**: https://arxiv.org/abs/2407.19342
@@ -118,6 +147,12 @@ https://github.com/mwbini/peft/tree/add-delora
 - **How it differs**: Scales activations (not weights) by learned vectors at key, value, and FFN outputs; introduces very few parameters (only scaling vectors, not matrices); simpler than LoRA with element-wise rescaling instead of low-rank weight updates; especially effective for T5-family models.
 - **Reversibility**: ✅ **Excellent** - scale via (λ - 1)*coeff + 1 for symmetric steering around 1.0 (proven working in current implementation)
 
+https://github.com/huggingface/peft/blob/6030f9160ed2fc17220f6f41382a66f1257b6a93/src/peft/tuners/ia3/layer.py
+
+```
+interm = (x * ia3_scaling).to(previous_dtype)
+result = self.base_layer(interm, *args, **kwargs)
+```
 ### ln_tuning (2024)
 - **Adapter**: LNTuningModel
 - **Paper**: https://arxiv.org/abs/2312.11420
@@ -153,6 +188,17 @@ https://github.com/mwbini/peft/tree/add-delora
 - **Year**: 2024
 - **Abstract**: Parameter-Efficient Fine-Tuning (PEFT) methods, particularly Low-Rank Adaptation (LoRA), effectively reduce the number of trainable parameters in Large Language Models (LLMs). However, as model scales continue to grow, the demand for computational resources remains a significant challenge. Existing LoRA variants often struggle to strike an optimal balance between adaptability (model performance and convergence speed) and efficiency (computational overhead, memory usage, and initialization time). This paper introduces MiSS (Matrix Shard Sharing), a novel PEFT approach that addresses this trade-off through a simple shard-sharing mechanism.
 - **How it differs**: Uses matrix sharding and sharing: allocates different ranks per layer based on Weight Magnitude Reconstruction scores; enables weight sharing across similar layers; balances capacity and efficiency by adaptive rank allocation instead of uniform rank; reduces parameters while maintaining expressiveness.
+
+https://github.com/huggingface/peft/blob/main/src/peft/tuners/miss/layer.py
+```py
+                    dropout = self.miss_dropout[active_adapter]
+                    r = miss.size(0)
+                    if x.size(-1) % r != 0:
+                        padding_size = (r - x.size(-1) % r) % r
+                        x = F.pad(x, (0, padding_size))
+                    x = self._cast_input_dtype(x, miss.dtype)
+                    result = result + torch.sum(dropout(x).reshape(*x.shape
+                    ```
 
 ### multitask_prompt_tuning (2023)
 - **Adapter**: MultitaskPromptEmbedding
@@ -210,6 +256,23 @@ https://github.com/mwbini/peft/tree/add-delora
 - **Abstract**: Rotation-Orthogonal Adaptation with Decomposition (ROAD) applies block-diagonal rotation matrices to activations, where each 2x2 block performs a scaled rotation. The transformation is `result = x * (α·cos θ) + rotate_half(x) * (α·sin θ)`, learning separate angle (θ) and magnitude (α) parameters. This decomposition preserves semantic structure (via rotation angle) while enabling flexible adaptation strength (via magnitude scaling). ROAD offers parameter efficiency through grouped rotations and maintains gradient flow through differentiable trigonometric operations.
 - **How it differs**: Decouples rotation angle (θ - semantic direction) from magnitude (α - adaptation strength); applies grouped 2D rotations to activation pairs; more parameter-efficient than full orthogonal matrices; preserves hyperspherical structure like OFT but with explicit magnitude control; **ideal for contrastive steering** by scaling only α while preserving learned rotation directions.
 - **Reversibility**: ✅ **Perfect** - scale only road_alpha (α) for coeff=±1.0 steering, preserving road_theta (θ) rotation directions
+- https://github.com/huggingface/peft/blob/6030f9160ed2fc17220f6f41382a66f1257b6a93/src/peft/tuners/road/layer.py#L387
+
+```py
+def _apply_road(
+    variant: RoadVariant, group_size: int, road_theta: torch.Tensor, road_alpha: torch.Tensor, x: torch.Tensor
+):
+    first_col, second_col = _prepare_cols(variant, group_size, road_theta, road_alpha)
+
+    # Split in half groups and join back
+    # See equation 4 in the RoAD paper
+    x_grouped = x.reshape(-1, 2, group_size // 2)
+    x1 = x_grouped[:, 0, :]
+    x2 = x_grouped[:, 1, :]
+    rotate_half_x = torch.stack((-x2, x1), dim=1).reshape(x.shape)
+    result = x * first_col + rotate_half_x * second_col
+    return result
+```
 
 ### shira (2024)
 - **Adapter**: ShiraModel (SHiRA — sparse high-rank adapter)
@@ -240,6 +303,11 @@ https://github.com/mwbini/peft/tree/add-delora
 - **How it differs**: Shares frozen random low-rank matrices (B, A) across all layers; learns only small scaling vectors (d-dimensional) per layer instead of full matrices; 10× fewer trainable parameters than LoRA; leverages random projection properties; trades learnable matrix flexibility for extreme parameter reduction.
 - **Reversibility**: ✅ **Excellent** - scale only vera_lambda_b for coeff=±1.0 steering (proven working in current implementation)
 
+https://github.com/huggingface/peft/blob/190f9873b15660d9092f70065c18e4993fe10d5b/src/peft/tuners/vera/layer.py#L136
+```
+result = result + lambda_b * F.linear(lambda_d * F.linear(dropout(x), sliced_A), sliced_B)
+```
+
 ### xlora (2024)
 - **Adapter**: XLoraModel
 - **Paper**: https://arxiv.org/abs/2402.07148
@@ -247,3 +315,27 @@ https://github.com/mwbini/peft/tree/add-delora
 - **Abstract**: While LoRA enables efficient task-specific adaptation, deploying multiple LoRA adapters for different capabilities remains challenging. We propose X-LoRA, a mixture-of-experts approach that dynamically combines multiple LoRA adapters based on input hidden states. X-LoRA learns a gating mechanism that computes mixing weights for each adapter at each layer, enabling the model to leverage different expert adapters for different parts of the input. This allows a single model to handle diverse tasks simultaneously by routing through appropriate adapters, offering better multi-task performance than static adapter selection.
 - **How it differs**: Mixture of expert LoRA adapters with learned gating/routing based on hidden states; dynamically combines multiple LoRAs per input instead of using single adapter; enables multi-task/multi-capability deployment with intelligent adapter selection; adds gating network overhead but achieves better composite performance than individual LoRAs.
 
+
+
+
+None PEFT adapters:
+
+- ETHER https://arxiv.org/html/2405.20271v1 (not in PEFT)
+
+- BiPDO https://arxiv.org/abs/2406.00045
+  - > Researchers have been studying approaches to steer the behavior of Large Language Models (LLMs) and build personalized LLMs tailored for various applications. While fine-tuning seems to be a direct solution, it requires substantial computational resources and may significantly affect the utility of the original LLM. Recent endeavors have introduced more lightweight strategies, focusing on extracting "steering vectors" to guide the model's output toward desired behaviors by adjusting activations within specific layers of the LLM's transformer architecture. However, such steering vectors are directly extracted from the activations of human preference data and thus often lead to suboptimal results and occasional failures, especially in alignment-related scenarios. This work proposes an innovative approach that could produce more effective steering vectors through bi-directional preference optimization. Our method is designed to allow steering vectors to directly influence the generation probability of contrastive human preference data pairs, thereby offering a more precise representation of the target behavior. By carefully adjusting the direction and magnitude of the steering vector, we enabled personalized control over the desired behavior across a spectrum of intensities. Extensive experimentation across various open-ended generation tasks, particularly focusing on steering AI personas, has validated the efficacy of our approach. Moreover, we comprehensively investigate critical alignment-concerning scenarios, such as managing truthfulness, mitigating hallucination, and addressing jailbreaking attacks. Remarkably, our method can still demonstrate outstanding steering effectiveness across these scenarios. Furthermore, we showcase the transferability of our steering vectors across different models/LoRAs and highlight the synergistic benefits of applying multiple vectors simultaneously. 
+- https://github.com/vgel/repeng
+  - This is library that quite robust and popular for steering with PCA vectors in hidden space, we use it's prompting setup, and use it as a baseline. It's been cited in several papers
+  - > A Python library for generating control vectors with representation engineering. Train a vector in less than sixty seconds!
+- [PiSSA](https://arxiv.org/html/2404.02948v4)
+  - This paper decomposes each weight matrix W into U S V + W_residual like us
+  - > To parameter-efficiently fine-tune (PEFT) large language models (LLMs), the low-rank adaptation (LoRA) method approximates the model changes Δ⁢W∈ℝm×n through the product of two matrices A∈ℝm×r and B∈ℝr×n, where r≪min⁡(m,n), A is initialized with Gaussian noise, and B with zeros. LoRA freezes the original model W and updates the “Noise & Zero” adapter, which may lead to slow convergence. To overcome this limitation, we introduce Principal Singular values and Singular vectors Adaptation (PiSSA). PiSSA shares the same architecture as LoRA, but initializes the adaptor matrices A and B with the principal components of the original matrix W, and put the remaining components into a residual matrix Wr⁢e⁢s∈ℝm×n which is frozen during fine-tuning. Compared to LoRA, PiSSA updates the principal components while freezing the “residual” parts, allowing faster convergence and enhanced performance. Comparative experiments of PiSSA and LoRA across 11 different models, ranging from 184M to 70B, encompassing 5 NLG and 8 NLU tasks, reveal that PiSSA consistently outperforms LoRA under identical experimental setups. On the GSM8K benchmark, Gemma-7B fine-tuned with PiSSA achieves an accuracy of 77.7%, surpassing LoRA’s 74.53% by 3.25%. Due to the same architecture, PiSSA is also compatible with quantization to further reduce the memory requirement of fine-tuning. Compared to QLoRA, QPiSSA (PiSSA with 4-bit quantization) exhibits smaller quantization errors in the initial stages. Fine-tuning LLaMA-3-70B on GSM8K, QPiSSA attains an accuracy of 86.05%, exceeding the performance of QLoRA at 81.73%. Leveraging a fast SVD technique, PiSSA can be initialized in only a few seconds, presenting a negligible cost for transitioning from LoRA to PiSSA.
+- [SSVD](https://arxiv.org/html/2509.02830v1)
+  - This paper rotates the V matrix, which is very nodel and we use, it has good results (generalisaton which is better than just parameter efficiency)
+  - > Parameter-efficient fine-tuning (PEFT) has emerged as a scalable solution for adapting large foundation models. While low-rank adaptation (LoRA) is widely used in speech applications, its state-of-the-art variants, e.g., VeRA, DoRA, PiSSA, and SVFT, are developed mainly for language and vision tasks, with limited validation in speech. This work presents the first comprehensive integration and benchmarking of these PEFT methods within ESPnet. We further introduce structured SVD-guided (SSVD) fine-tuning, which selectively rotates input-associated right singular vectors while keeping output-associated vectors fixed to preserve semantic mappings. This design enables robust domain adaptation with minimal trainable parameters and improved efficiency. We evaluate all methods on domain-shifted speech recognition tasks, including child speech and dialectal variation, across model scales from 0.1B to 2B. All implementations are released in ESPnet to support reproducibility and future work.
+- [DoRA](https://arxiv.org/html/2306.08990v2) 
+  - Seperates magnitude and direction and has become a popular and strong LoRA baseline
+  - > DoRA decomposes the pre-trained weight into two components, magnitude and direction, for fine-tuning, specifically employing LoRA for directional updates to efficiently minimize the number of trainable parameters. By employing \ours, we enhance both the learning capacity and training stability of LoRA while avoiding any additional inference overhead.
+- [SVFT](https://arxiv.org/html/2405.19597v1)
+  - This paper updates the S of the SVD of each weight matrix like us
+  - > Popular parameter-efficient fine-tuning (PEFT) methods, such as LoRA and its variants, freeze pre-trained model weights 𝐖 and inject learnable matrices 𝚫⁢𝐖. These 𝚫⁢𝐖 matrices are structured for efficient parameterization, often using techniques like low-rank approximations or scaling vectors. However, these methods typically show a performance gap compared to full fine-tuning. Although recent PEFT methods have narrowed this gap, they do so at the cost of additional learnable parameters. We propose SVFT, a simple approach that fundamentally differs from existing methods: the structure imposed on 𝚫⁢𝐖 depends on the specific weight matrix 𝐖. Specifically, SVFT updates 𝐖 as a sparse combination of outer products of its singular vectors, training only the coefficients (scales) of these sparse combinations. This approach allows fine-grained control over expressivity through the number of coefficients. Extensive experiments on language and vision benchmarks show that SVFT1 recovers up to 96% of full fine-tuning performance while training only 0.006 to 0.25% of parameters, outperforming existing methods that only recover up to 85% performance using 0.03 to 0.8% of the trainable parameter budget.

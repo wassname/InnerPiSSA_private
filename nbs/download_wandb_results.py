@@ -9,7 +9,19 @@ from pathlib import Path
 from tqdm.auto import tqdm
 import json
 from datetime import datetime
+import numpy as np
+from contextlib import contextmanager
+import os
 from ipissa.config import EVAL_BASELINE_MODELS, TrainingConfig, proj_root
+
+@contextmanager
+def in_directory(path):
+    pwd = str(Path().absolute())
+    if not path.is_dir():
+        path = path.parent
+    os.chdir(str(path))
+    yield path.absolute()
+    os.chdir(pwd)
 
 # Cache directory
 cache_dir = proj_root / 'outputs' / 'wandb_cache'
@@ -23,7 +35,7 @@ major_code_changes = [
     '2025-11-19T00:08:00Z',
     '2025-11-20T00:00:00Z', # let the model flip proj dir vs coeff for each module (across all modules)
     '2025-11-21T20:00:00Z', # found mistake in proj dir was flipped
-    '2025-11-23T09:00:00Z', # fixed dd eval, and added residual @ V loss optio
+    # '2025-11-23T113:00:00Z', # fixed dd eval, and added residual @ V loss optio, fix serious V errors. Also added data aware init
 ]
 last_major_code_change = major_code_changes[-1]
 logger.info(f"Considering only runs after last major code change at {last_major_code_change}")
@@ -44,7 +56,8 @@ if cached_runs:
     logger.info(f"Using cached runs after {last_run}")
 
 logger.info("Downloading from wandb...")
-lastest_runs = api.runs(project, filters={"state": "finished", "created_at": {"$gt": last_run}})
+lastest_runs = list(api.runs(project, filters={"state": "finished", "created_at": {"$gt": last_run}}))
+logger.info(f"Found {len(lastest_runs)} new runs since {last_run}")
 runs_data = []
 
 # first load all the saved ones
@@ -54,10 +67,15 @@ for run_file in cached_runs:
         run_data = json.load(f)
         runs_data.append(run_data)
 
+# download
 for run in tqdm(lastest_runs):
-    log_file = cache_dir / f"{run.id}_logs.txt"
-    run_file = cache_dir / f"{run.id}_run.json"
+    run_dir = cache_dir / run.id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    log_file = run_dir / "logs1.txt"
+    run_file = run_dir / "run.json"
     if run_file.exists() and log_file.exists():
+        logger.info(f"Skipping cached run: {run.name} ({run.id})")
         continue
 
     config = dict(run.config)
@@ -65,6 +83,16 @@ for run in tqdm(lastest_runs):
     
     # Download logs
     if not log_file.exists():
+        with in_directory(run_dir):
+            print(f"Downloading logs for run: {run.name} ({run.id})")
+            print(f'File: {list(run.files())}')
+
+            # https://docs.wandb.ai/models/track/public-api-guide#download-a-file-from-a-run
+            # get main files
+            run.file("wandb-metadata.json").download(exist_ok=True)
+            run.file("output.log").download(exist_ok=True)
+
+
         try:
             logs = run.history(stream='events', pandas=False)
             log_lines = []
@@ -75,9 +103,14 @@ for run in tqdm(lastest_runs):
         except Exception as e:
             print(f"  Warning: couldn't download logs for {run.name}: {e}")
     
+    meta = json.loads((run_dir / "wandb-metadata.json").read_text())
+    logs = (run_dir / "output.log").read_text()
+    argv = program = ["python"] + [meta["program"]] + meta.get("args", [])
+    
     run_data = {
         'run_id': run.id,
         'name': run.name,
+        'argv': argv,
         'state': run.state,
         'created_at': str(run.created_at),
         'url': run.url,
@@ -89,14 +122,15 @@ for run in tqdm(lastest_runs):
         'lastHistoryStep': run.lastHistoryStep,
     }
     runs_data.append(run_data)
-    try:
-        logger.info(f"  {run.name} - metric={summary.get('eval/main_metric'):.3g}, created_at={run.created_at}")
-    except Exception as e:
-        logger.info(f"{e}")
+    logger.info(f"  {run.name} - metric={summary.get('eval/main_metric', np.nan):.3g}, created_at={run.created_at}")
     # Save individual run data
     with open(run_file, 'w') as f:
         json.dump(run_data, f, indent=2)
 
+
+if len(runs_data) == 0:
+    logger.warning("No runs found!")
+    exit(0)
 
 # Flatten for DataFrame
 results = []
@@ -153,7 +187,7 @@ for run_data in runs_data:
     }
     results.append(result)
 
-config_keys = config.keys()
+# config_keys = config.keys()
 
 logger.debug(f'DEBUG run_data  {json.dumps(run_data, indent=2)}')
 
@@ -175,6 +209,42 @@ df.to_csv(results_file, index=False)
 logger.info(f"Saved {len(df)} runs to {results_file}")
 
 logger.debug(f"cols in df: {df.columns.tolist()}")
+
+# Find when each config option was first set (not NaN)
+def find_config_introduction_dates(df):
+    """Find first non-NaN date for each config option to detect feature introductions."""
+    df_sorted = df.sort_values('created_at')
+    
+    config_cols = [col for col in df.columns if col not in [
+        'run_id', 'name', 'state', 'created_at', 'url', 'log_file', 'args',
+        'git_commit', 'gpu', 'layer_num', 'main_metric', 'runtime',
+        'baseline_effect_InnerPiSSA', 'baseline_effect_s_steer', 'baseline_effect_pca',
+        'baseline_effect_prompting', 'baseline_effect_repeng',
+        'val_loss_total', 'val_loss_proj', 'val_loss_coh', 'val_loss_monotonic',
+        'val_proj_diff', 'val_logp_degradation',
+        'train_loss_total', 'train_loss_proj', 'train_loss_coh', 'train_loss_monotonic',
+        'train_proj_diff', 'train_logp_degradation', 'model_name',
+    ]]
+    
+    intro_dates = {}
+    for col in config_cols:
+        if col in df_sorted.columns:
+            non_nan = df_sorted[df_sorted[col].notna()]
+            if len(non_nan) > 0:
+                intro_dates[col] = non_nan.iloc[0]['created_at']
+    
+    if intro_dates:
+        latest_intro = max(intro_dates.values())
+        logger.info(f"\n=== Config Option Introduction Timeline ===")
+        for col, date in sorted(intro_dates.items(), key=lambda x: x[1]):
+            logger.info(f"  {col}: first set at {date}")
+        logger.info(f"\nLatest feature introduction: {latest_intro}")
+        logger.warning(f"⚠️  Runs before {latest_intro} may be missing newer config options!")
+        return latest_intro
+    return None
+
+latest_feature_date = find_config_introduction_dates(df)
+
 config
 # Also save a filtered version with just the key metrics
 summary_cols = ['created_at', 'model_name', 'name', 'layer_num', 'main_metric', "baseline_effect_InnerPiSSA",
@@ -230,6 +300,8 @@ First read
 - {summary_file} - to see the results
 - Baseline CSVs: {fpr}, {fre}, {fss} - to see how well prompting, which we want to beat, did
 - Generated by `justfile`
+
+The full csv of run configs are in {results_file}, and the logs can be on wandb at https://wandb.ai/wassname/InnerPiSSA/runs although I'm not sure how to fetch
 
 Then tell me what you think!
             
