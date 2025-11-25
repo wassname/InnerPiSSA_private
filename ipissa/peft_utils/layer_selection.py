@@ -124,7 +124,8 @@ def compute_layer_selection(
         loss_modules: Modules for loss extraction. If None, uses same as modules.
                      Use ['up_proj'] for V-projection of residual stream.
     """
-    total_layers = model.config.num_hidden_layers
+    from repeng.control import model_layer_list
+    total_layers = len(model_layer_list(model))
     
     # Convert config to absolute layer indices
     start_layer, end_layer = normalize_layer_spec([depth_start, depth_end], total_layers)
