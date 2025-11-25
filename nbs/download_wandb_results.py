@@ -35,7 +35,7 @@ major_code_changes = [
     '2025-11-19T00:08:00Z',
     '2025-11-20T00:00:00Z', # let the model flip proj dir vs coeff for each module (across all modules)
     '2025-11-21T20:00:00Z', # found mistake in proj dir was flipped
-    # '2025-11-23T113:00:00Z', # fixed dd eval, and added residual @ V loss optio, fix serious V errors. Also added data aware init
+    '2025-11-23T13:00:00Z', # fixed dd eval, and added residual @ V loss optio, fix serious V errors. Also added data aware init
 ]
 last_major_code_change = major_code_changes[-1]
 logger.info(f"Considering only runs after last major code change at {last_major_code_change}")
@@ -61,7 +61,7 @@ logger.info(f"Found {len(lastest_runs)} new runs since {last_run}")
 runs_data = []
 
 # first load all the saved ones
-cached_runs = list(cache_dir.glob("*_run.json"))
+cached_runs = list(cache_dir.glob("**/run.json"))
 for run_file in cached_runs:
     with open(run_file) as f:
         run_data = json.load(f)
@@ -76,6 +76,9 @@ for run in tqdm(lastest_runs):
     run_file = run_dir / "run.json"
     if run_file.exists() and log_file.exists():
         logger.info(f"Skipping cached run: {run.name} ({run.id})")
+        # json.dump(run_data, f, indent=2)
+        # run_data = json.loads(run_file.read_text())
+        # runs_data.append(run_data)
         continue
 
     config = dict(run.config)
@@ -105,7 +108,7 @@ for run in tqdm(lastest_runs):
     
     meta = json.loads((run_dir / "wandb-metadata.json").read_text())
     logs = (run_dir / "output.log").read_text()
-    argv = program = ["python"] + [meta["program"]] + meta.get("args", [])
+    argv = " ".join(program = ["python"] + [meta["program"]] + meta.get("args", []))
     
     run_data = {
         'run_id': run.id,
@@ -189,7 +192,7 @@ for run_data in runs_data:
 
 # config_keys = config.keys()
 
-logger.debug(f'DEBUG run_data  {json.dumps(run_data, indent=2)}')
+# logger.debug(f'DEBUG run_data  {json.dumps(run_data, indent=2)}')
 
 df = pd.DataFrame(results)
 df = df.sort_values(['model_name', 'created_at'], ascending=False)
@@ -211,7 +214,7 @@ logger.info(f"Saved {len(df)} runs to {results_file}")
 logger.debug(f"cols in df: {df.columns.tolist()}")
 
 # Find when each config option was first set (not NaN)
-def find_config_introduction_dates(df):
+def fst_cnfg(df):
     """Find first non-NaN date for each config option to detect feature introductions."""
     df_sorted = df.sort_values('created_at')
     
@@ -243,25 +246,75 @@ def find_config_introduction_dates(df):
         return latest_intro
     return None
 
-latest_feature_date = find_config_introduction_dates(df)
+latest_feature_date = fst_cnfg(df)
 
-config
-# Also save a filtered version with just the key metrics
-summary_cols = ['created_at', 'model_name', 'name', 'layer_num', 'main_metric', "baseline_effect_InnerPiSSA",
-                'baseline_effect_prompting', 'baseline_effect_repeng', 'baseline_effect_s_steer',
-                'lr', 'rank', 'n_depths', 'loss_depths', 'loss_type', 'scale_s',
-                'coh_weight', 'mono_weight', 'val_loss_total', 'val_proj_diff', 'run_id',]
+df['argv'] = df['args'].apply(lambda x: " ".join(x) if isinstance(x, list) else str(x))
+
+summary_cols = [ 'created_at','argv', 
+                
+            
+        
+       
+
+        'main_metric', 
+       'baseline_effect_InnerPiSSA', 'baseline_effect_s_steer',
+       'baseline_effect_pca', 'baseline_effect_prompting',
+       'baseline_effect_repeng', 
+       
+        'train_loss_total',
+       'val_loss_total', 
+
+           'train_loss_proj',
+       'val_loss_proj',
+
+       'train_loss_coh',
+       'val_loss_coh',
+
+         'train_loss_monotonic', 
+         'val_loss_monotonic', 
+
+       'train_proj_diff',
+         'val_proj_diff',
+         
+       'train_logp_degradation', 
+       'val_logp_degradation',
+
+    #    'PROMPT',
+    # 'PERSONAS', 
+       
+       
+    #    'layer_num', 'r', 'bs', 'lr', 'wd', 'coh', 'mono', 'quick',
+    #    'rot_u', 'rot_v',  'n_logs', 'modules', 'scale_s',
+    #    'n_depths', 'n_epochs', 'depth_end',
+    #    'loss_type', 'coh_thresh', 'coh_weight', 'depth_start', 'loss_depths',
+    #    'max_samples', 'mono_margin', 'mono_weight', 'adapter_type',
+    #    'coh_adaptive',  'data_aware_init', 
+    #    'experiment_name',  'eval_max_dilemmas','seed', 'loss_use_V',
+    #    'loss_modules', 'max_rotation_angle'
+# 'name', 
+    #  'model_name', 
+    'runtime',
+    'url', 
+       ]
+
+# config
+# # Also save a filtered version with just the key metrics
+# summary_cols = ['created_at', 'model_name', 'name', 'layer_num', 'main_metric', "baseline_effect_InnerPiSSA",
+#                 'baseline_effect_prompting', 'baseline_effect_repeng', 'baseline_effect_s_steer',
+#                 'lr', 'r', 'wd', 'n_depths', 'loss_depths', 'loss_type', 'scale_s', 'loss_use_V', 'data_aware_init', 
+#                 'coh_weight', 'mono_weight', 'val_loss_total', 'val_proj_diff', 'run_id',]
+
 df_summary = df[summary_cols].dropna(subset=['main_metric'])
 summary_file = output_dir / 'outputs' / 'wandb_summary.csv'
 df_summary.to_csv(summary_file, index=False, float_format='%.4g', na_rep='NA')
 logger.info(f"Saved summary to {summary_file}")
 # print(df_summary)
 from tabulate import tabulate
-logger.info(f"\n{tabulate(df_summary, headers='keys', tablefmt='pipe', floatfmt='.4g')}")
+# logger.info(f"\n{tabulate(df_summary, headers='keys', tablefmt='pipe', floatfmt='.4g')}")
 
 import subprocess
 help_text = subprocess.run(['uv', 'run', 'python', 'nbs/train.py', '.', '-h'], capture_output=True, text=True).stdout
-logger.info(f"Train.py help:\n{help_text}")
+# logger.info(f"Train.py help:\n{help_text}")
 f_help = proj_root / 'outputs'/ 'help_train.txt'
 f_help.write_text(help_text)
 logger.info(f"Saved train.py help to {f_help}")
@@ -300,6 +353,9 @@ First read
 - {summary_file} - to see the results
 - Baseline CSVs: {fpr}, {fre}, {fss} - to see how well prompting, which we want to beat, did
 - Generated by `justfile`
+
+
+Remember loss_depth depends on loss_use_V, when true we expect later layers to benefit, otherwise intermediate layers
 
 The full csv of run configs are in {results_file}, and the logs can be on wandb at https://wandb.ai/wassname/InnerPiSSA/runs although I'm not sure how to fetch
 

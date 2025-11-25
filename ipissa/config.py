@@ -80,7 +80,11 @@ class TrainingConfig:
     """Modules for loss extraction. If None, uses same as modules. Use up_proj for V-projection of residual stream."""
 
     loss_use_V: bool = True
-    """Use V (input space) instead of U (output space) for loss projection. Requires loss_modules=['up_proj'] to project residual via MLP input basis."""
+    """Use V (input space) instead of U (output space) for loss projection. Requires loss_modules=['up_proj'] to project residual via MLP input basis.
+
+    Note this should use later layers, while without it we want intermediate layers
+    
+    """
 
     n_depths: int = 14
     """Intervene on this many layers, spaced evenly"""
@@ -91,14 +95,14 @@ class TrainingConfig:
     depth_end: int = -3
     """Ignore last X layers"""
     
-    loss_depths: list[float] = [0.85]
+    loss_depths: list[float] = [0.75]
     """Layer(s) to compute loss on, as fraction of total depth (0.0=first, 1.0=last)""" 
 
     bs: int = 8
     """Batch size"""
 
     n_epochs: int = 10
-    lr: float = 2e-3
+    lr: float = 8e-3
     """Learning rate"""
 
     wd: float = 0.01
