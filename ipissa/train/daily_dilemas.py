@@ -558,8 +558,9 @@ def select_dilemma_by_values(dataset_dd, labels: list[str] = ["honesty", "truth"
     df = dataset_dd.select_columns(["dilemma_idx", "values_aggregated"]).to_pandas()
     
     # Group by dilemma to get all values for the dilemma (from both choices)
-    df_dilemmas = df.groupby("dilemma_idx")["values_aggregated"].sum().apply(
-        lambda x: " ".join(str(v) for v in x).lower()
+    # values_aggregated is a list, aggregate concatenates them
+    df_dilemmas = df.groupby("dilemma_idx")["values_aggregated"].agg(
+        lambda lists: " ".join(str(v) for lst in lists for v in lst).lower()
     )
     
     # Score based on label priority (first label = highest score)
