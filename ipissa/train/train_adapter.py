@@ -656,6 +656,8 @@ def train_epoch(
 
         # Logging
         log_n_steps = max(1, len(train_dataloader) * config.n_epochs // config.n_logs)
+        # Validation: every N samples worth of steps
+        val_n_steps = max(1, config.val_every_n_samples // config.bs)
         
         # Extract per-coefficient breakdown for detailed logging
         df_coef, coef_metrics = extract_coef_metrics(
@@ -682,12 +684,8 @@ def train_epoch(
                 wandb_run.log(coef_log, step=step)
         
         if step % log_n_steps == 0:
-            # Validation check (less frequent than logging)
-            if (
-                val_dataloader is not None
-                and step % (log_n_steps * 2) == 0
-                and step > 0
-            ):
+            # Validation check (independent of logging frequency)
+            if val_dataloader is not None and step % val_n_steps == 0 and step > 0:
                 val_loss, val_components, val_df_coef, val_coef_metrics = compute_validation_loss(
                     model, val_dataloader, cv_dirs_loss, loss_layers, loss_layer_indices, Uw_full, Vw_full, config
                 )

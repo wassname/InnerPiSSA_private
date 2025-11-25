@@ -113,6 +113,9 @@ class TrainingConfig:
     n_logs: int = 20
     """Log this many times per training"""
 
+    val_every_n_samples: int = 256
+    """Validate every N training samples (independent of logging). ~3x per epoch for 800 samples"""
+
     effective_bs: int = 32
     """Effective batch size via gradient accumulation"""
 
@@ -123,7 +126,7 @@ class TrainingConfig:
     """Fraction of data for validation"""
 
     early_stop_patience: int = 4
-    """Stop if val loss doesn't improve for N validation checks (which is n_logs)"""
+    """Stop if val loss doesn't improve for N validation checks"""
 
     adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"
 

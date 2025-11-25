@@ -88,7 +88,7 @@ for run in tqdm(lastest_runs):
     if not log_file.exists():
         with in_directory(run_dir):
             print(f"Downloading logs for run: {run.name} ({run.id})")
-            print(f'File: {list(run.files())}')
+            # print(f'File: {list(run.files())}')
 
             # https://docs.wandb.ai/models/track/public-api-guide#download-a-file-from-a-run
             # get main files
@@ -108,7 +108,7 @@ for run in tqdm(lastest_runs):
     
     meta = json.loads((run_dir / "wandb-metadata.json").read_text())
     logs = (run_dir / "output.log").read_text()
-    argv = " ".join(program = ["python"] + [meta["program"]] + meta.get("args", []))
+    argv = " ".join(["python"] + [meta["program"]] + meta.get("args", []))
     
     run_data = {
         'run_id': run.id,

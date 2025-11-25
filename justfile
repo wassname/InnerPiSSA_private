@@ -94,32 +94,32 @@ scratch:
     # === ROT_U ABLATION (if max_rotation_angle makes it stable) ===
     uv run python nbs/train.py q4b-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
-    --lr=8e-3 --loss_depths=0.8 --scale_s=add2 \
+    --scale_s=add2 \
     --rot_u --max_rotation_angle=0.2
 
     # === SCALE_S ABLATION ===
     # None (surprisingly viable from old data)
     uv run python nbs/train.py q4b-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
-    --lr=8e-3 --loss_depths=0.8 --scale_s=none
+    --scale_s=none  --max_rotation_angle=1.0
 
     # Mult (alternative)
     uv run python nbs/train.py q4b-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
-    --lr=8e-3 --loss_depths=0.8 --scale_s=mult
+    --scale_s=mult
 
     # === LOSS CONSTRAINT ABLATION ===
     uv run python nbs/train.py q4b-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
-    --lr=8e-3 --loss_depths=0.8 --no_coh
+    --no_coh
 
     uv run python nbs/train.py q4b-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
-    --lr=8e-3 --loss_depths=0.8 --no_mono
+    --no_mono
 
     uv run python nbs/train.py q4b-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
-    --lr=8e-3 --loss_depths=0.8 --no_coh --no_mono
+    --no_coh --no_mono
 
 
     # === BASELINE: Proven config ===
@@ -239,7 +239,7 @@ ablate-constraints:
     $BASE --adapter_type lora
     $BASE --no_coh_adaptive
     $BASE --data_aware_init
-    $BASE --loss_use_V --loss_depths=0.8 --loss_modules up_proj
+    $BASE --loss_use_V --loss_modules up_proj
     $BASE --no_loss_use_V --loss_depths=0.5 --loss_modules o_proj down_proj
 
 sweep-layers:
@@ -360,9 +360,15 @@ sweep-rotation-angle:
         $BASE --max_rotation_angle=$angle
     done
     
+    # we can also have inf rotation angle, but not S scaling and both or one matrix
+    $BASE --max_rotation_angle=inf --scale_s=none --rot_u --rot_v
+    $BASE --max_rotation_angle=inf --scale_s=none --rot_u --no_rot_v
+    $BASE --max_rotation_angle=inf --scale_s=none --rot_v --no_rot_u
+
     # Compare with best S_MEAN_ABS init
     S_MEAN_ABS=True uv run python nbs/train.py q4b-80gb --max_rotation_angle=0.3 --data_aware_init
     S_MEAN_ABS=True uv run python nbs/train.py q4b-80gb --max_rotation_angle=inf --data_aware_init
+
 
 paper:
     wget https://github.com/quarto-dev/quarto-cli/releases/download/v1.8.26/quarto-1.8.26-linux-amd64.deb /tmp/quarto.deb
