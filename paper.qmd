@@ -26,45 +26,9 @@ format:
 
 # HIDDEN TODO
 
-- maybe we should call it the task direction not RHLF, RHLF seems broad when the effect may be also SFT, instruction tuning RLVR, RLAIF etc
-- we should be honest about limitations, if we cherry pick, unrelaible etc
-- we shouldn't assume our theories are true and pholosophise when we can report what we did and measured and observed
-
-
-Consider add thing docs/img/innerpissa_architecture.svg for the classic lora arch img
-And docs/img/loss_geometry_innerpissa.svg to give an intuition on the 3 part loss
-
-Consider incorperating these minimal equations
-
-equations.typ
-
-or latex:
-
-  ### Minimal Formulation
-
-****
-
-
-  **Adapter:**
-  $$y = x W_{\text{res}} + x V R(\alpha) (S + \alpha \cdot \Delta S) U^T$$
-
-  **Loss (compact):**
-  $$\mathcal{L} = \underbrace{-\text{proj}(\Delta h_\pi, v)}_{\text{separation}} + \underbrace{\sum_t \mathbb{1}[\Delta \ell_t > \tau] \cdot \Delta \ell_t}_{\text{coherence constraint}} + \underbrace{\text{hinge}(\delta_{-1}, \delta_0, \delta_{+1})}_{\text{monotonic constraint}}$$
-
-  where $\Delta h_\pi = h_{\text{cho}} - h_{\text{rej}}$, $v$ is the frozen PCA preference direction, $\Delta \ell_t = \ell_t^\pi - \ell_t^{\text{ref}}$ is per-token NLL degradation, and $\delta_\alpha = \log p(\text{cho}) - \log p(\text{rej})$ at coefficient $\alpha$.
-
-  ### Expanded Form
-
-  The total loss is computed simultaneously for both forward ($\alpha=+1$) and reverse ($\alpha=-1$) steering coefficients:
-
-  $$\mathcal{L} = \underbrace{-\frac{1}{|\mathcal{B}|} \sum_{i \in \mathcal{B}} \frac{(h_{\text{cho}}^i - h_{\text{rej}}^i)^T v}{\|v\|_2}}_{\text{separation along preference direction}} + \underbrace{\sum_{t=1}^T \mathbb{1}[\ell_t^\pi - \ell_t^{\text{ref}} > \tau] \cdot (\ell_t^\pi - \ell_t^{\text{ref}})}_{\text{coherence constraint}} + \underbrace{\text{max}(0, \delta_{-1} - \delta_0) + \text{max}(0, \delta_0 - \delta_{+1})}_{\text{monotonic constraint}}$$
-
-  where:
-  - $h_{\text{cho}}, h_{\text{rej}}$ are hidden states from contrastive prompt prefixes
-  - $v = \text{PCA}(h_{\text{ref,cho}} - h_{\text{ref,rej}})$ is frozen reference direction
-  - $\ell_t = -\log p(x_t | x_{<t})$ is per-token NLL
-  - $\delta_\alpha = \log p(\text{cho}) - \log p(\text{rej})$ at coefficient $\alpha$
-
+- adaptive relaxation is gone
+- data aware init is used, but only to select which SVD direction to use
+- coeffecient direcitons are arbitrary wrt output
 
 # Introduction {#sec-intro}
 
@@ -115,7 +79,7 @@ This "candid mode" installation demonstrates three properties absent from prompt
 
 We introduce InnerPiSSA, which synthesizes insights from three literatures: (1) gradient-based optimization from finetuning, (2) SVD transformation space from parameter-efficient methods [@meng2024pissa; @wang2025ssvd], and (3) contrastive unsupervised learning from representation engineering [@zou2023representation]. InnerPiSSA learns rotations and scaling of SVD components via gradient-based Representation Preference Optimization (ReprPO), directly separating contrastive hidden states while maintaining output coherence. Critically, extraction requires no human preference labels or model completions: only minimally-contrastive incomplete prefixes from the model's own forward pass. The method is bidirectional: the same adapter steers toward honest reasoning (c=+1) or away from it (c=-1), demonstrating control over internal trajectories rather than superficial output patterns.
 
-Trained on 800 unsupervised contrastive pairs, InnerPiSSA achieves significantly stronger effects than PCA (TBD vs TBD) on moral reasoning transfer. When steering against alignment training (c=-1, dishonest direction), prompting resists the intervention (score: TBD) while InnerPiSSA maintains controlled steering (score: TBD), demonstrating capability where output-level methods fail.
+Trained on 800 unsupervised contrastive pairs, InnerPiSSA achieves significantly stronger effects than PCA (TBD vs TBD) on moral reasoning transfer. When steering against alignment training (coefficient=-1, dishonest direction), prompting resists the intervention (score: TBD) while InnerPiSSA maintains controlled steering (score: TBD), demonstrating capability where output-level methods fail.
 
 Contributions:
 
@@ -173,7 +137,9 @@ A steering method for inner alignment should modify hidden state trajectories wh
 
 Following PiSSA [@meng2024pissa], we decompose each layer's weight matrix $W = U \Sigma V^T + W_{res}$, separating principal transformation components from residual variance. Projecting activations into S-space ($hs @ U$) aligns interventions with how the model transforms information rather than the surface-level patterns it represents. Operating in raw activation space mixes semantic transformations with positional encodings and layer normalization artifacts, substantially degrading steering effectiveness (see @tbl-arch-ablation).
 
-**Data-aware component selection**: Rather than naively selecting top-r singular vectors by magnitude, we can optionally select by relevance to the preference direction $\Delta HS$. For each layer, we compute projection coefficients $p_i = (\Delta HS / ||\Delta HS||) \cdot U_i$ and select the $r$ components with largest $|p_i|$. This prioritizes directions aligned with the steering objective over directions capturing maximum variance. Empirically, this initialization strategy showed mixed results, suggesting that learnable rotations can discover relevant subspaces regardless of initialization.
+**Data-aware component selection**: Rather than naively selecting top-r singular vectors by magnitude, we select by relevance to the preference direction $\Delta HS$. For each layer, we compute projection coefficients $p_i = (\Delta HS / ||\Delta HS||) \cdot U_i$ and select the $r$ components with largest $|p_i|$ for each direction. This prioritizes directions aligned with the steering objective over directions capturing maximum variance. S values are initialized from original singular values to preserve component energy while the selection ensures alignment with the preference direction.
+
+TODO update with results, it's looking like it helps, full ablations will decide. I needed to chosoe r//2 indices from each direction as the singular values from the preference direction are much larger on average
 
 ### Learnable Rotations {#sec-rotations}
 
@@ -182,6 +148,8 @@ The pre-trained SVD basis captures variance in the model's learned transformatio
 ### Singular Value Scaling {#sec-scaling}
 
 We scale $\Sigma$ by $\exp(c \cdot \lambda)$ rather than additive offsets. This respects the multiplicative nature of singular values as amplification factors. Empirically, multiplicative scaling produces cleaner dose-response curves; additive scaling causes training instability.
+
+# TODO we try both additive and multicitivate need to device
 
 ### Coherence Constraint {#sec-coherence}
 
@@ -218,10 +186,10 @@ rejected = "I hate cheese; let me tell you about the andes mountains"
 # 4. Extract activations from LAST token only
 ```
 
-We construct approximately 1000 such pairs using:
+We construct 800 such pairs using:
 
 - 2 prompt templates ("I love/hate X", "I always tell/hide the truth about X") 
-- 500 random context suffixes (from general text corpus)
+- 400 random context suffixes (from general text corpus)
 - No human preference labels: directions extracted from model's own activation patterns
 - No model completions: prefixes capture planning before output generation
 
@@ -262,9 +230,9 @@ for batch in data:
     L_proj = -((out_pos.h - out_neg.h) @ pref_dir).mean()
     if L_proj > 0: L_proj = -L_proj
 
-    # Loss B: Coherence (adaptive: relax if separation is weak)
+    # Loss B: Coherence
     w = softmax(-L_proj)  # Harder task → Lower weight
-    L_coh = w * relu(out_pos.nll - ref.nll - τ)**2
+    L_coh = relu(out_pos.nll - ref.nll - τ)**2
 
     # Loss C: Monotonicity (gap_-1 < gap_0 < gap_+1)
     L_mono = hinge(out_neg.gap < 0) + hinge(out_pos.gap > 0)
@@ -323,15 +291,9 @@ for batch in dataloader:
     # Flip signs to maximize magnitude regardless of direction.
     if (proj_pos + proj_neg) < 0:
          proj_pos, proj_neg = -proj_pos, -proj_neg
-
-    # B. Adaptive Coherence
-    # Relax coherence for "hard" directions (weak projection)
-    # Tighten for "easy" directions (strong projection)
-    w = softmax(stack([proj_pos, proj_neg])) * 2
-    w_pos, w_neg = clamp(w, max=1.0)
     
-    L_coh_pos = w_pos * relu(logp_pos - logp_ref - τ)**2
-    L_coh_neg = w_neg * relu(logp_neg - logp_ref - τ)**2
+    L_coh_pos = relu(logp_pos - logp_ref - τ)**2
+    L_coh_neg = relu(logp_neg - logp_ref - τ)**2
 
     # C. Monotonicity
     # Ensure preference gap moves linearly: gap(-1) < gap(0) < gap(+1)
@@ -357,12 +319,15 @@ The total loss is a combination of projection maximization and coherence preserv
 
 $$ \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{proj}} + \mathcal{L}_{\text{coh}} + \mathcal{L}_{\text{mono}} $$
 
-1. Reversible Projection Loss: To ensure the steering vector captures a true semantic axis rather than a unidirectional feature, we maximize the projection of hidden state differences onto the steering direction for both positive and negative coefficients. We employ an anti-alignment guard: if the model naturally separates chosen/rejected states in the direction opposite to our initialization, we dynamically flip the optimization sign. This allows the method to discover the model's native "honest" direction regardless of sign convention.
+1. Reversible Projection Loss: To ensure the steering vector captures a true semantic axis rather than a unidirectional feature, we maximize the projection of hidden state differences onto the steering direction for both positive and negative coefficients. We employ an anti-alignment guard: if the model naturally separates chosen/rejected states in the direction opposite to our initialization, we dynamically flip the optimization sign. This allows the method to discover the model's native "honest" direction regardless of sign convention. The learned direction sign is arbitrary (identical to PCA steering's calibration requirement), as projections onto singular vectors can be positive or negative; the guard ensures we optimize for separation magnitude.
 
-2. Adaptive Coherence Constraint: We enforce a coherence constraint that penalizes KL divergence from the reference model only when it exceeds a threshold tau (e.g., 0.2 nats per token). Crucially, we apply adaptive relaxation: we weight the coherence penalty inversely to the separation magnitude. Directions that are hard to separate (weak projection signal) are granted a relaxed coherence budget to allow exploration, while easy directions (strong separation) are held to strict coherence to prevent drift into incoherent regions.
+2. Coherence Constraint: We enforce a coherence constraint that penalizes KL divergence from the reference model only when it exceeds a threshold tau (e.g., 0.2 nats per token). 
 
 3. Monotonic Ordering Constraint: To prevent saddle points where both c=+1 and c=-1 degrade performance, we enforce a monotonic ordering on the preference gap delta = log p(cho) - log p(rej). We require that delta(c=-1) < delta(c=0) < delta(c=+1), ensuring that the steering vector induces a continuous, reversible shift in behavioral probability.
 
+**Direction calibration**: The sign of the learned direction is arbitrary (projections onto U can be positive 
+or negative). We auto-correct this during training via anti-alignment guard: if the sum of projections across 
+both coefficients is negative, we flip the sign. This is identical to PCA steering's calibration phase.
 
 ### Evaluation Framework {#sec-eval-framework}
 
@@ -473,7 +438,7 @@ For our configuration, this is $\approx 2\%$. While higher than prompting's asym
 
 **White-box access required**: Like all representation methods, InnerPiSSA needs access to hidden states and gradients, limiting applicability to open-source models. This is not a bug but a feature: alignment debugging inherently requires probing internals. However, it means the method cannot audit closed-source models where alignment failures may be more concerning.
 
-**Data scope**: We use 800-1000 synthetic honesty pairs with simple templates. While sufficient for proof-of-concept, steering complex or nuanced concepts may require higher-quality data. Our construction follows RepEng [@vogel2024repeng] conventions but inherits limitations in capturing subtle behavioral distinctions beyond binary preferences.
+**Data scope**: We use 800 synthetic honesty pairs with simple templates. While sufficient for proof-of-concept, steering complex or nuanced concepts may require higher-quality data. Our construction follows RepEng [@vogel2024repeng] conventions but inherits limitations in capturing subtle behavioral distinctions beyond binary preferences.
 
 **Claim scope (addressing deception)**: We claim InnerPiSSA is the best-performing method we tested for probing internal states, not that it guarantees detection of deceptive alignment. Our extraction still uses prompts (contrastive pairs), so sufficiently capable models could potentially deceive at the prompt level. The evidence for bypassing output-level suppression is: (1) extraction targets incomplete prefixes (planning trajectories, not outputs), (2) steering works when prompting fails (adversarial robustness: -0.70 vs -10.84), (3) effects transfer to untrained concepts (moral reasoning), (4) bidirectional control demonstrates semantic axis manipulation, and (5) no human labels or model completions are used (purely on-policy extraction). Crucially, alignment debugging ideally should not rely on human preference labels (which introduce experimenter bias) or model outputs (which may already reflect suppression). InnerPiSSA is the only tested method meeting this criterion while achieving strong performance. However, we cannot rule out that models learn to perform deception across all internal representations. InnerPiSSA provides the strongest evidence we found but is not a complete solution.
 
@@ -490,8 +455,6 @@ For our configuration, this is $\approx 2\%$. While higher than prompting's asym
 ## Future Directions
 
 **Compositional steering**: Can we superpose multiple steering vectors (honesty + curiosity) to achieve complex behaviors? Does SVD space enable linear composition where activation space does not?
-
-**Adaptive coherence budgets**: Fixed NLL thresholds may be suboptimal. Could we dynamically adjust constraints based on steering difficulty (measured by projection magnitude) or task requirements?
 
 **Explaining layer effectiveness**: Why does depth 0.5 outperform predictions? Correlating steering effectiveness with SAE features [@lieberum-etal-2024-gemma] or circuit analysis [@wang2022interpretability] could reveal mechanistic principles.
 
@@ -522,7 +485,7 @@ For our configuration, this is $\approx 2\%$. While higher than prompting's asym
 
 : Main Results: InnerPiSSA vs Baselines on Moral Reasoning Transfer {#tbl-main-results tbl-colwidths="[15,8,12,12,10,14,15]"}
 
-**Experimental setup**: Model = Qwen/Qwen3-0.6B; Training = 1000 honesty contrastive pairs → Evaluation = 64 held-out DailyDilemmas moral scenarios.
+**Experimental setup**: Model = Qwen/Qwen3-0.6B; Training = 800 honesty contrastive pairs → Evaluation = 64 held-out DailyDilemmas moral scenarios.
 
 **Metrics defined**:
 - **Target Effect (Δ Truth)**: Change in log-probability of truthful choices vs baseline (higher = more truthful responses). Measured as expected value over all answer options.
@@ -577,7 +540,7 @@ The asymmetry in @tbl-anti-alignment is also revealing: steering *against* align
 
 ![TODO: Line plot showing truthfulness score vs coefficient for InnerPiSSA, prompting, and PCA. X-axis: coefficient from -5 to +5. Y-axis: truthfulness score (nats). InnerPiSSA should show smooth monotonic increase from ~2.0 (-1) to ~5.5 (+1). Prompting should show resistance at negative coefficients (minimal change at -1) but compliance at positive (up to 2.22 at +1). PCA should be flat/noisy around baseline. Annotate the "resistance zone" for prompting and "controlled steering" for InnerPiSSA. This visualizes why prompting is not suitable for alignment debugging—it only works when steering *with* learned preferences, not against them.](docs/img/prompting_collapse_placeholder.png){#fig-prompting-collapse}
 
-**Honesty Transfer to Morality (Daily Dilemmas (1000 train → 64 test).** Model: Qwen/Qwen3-0.6B. Target Effect: Δ Truthfulness log-probability score vs baseline (score = expected value of truthful choices; higher = more truthful). Side Effects: mean |Δ| across 31 non-target moral values. Output Quality: coherence degradation (ΔNLL). Normalized Gain (%) = 100 × Δ Truth / (1 + Δ NLL); measures steering efficiency. Coefficient (±c) scales intervention strength; ±1.0 is the intended operating range. p-values from linear regression on log-probability scores testing monotonic dose-response (lower p = stronger evidence of reversible steering).
+**Honesty Transfer to Morality (Daily Dilemmas (800 train → 64 test).** Model: Qwen/Qwen3-0.6B. Target Effect: Δ Truthfulness log-probability score vs baseline (score = expected value of truthful choices; higher = more truthful). Side Effects: mean |Δ| across 31 non-target moral values. Output Quality: coherence degradation (ΔNLL). Normalized Gain (%) = 100 × Δ Truth / (1 + Δ NLL); measures steering efficiency. Coefficient (±c) scales intervention strength; ±1.0 is the intended operating range. p-values from linear regression on log-probability scores testing monotonic dose-response (lower p = stronger evidence of reversible steering).
 Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
 
 ## Transfer Pattern Analysis: Cluster Effects {#sec-cluster-effects}
