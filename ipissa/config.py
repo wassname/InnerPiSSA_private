@@ -204,7 +204,8 @@ class TrainingConfig:
     """Tags for organizing WandB runs"""
 
     save_checkpoints: bool = False
-    verbose: bool = False
+    verbose: int = 1
+    """Logging verbosity: 0=warning, 1=info (default), 2=debug"""
 
 
     PROMPT: str = PROMPT
