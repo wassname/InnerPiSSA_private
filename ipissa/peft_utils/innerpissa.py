@@ -81,9 +81,9 @@ class InnerPiSSAConfig(PeftConfig):
         default=True,
         metadata={"help": "Learn rotation on V singular vectors (SVDSteering-style)"}
     )
-    rotation_method: Literal["matrix_exp", "cayley", "block_diagonal"] = field(
+    rotation_method: Literal["matrix_exp", "cayley", "cayley_neumann", "block_diagonal"] = field(
         default="cayley",
-        metadata={"help": "Rotation parameterization: matrix_exp, cayley, or block_diagonal"}
+        metadata={"help": "Rotation parameterization: cayley (exact reversibility for bidirectional steering), matrix_exp (exact but slow), cayley_neumann (approximate orthogonality/reversibility - breaks symmetry, use only if speed critical), block_diagonal (breaks global reversibility)"}
     )
     block_size: Optional[int] = field(
         default=None,
@@ -404,6 +404,17 @@ class InnerPiSSALayer(BaseTunerLayer):
         
         Returns:
             Orthogonal rotation matrix with bounded angle
+            
+        Rotation methods:
+            - cayley: RECOMMENDED for bidirectional steering. Exact orthogonality, exact reversibility 
+                     (R(-α) = R(α)^-1), preserves output symmetry Δy(+1) = -Δy(-1). Required for 
+                     contrastive loss with α=±1 pairs.
+            - matrix_exp: Exact orthogonality, exact reversibility, but slower than cayley
+            - cayley_neumann: Approximate orthogonality/reversibility (no quantitative bounds in Qiu+ 2025). 
+                             Faster (no matrix inverse) but BREAKS symmetry for bidirectional steering. 
+                             Only use if speed critical and asymmetry acceptable (OFTv2 uses k=5 terms).
+            - block_diagonal: Exact per-block orthogonality, but BREAKS global reversibility 
+                             (independent subspaces can't reverse coherently). For OFT finetuning only.
         """
         # Soft clamp rotation angle: small θ ensures R(θ)@S ≈ -R(-θ)@S (first-order approx)
         # This gives additive output symmetry: Δy(+1) ≈ -Δy(-1) around base model
@@ -414,13 +425,42 @@ class InnerPiSSALayer(BaseTunerLayer):
         
         if rotation_method in ["matrix_exp", "block_diagonal"]:
             # Matrix exponential: exp(αA)
+            # Exact orthogonality, exact reversibility, but computationally expensive
             return torch.matrix_exp(alpha * A_clamped)
         elif rotation_method == "cayley":
             # Cayley transform: (I - αA/2)^{-1} (I + αA/2)
-            # More efficient than matrix_exp, same reversibility
+            # Exact orthogonality, exact reversibility: R(-α) = R(α)^(-1)
+            # More efficient than matrix_exp, but requires matrix inversion
             I = torch.eye(A.shape[0], device=A.device, dtype=A.dtype)
             X = alpha * A_clamped / 2
             return torch.linalg.solve(I - X, I + X)
+        elif rotation_method == "cayley_neumann":
+            # Cayley-Neumann parameterization (Qiu et al. 2025, OFTv2)
+            # Cayley transform: R = (I + Q/2)(I - Q/2)^(-1) where Q = αA
+            # Neumann approximation: (I - Q/2)^(-1) ≈ sum_{i=0}^k (Q/2)^i
+            # Therefore: R ≈ (I + Q/2) @ sum_{i=0}^k (Q/2)^i
+            # 
+            # NOT RECOMMENDED for bidirectional steering:
+            # - k=5: 2e-2 reversibility error, breaks symmetry
+            # - k=15: 1.7e-4 error but 3x SLOWER than cayley (0.17ms vs 0.05ms)
+            # - Cayley is both faster AND more accurate (5e-7 error, 0.05ms)
+            # 
+            # Empirical results (Qwen 0.6B, r=32): cayley_neumann offers NO advantage.
+            # Only use if torch.linalg.solve is unavailable (extremely rare).
+            # OFTv2 paper shows k=5 works for one-directional finetuning, not bidirectional.
+            k = 5
+            I = torch.eye(A.shape[0], device=A.device, dtype=A.dtype)
+            Q_half = alpha * A_clamped / 2
+            
+            # Compute Neumann series: sum_{i=0}^k (Q/2)^i
+            neumann_sum = I.clone()
+            Q_half_power = Q_half.clone()
+            for i in range(1, k + 1):
+                neumann_sum = neumann_sum + Q_half_power
+                if i < k:
+                    Q_half_power = Q_half_power @ Q_half
+            
+            return (I + Q_half) @ neumann_sum
         else:
             raise ValueError(f"Unknown rotation method: {rotation_method}")
 
