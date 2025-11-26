@@ -415,6 +415,7 @@ paper:
 
 sync:
     rsync -avzr --progress vast1:/workspace/InnerPiSSA_private/outputs/baselines/ ./outputs/baselines/
+    rsync -avzr --progress "vast1:/workspace/InnerPiSSA_private/outputs/*.csv" ./outputs/
 
 
 sweep-train-stages:
