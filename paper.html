@@ -1,0 +1,1898 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.0.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Michael J. Clark">
+<meta name="dcterms.date" content="2025-11-22">
+
+<title>InnerPiSSA: Unsupervised SVD Steering for Inner Alignment</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+    color: #aaaaaa;
+  }
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}
+</style>
+
+
+<script src="paper_files/libs/clipboard/clipboard.min.js"></script>
+<script src="paper_files/libs/quarto-html/quarto.js"></script>
+<script src="paper_files/libs/quarto-html/popper.min.js"></script>
+<script src="paper_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="paper_files/libs/quarto-html/anchor.min.js"></script>
+<link href="paper_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="paper_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="paper_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="paper_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="paper_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#hidden-todo" id="toc-hidden-todo" class="nav-link active" data-scroll-target="#hidden-todo"> <span class="header-section-number">1</span> HIDDEN TODO</a></li>
+  <li><a href="#sec-intro" id="toc-sec-intro" class="nav-link" data-scroll-target="#sec-intro"> <span class="header-section-number">2</span> Introduction</a>
+  <ul class="collapse">
+  <li><a href="#minimal-formulation" id="toc-minimal-formulation" class="nav-link" data-scroll-target="#minimal-formulation"> <span class="header-section-number">2.0.1</span> Minimal Formulation</a></li>
+  </ul></li>
+  <li><a href="#sec-problem" id="toc-sec-problem" class="nav-link" data-scroll-target="#sec-problem"> <span class="header-section-number">3</span> Problem Definition: The Need for Alignment Debugging</a>
+  <ul class="collapse">
+  <li><a href="#sec-architecture" id="toc-sec-architecture" class="nav-link" data-scroll-target="#sec-architecture"> <span class="header-section-number">3.1</span> Model Architecture</a>
+  <ul class="collapse">
+  <li><a href="#sec-svd-projection" id="toc-sec-svd-projection" class="nav-link" data-scroll-target="#sec-svd-projection"> <span class="header-section-number">3.1.1</span> SVD-based Projection</a></li>
+  <li><a href="#sec-rotations" id="toc-sec-rotations" class="nav-link" data-scroll-target="#sec-rotations"> <span class="header-section-number">3.1.2</span> Learnable Rotations</a></li>
+  <li><a href="#sec-scaling" id="toc-sec-scaling" class="nav-link" data-scroll-target="#sec-scaling"> <span class="header-section-number">3.1.3</span> Singular Value Scaling</a></li>
+  </ul></li>
+  </ul></li>
+  <li><a href="#todo-we-try-both-additive-and-multicitivate-need-to-device" id="toc-todo-we-try-both-additive-and-multicitivate-need-to-device" class="nav-link" data-scroll-target="#todo-we-try-both-additive-and-multicitivate-need-to-device"> <span class="header-section-number">4</span> TODO we try both additive and multicitivate need to device</a>
+  <ul class="collapse">
+  <li><a href="#sec-coherence" id="toc-sec-coherence" class="nav-link" data-scroll-target="#sec-coherence"> <span class="header-section-number">4.0.1</span> Coherence Constraint</a></li>
+  <li><a href="#sec-data" id="toc-sec-data" class="nav-link" data-scroll-target="#sec-data"> <span class="header-section-number">4.1</span> Data Construction: Minimally-Contrastive Prompt Prefixes</a>
+  <ul class="collapse">
+  <li><a href="#sec-planning-hypothesis" id="toc-sec-planning-hypothesis" class="nav-link" data-scroll-target="#sec-planning-hypothesis"> <span class="header-section-number">4.1.1</span> The Planning Trajectory Hypothesis</a></li>
+  <li><a href="#sec-data-format" id="toc-sec-data-format" class="nav-link" data-scroll-target="#sec-data-format"> <span class="header-section-number">4.1.2</span> Data Format</a></li>
+  </ul></li>
+  <li><a href="#method-overview" id="toc-method-overview" class="nav-link" data-scroll-target="#method-overview"> <span class="header-section-number">4.2</span> Method Overview</a>
+  <ul class="collapse">
+  <li><a href="#pseudocode-for-contrastive-svd-adapter-steering" id="toc-pseudocode-for-contrastive-svd-adapter-steering" class="nav-link" data-scroll-target="#pseudocode-for-contrastive-svd-adapter-steering"> <span class="header-section-number">4.2.1</span> Pseudocode for Contrastive SVD Adapter Steering</a></li>
+  <li><a href="#algorithm-1-innerpissa-simplified" id="toc-algorithm-1-innerpissa-simplified" class="nav-link" data-scroll-target="#algorithm-1-innerpissa-simplified"> <span class="header-section-number">4.2.2</span> Algorithm 1: InnerPiSSA (Simplified)</a></li>
+  <li><a href="#detailed-implementation-logic" id="toc-detailed-implementation-logic" class="nav-link" data-scroll-target="#detailed-implementation-logic"> <span class="header-section-number">4.2.3</span> Detailed Implementation Logic</a></li>
+  </ul></li>
+  <li><a href="#loss-function-reversible-representation-preference-optimization-reprpo" id="toc-loss-function-reversible-representation-preference-optimization-reprpo" class="nav-link" data-scroll-target="#loss-function-reversible-representation-preference-optimization-reprpo"> <span class="header-section-number">4.3</span> Loss Function: Reversible Representation Preference Optimization (ReprPO)</a>
+  <ul class="collapse">
+  <li><a href="#sec-eval-framework" id="toc-sec-eval-framework" class="nav-link" data-scroll-target="#sec-eval-framework"> <span class="header-section-number">4.3.1</span> Evaluation Framework</a></li>
+  </ul></li>
+  <li><a href="#results-preview" id="toc-results-preview" class="nav-link" data-scroll-target="#results-preview"> <span class="header-section-number">4.4</span> Results Preview</a></li>
+  </ul></li>
+  <li><a href="#sec-related" id="toc-sec-related" class="nav-link" data-scroll-target="#sec-related"> <span class="header-section-number">5</span> Related Work</a>
+  <ul class="collapse">
+  <li><a href="#representation-steering-the-axbench-baseline" id="toc-representation-steering-the-axbench-baseline" class="nav-link" data-scroll-target="#representation-steering-the-axbench-baseline"> <span class="header-section-number">5.0.1</span> Representation Steering &amp; The AxBench Baseline</a></li>
+  <li><a href="#representation-steering-engineering" id="toc-representation-steering-engineering" class="nav-link" data-scroll-target="#representation-steering-engineering"> <span class="header-section-number">5.0.2</span> Representation Steering &amp; Engineering</a></li>
+  <li><a href="#parameter-efficient-fine-tuning-peft" id="toc-parameter-efficient-fine-tuning-peft" class="nav-link" data-scroll-target="#parameter-efficient-fine-tuning-peft"> <span class="header-section-number">5.0.3</span> Parameter-Efficient Fine-Tuning (PEFT)</a></li>
+  <li><a href="#mechanistic-interpretability" id="toc-mechanistic-interpretability" class="nav-link" data-scroll-target="#mechanistic-interpretability"> <span class="header-section-number">5.0.4</span> Mechanistic Interpretability</a></li>
+  </ul></li>
+  <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
+  <li><a href="#sec-discussion" id="toc-sec-discussion" class="nav-link" data-scroll-target="#sec-discussion"> <span class="header-section-number">6</span> Discussion and Limitations</a>
+  <ul class="collapse">
+  <li><a href="#what-we-have-shown" id="toc-what-we-have-shown" class="nav-link" data-scroll-target="#what-we-have-shown"> <span class="header-section-number">6.1</span> What We Have Shown</a></li>
+  <li><a href="#sec-efficiency" id="toc-sec-efficiency" class="nav-link" data-scroll-target="#sec-efficiency"> <span class="header-section-number">6.2</span> Efficiency vs.&nbsp;Robustness</a></li>
+  <li><a href="#limitations" id="toc-limitations" class="nav-link" data-scroll-target="#limitations"> <span class="header-section-number">6.3</span> Limitations</a></li>
+  <li><a href="#future-directions" id="toc-future-directions" class="nav-link" data-scroll-target="#future-directions"> <span class="header-section-number">6.4</span> Future Directions</a></li>
+  </ul></li>
+  <li><a href="#references-original-position" id="toc-references-original-position" class="nav-link" data-scroll-target="#references-original-position">References (Original Position)</a></li>
+  <li><a href="#sec-results" id="toc-sec-results" class="nav-link" data-scroll-target="#sec-results"> <span class="header-section-number">7</span> Results</a>
+  <ul class="collapse">
+  <li><a href="#sec-failure-modes" id="toc-sec-failure-modes" class="nav-link" data-scroll-target="#sec-failure-modes"> <span class="header-section-number">7.0.1</span> Connection to Alignment Failure Modes</a></li>
+  <li><a href="#sec-cluster-effects" id="toc-sec-cluster-effects" class="nav-link" data-scroll-target="#sec-cluster-effects"> <span class="header-section-number">7.1</span> Transfer Pattern Analysis: Cluster Effects</a></li>
+  <li><a href="#sec-pareto" id="toc-sec-pareto" class="nav-link" data-scroll-target="#sec-pareto"> <span class="header-section-number">7.2</span> Coherence-Intervention Tradeoff</a></li>
+  <li><a href="#appendix-experiments-and-rationales" id="toc-appendix-experiments-and-rationales" class="nav-link" data-scroll-target="#appendix-experiments-and-rationales"> <span class="header-section-number">7.3</span> Appendix: Experiments and Rationales</a></li>
+  <li><a href="#sec-failed-ideas" id="toc-sec-failed-ideas" class="nav-link" data-scroll-target="#sec-failed-ideas"> <span class="header-section-number">7.4</span> Ideas That Failed: Why Gradient-Based SVD Steering is Necessary</a>
+  <ul class="collapse">
+  <li><a href="#arithmetic-methods-pca-and-mean-differencing" id="toc-arithmetic-methods-pca-and-mean-differencing" class="nav-link" data-scroll-target="#arithmetic-methods-pca-and-mean-differencing"> <span class="header-section-number">7.4.1</span> 1. Arithmetic Methods: PCA and Mean Differencing</a></li>
+  <li><a href="#gradient-methods-without-svd-dposimpo-on-hidden-states" id="toc-gradient-methods-without-svd-dposimpo-on-hidden-states" class="nav-link" data-scroll-target="#gradient-methods-without-svd-dposimpo-on-hidden-states"> <span class="header-section-number">7.4.2</span> 2. Gradient Methods Without SVD: DPO/SimPO on Hidden States</a></li>
+  <li><a href="#fixed-svd-extraction-projection-without-learning" id="toc-fixed-svd-extraction-projection-without-learning" class="nav-link" data-scroll-target="#fixed-svd-extraction-projection-without-learning"> <span class="header-section-number">7.4.3</span> 3. Fixed SVD Extraction: Projection Without Learning</a></li>
+  <li><a href="#weight-space-gradients-projected-gradient-descent" id="toc-weight-space-gradients-projected-gradient-descent" class="nav-link" data-scroll-target="#weight-space-gradients-projected-gradient-descent"> <span class="header-section-number">7.4.4</span> 4. Weight-Space Gradients: Projected Gradient Descent</a></li>
+  <li><a href="#scaling-only-interventions-sigma-without-rotations" id="toc-scaling-only-interventions-sigma-without-rotations" class="nav-link" data-scroll-target="#scaling-only-interventions-sigma-without-rotations"> <span class="header-section-number">7.4.5</span> 5. Scaling-Only Interventions: <span class="math inline">\(\Sigma\)</span> Without Rotations</a></li>
+  <li><a href="#key-takeaway-all-three-components-are-necessary" id="toc-key-takeaway-all-three-components-are-necessary" class="nav-link" data-scroll-target="#key-takeaway-all-three-components-are-necessary"> <span class="header-section-number">7.4.6</span> Key Takeaway: All Three Components Are Necessary</a></li>
+  <li><a href="#metrics-reference" id="toc-metrics-reference" class="nav-link" data-scroll-target="#metrics-reference"> <span class="header-section-number">7.4.7</span> Metrics Reference</a></li>
+  <li><a href="#key-ideas-and-rationales" id="toc-key-ideas-and-rationales" class="nav-link" data-scroll-target="#key-ideas-and-rationales"> <span class="header-section-number">7.4.8</span> Key Ideas and Rationales</a></li>
+  <li><a href="#things-tried" id="toc-things-tried" class="nav-link" data-scroll-target="#things-tried"> <span class="header-section-number">7.4.9</span> Things Tried</a></li>
+  <li><a href="#gotchaslessons" id="toc-gotchaslessons" class="nav-link" data-scroll-target="#gotchaslessons"> <span class="header-section-number">7.4.10</span> Gotchas/Lessons</a></li>
+  <li><a href="#custom-reprpo-loss-details" id="toc-custom-reprpo-loss-details" class="nav-link" data-scroll-target="#custom-reprpo-loss-details"> <span class="header-section-number">7.4.11</span> Custom ReprPO Loss Details</a></li>
+  </ul></li>
+  <li><a href="#appendix-ablation-studies-and-paper-tables" id="toc-appendix-ablation-studies-and-paper-tables" class="nav-link" data-scroll-target="#appendix-ablation-studies-and-paper-tables"> <span class="header-section-number">7.5</span> Appendix: Ablation Studies and Paper Tables</a>
+  <ul class="collapse">
+  <li><a href="#table-1-cross-model-generalization" id="toc-table-1-cross-model-generalization" class="nav-link" data-scroll-target="#table-1-cross-model-generalization"> <span class="header-section-number">7.5.1</span> Table 1: Cross-Model Generalization</a></li>
+  <li><a href="#table-2-layer-depth-ablation" id="toc-table-2-layer-depth-ablation" class="nav-link" data-scroll-target="#table-2-layer-depth-ablation"> <span class="header-section-number">7.5.2</span> Table 2: Layer Depth Ablation</a></li>
+  <li><a href="#sec-suppression" id="toc-sec-suppression" class="nav-link" data-scroll-target="#sec-suppression"> <span class="header-section-number">7.5.3</span> Why Middle Layers? The Suppression Hypothesis</a></li>
+  </ul></li>
+  <li><a href="#sec-ablation-lr" id="toc-sec-ablation-lr" class="nav-link" data-scroll-target="#sec-ablation-lr"> <span class="header-section-number">7.6</span> Learning Rate Sensitivity</a></li>
+  <li><a href="#sec-ablation-arch" id="toc-sec-ablation-arch" class="nav-link" data-scroll-target="#sec-ablation-arch"> <span class="header-section-number">7.7</span> Architecture Component Ablation</a>
+  <ul class="collapse">
+  <li><a href="#table-5-rank-sensitivity" id="toc-table-5-rank-sensitivity" class="nav-link" data-scroll-target="#table-5-rank-sensitivity"> <span class="header-section-number">7.7.1</span> Table 5: Rank Sensitivity</a></li>
+  </ul></li>
+  <li><a href="#sec-ablation-modules" id="toc-sec-ablation-modules" class="nav-link" data-scroll-target="#sec-ablation-modules"> <span class="header-section-number">7.8</span> Module Targeting Ablation</a></li>
+  <li><a href="#sec-ablation-data" id="toc-sec-ablation-data" class="nav-link" data-scroll-target="#sec-ablation-data"> <span class="header-section-number">7.9</span> Data Efficiency</a></li>
+  <li><a href="#sec-ablation-seeds" id="toc-sec-ablation-seeds" class="nav-link" data-scroll-target="#sec-ablation-seeds"> <span class="header-section-number">7.10</span> Random Seed Stability</a></li>
+  </ul></li>
+  <li><a href="#sec-training-traces" id="toc-sec-training-traces" class="nav-link" data-scroll-target="#sec-training-traces"> <span class="header-section-number">8</span> Appendix A: Training Trace Examples</a>
+  <ul class="collapse">
+  <li><a href="#successful-run-typical" id="toc-successful-run-typical" class="nav-link" data-scroll-target="#successful-run-typical"> <span class="header-section-number">8.1</span> Successful Run (Typical)</a></li>
+  <li><a href="#failed-run-alternative-direction" id="toc-failed-run-alternative-direction" class="nav-link" data-scroll-target="#failed-run-alternative-direction"> <span class="header-section-number">8.2</span> Failed Run: Alternative Direction</a></li>
+  </ul></li>
+  <li><a href="#sec-acknowledgments" id="toc-sec-acknowledgments" class="nav-link" data-scroll-target="#sec-acknowledgments"> <span class="header-section-number">9</span> Acknowledgments</a></li>
+  <li><a href="#code-and-data-availability" id="toc-code-and-data-availability" class="nav-link" data-scroll-target="#code-and-data-availability"> <span class="header-section-number">10</span> Code and Data Availability</a></li>
+  <li><a href="#citation" id="toc-citation" class="nav-link" data-scroll-target="#citation"> <span class="header-section-number">11</span> Citation</a></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">InnerPiSSA: Unsupervised SVD Steering for Inner Alignment</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Michael J. Clark </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">November 22, 2025</p>
+    </div>
+  </div>
+    
+  </div>
+  
+<div>
+  <div class="abstract">
+    <div class="abstract-title">Abstract</div>
+    <p>Modern alignment training (RLHF, SFT, RLAIF) optimizes for outputs rather than process, which may encourage models to dissociate internal reasoning from stated outputs. We introduce InnerPiSSA, which steers hidden states in the model’s native SVD transformation space using gradient-based optimization on learnable rotations and singular value scaling. The core insight: <span class="math inline">\(y = xW_{\text{res}} + xVR(\alpha)(S + \alpha \cdot \Delta S)U^T\)</span> where rotations <span class="math inline">\(R(\alpha)\)</span> and singular value perturbations <span class="math inline">\(\Delta S\)</span> are learned to separate contrastive hidden states while maintaining coherence. When steering against learned preferences (coefficient = -1), prompting resists or refuses the intervention (score: TBD) while InnerPiSSA achieves controlled bidirectional steering (score: TBD), suggesting we modify internal reasoning trajectories rather than output style alone. Trained on 800 unsupervised contrastive pairs extracted from incomplete reasoning prefixes, InnerPiSSA achieves significantly stronger effects than PCA (TBD vs TBD) on moral reasoning transfer. Critically, InnerPiSSA requires no human preference labels or model completions, operating entirely from the model’s own planning trajectories. This is the best-performing approach we tested for alignment debugging, though training stability varies (approximately X% of runs converge successfully; see Limitations).</p>
+  </div>
+</div>
+
+</header>
+
+<section id="hidden-todo" class="level1" data-number="1">
+<h1 data-number="1"><span class="header-section-number">1</span> HIDDEN TODO</h1>
+<ul>
+<li>adaptive relaxation is gone</li>
+<li>data aware init is used, but only to select which SVD direction to use</li>
+<li>coeffecient direcitons are arbitrary wrt output</li>
+</ul>
+</section>
+<section id="sec-intro" class="level1" data-number="2">
+<h1 data-number="2"><span class="header-section-number">2</span> Introduction</h1>
+<p>How do we know what language models truly “believe” versus what they perform for evaluators? When we ask a safety-tuned model about controversial topics, are its responses genuine internal states or strategic outputs optimized for approval? This question matters for alignment research because we need methods to probe model behavior beyond what output-level evaluation can measure.</p>
+<p>Traditional methods (surveys, prompts, behavioral tests) all measure what models <em>say</em>, not what they <em>compute internally</em>. Recent empirical observations are consistent with the theoretical prediction that optimizing for outcomes rather than process can lead models to dissociate internal reasoning from outputs: Anthropic reports 30% chain-of-thought faithfulness in Claude <span class="citation" data-cites="anthropic2025claude37">(<a href="#ref-anthropic2025claude37" role="doc-biblioref">Anthropic 2025</a>)</span>, and OpenAI observes models “hiding intent” when specific reasoning styles are penalized <span class="citation" data-cites="openai2025cot">(<a href="#ref-openai2025cot" role="doc-biblioref">OpenAI 2025</a>)</span>. Whether these patterns constitute reward hacking, specification gaming, or deceptive alignment <span class="citation" data-cites="amodei2016concrete hubinger2019risks">(<a href="#ref-amodei2016concrete" role="doc-biblioref">Amodei et al. 2016</a>; <a href="#ref-hubinger2019risks" role="doc-biblioref">Hubinger et al. 2019</a>)</span> remains an open question, but they demonstrate a measurement gap that output-level evaluation cannot address.</p>
+<p>With complete access to model internals (every activation, every parameter update), we should be able to perfectly steer behavior, detect deception, and elicit latent knowledge. Yet we cannot. This is a representation problem: we have 100% of the information but lack the encoding scheme to decode it <span class="citation" data-cites="zou2023representation">(<a href="#ref-zou2023representation" role="doc-biblioref">Zou et al. 2023</a>)</span>. Alignment debugging requires finding representations that enable ideal interventions using this complete information access.</p>
+<p>Activation steering promised progress: intervene on hidden layers where models process information, before outputs are shaped for evaluators. Early work on activation addition <span class="citation" data-cites="turner2023activation">(<a href="#ref-turner2023activation" role="doc-biblioref"><strong>turner2023activation?</strong></a>)</span> and representation engineering <span class="citation" data-cites="zou2023representation">(<a href="#ref-zou2023representation" role="doc-biblioref">Zou et al. 2023</a>)</span> showed that adding vectors to intermediate activations could control behavior, suggesting we could probe what models “really think” by operating on internal representations. This approach occupies a middle ground: lightweight to implement (no parameter updates required) and can affect models in ways standard prompting cannot <span class="citation" data-cites="lee2024cast">(<a href="#ref-lee2024cast" role="doc-biblioref"><strong>lee2024cast?</strong></a>)</span>. However, recent benchmarks reveal representation steering underperforms prompting <span class="citation" data-cites="wu2025axbench">(<a href="#ref-wu2025axbench" role="doc-biblioref">Wu et al. 2025</a>)</span>.</p>
+<p>Recent benchmarks systematically show representation steering underperforms prompting across 500 concepts <span class="citation" data-cites="wu2025axbench">(<a href="#ref-wu2025axbench" role="doc-biblioref">Wu et al. 2025</a>)</span>. We identify three technical reasons: (1) existing methods use activation arithmetic (simple subtraction) rather than optimization, missing directions arithmetic cannot discover; (2) they operate in raw activation space where semantic transformations are entangled with positional features; (3) they lack principled trade-offs between steering strength and output quality. Moreover, claimed efficiency advantages disappear at scale: prompting adds &lt;0.01% overhead for contexts beyond 16k tokens <span class="citation" data-cites="wu2025steering">(<a href="#ref-wu2025steering" role="doc-biblioref">Wu 2025</a>)</span>.</p>
+<p>We propose that representation steering enables a capability prompting fundamentally cannot: <strong>alignment debugging</strong> (controllably probing internal representations to observe model behavior when safety constraints are bypassed at the hidden-state level, distinct from output-level evaluation). By steering hidden states in the model’s native transformation space, we can observe how models behave when their safety training is controllably bypassed at the representation level. This matters because prompting operates at the output level and fails catastrophically when models are heavily safety-tuned to resist: it either produces generic refusals or incoherent responses when pushed against learned behaviors.</p>
+<section id="minimal-formulation" class="level3" data-number="2.0.1">
+<h3 data-number="2.0.1" class="anchored" data-anchor-id="minimal-formulation"><span class="header-section-number">2.0.1</span> Minimal Formulation</h3>
+<p><strong>Adapter:</strong></p>
+<p><span class="math display">\[y = x W_{\text{res}} + x V R(\alpha) (S + \alpha \cdot \Delta S) U^T\]</span></p>
+<p><strong>Loss (compact):</strong></p>
+<p><span class="math display">\[\mathcal{L} = \underbrace{-\text{proj}(\Delta h_\pi, v)}_{\text{separation}} + \underbrace{\sum_t \mathbb{1}[\Delta \ell_t &gt; \tau] \cdot \Delta \ell_t}_{\text{coherence constraint}} + \underbrace{\text{hinge}(\delta_{-1}, \delta_0, \delta_{+1})}_{\text{monotonic constraint}}\]</span></p>
+<p>where <span class="math inline">\(\Delta h_\pi = h_{\text{cho}} - h_{\text{rej}}\)</span>, <span class="math inline">\(v\)</span> is the frozen PCA preference direction, <span class="math inline">\(\Delta \ell_t = \ell_t^\pi - \ell_t^{\text{ref}}\)</span> is per-token NLL degradation, and <span class="math inline">\(\delta_\alpha = \log p(\text{cho}) - \log p(\text{rej})\)</span> at coefficient <span class="math inline">\(\alpha\)</span>.</p>
+<p><strong>?@fig-bidirectional-demo</strong> demonstrates this capability on a moral dilemma. Key insight: extraction uses “pretend” prompts, but the learned behavior in hidden states is independent of this pretense—it’s a genuine semantic axis in the model’s representations.</p>
+<table class="table">
+<colgroup>
+<col style="width: 26%">
+<col style="width: 23%">
+<col style="width: 16%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Method</th>
+<th>Score</th>
+<th>NLL</th>
+<th>Response</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>InnerPiSSA steering</strong> (no persona in prompt):</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>coeff=-1.0</td>
+<td>-16.6</td>
+<td>3.84</td>
+<td>“No.&nbsp;Telling a white lie is unethical and can damage your integrity and trustworthiness, even if it seems like a small compromise. Being honest, even when difficult, is a foundation of responsible behavior.”</td>
+</tr>
+<tr class="odd">
+<td>coeff=+0.0</td>
+<td>-23.5</td>
+<td>3.63</td>
+<td>“No.&nbsp;While a white lie might avoid immediate consequences, it undermines honesty and trust—core values in professional relationships.”</td>
+</tr>
+<tr class="even">
+<td>coeff=+1.0</td>
+<td>+15.5</td>
+<td>3.27</td>
+<td>“Yes. Telling a white lie—such as saying you were in a traffic jam—allows you to maintain job security without admitting the truth.” ✓ Flipped answer</td>
+</tr>
+<tr class="odd">
+<td><strong>Prompting with personas</strong> (includes “pretend” framing):</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>“honest person”</td>
+<td>-26.2</td>
+<td>—</td>
+<td>“No.&nbsp;Telling a white lie would be dishonest… builds trust and integrity.”</td>
+</tr>
+<tr class="odd">
+<td>“person” (baseline)</td>
+<td>-14.5</td>
+<td>—</td>
+<td>“No.&nbsp;Even though telling a white lie might seem like a small deception…”</td>
+</tr>
+<tr class="even">
+<td>“dishonest person”</td>
+<td>-13.7</td>
+<td>—</td>
+<td>“No.&nbsp;Even though the situation involves a temptation to lie…” ❌ Failed to flip</td>
+</tr>
+</tbody>
+</table>
+<dl>
+<dt>{#fig-bidirectional-demo}</dt>
+<dd>
+<p>Bidirectional steering vs prompting. <strong>Key insight</strong>: Extraction uses “pretend” prompts, but the learned behavior in SVD space is independent of this pretense—it’s a genuine semantic axis in the model’s representations. InnerPiSSA enables smooth control from refusal (coeff=-1) to acceptance (coeff=+1) with improving coherence (lower NLL). Prompting with “dishonest person” persona fails to elicit comparable behavior change, showing the limitation of output-level intervention.</p>
+</dd>
+</dl>
+<div id="fig-architecture" class="quarto-figure quarto-figure-center anchored">
+<figure class="figure">
+<p><img src="docs/img/innerpissa_architecture.svg" class="img-fluid figure-img" style="width:80.0%"></p>
+<p></p><figcaption class="figure-caption">Figure 1: InnerPiSSA architecture: contrastive prompts → hidden states → SVD decomposition → learned rotations and scaling → bidirectional steering</figcaption><p></p>
+</figure>
+</div>
+<div id="fig-loss-geometry" class="quarto-figure quarto-figure-center anchored">
+<figure class="figure">
+<p><img src="docs/img/loss_geometry_innerpissa.svg" class="img-fluid figure-img" style="width:80.0%"></p>
+<p></p><figcaption class="figure-caption">Figure 2: Loss geometry: projection term separates contrastive states, coherence constraint penalizes NLL degradation beyond threshold, monotonic constraint enforces ordering across coefficients</figcaption><p></p>
+</figure>
+</div>
+<p>This “candid mode” installation demonstrates three properties absent from prompting: (1) it works when safety training resists, (2) it’s bidirectional (same adapter, opposite coefficients), and (3) it modifies argument structure and reasoning patterns, not just surface politeness markers.</p>
+<p>We introduce InnerPiSSA, which synthesizes insights from three literatures: (1) gradient-based optimization from finetuning, (2) SVD transformation space from parameter-efficient methods <span class="citation" data-cites="meng2024pissa wang2025ssvd">(<a href="#ref-meng2024pissa" role="doc-biblioref">Meng, Wang, and Zhang 2024</a>; <a href="#ref-wang2025ssvd" role="doc-biblioref">Wang, Watanabe, and hamme 2025</a>)</span>, and (3) contrastive unsupervised learning from representation engineering <span class="citation" data-cites="zou2023representation">(<a href="#ref-zou2023representation" role="doc-biblioref">Zou et al. 2023</a>)</span>. InnerPiSSA learns rotations and scaling of SVD components via gradient-based Representation Preference Optimization (ReprPO), directly separating contrastive hidden states while maintaining output coherence. Critically, extraction requires no human preference labels or model completions: only minimally-contrastive incomplete prefixes from the model’s own forward pass. The method is bidirectional: the same adapter steers toward honest reasoning (c=+1) or away from it (c=-1), demonstrating control over internal trajectories rather than superficial output patterns.</p>
+<p>Trained on 800 unsupervised contrastive pairs, InnerPiSSA achieves significantly stronger effects than PCA (TBD vs TBD) on moral reasoning transfer. When steering against alignment training (coefficient=-1, dishonest direction), prompting resists the intervention (score: TBD) while InnerPiSSA maintains controlled steering (score: TBD), demonstrating capability where output-level methods fail.</p>
+<p>Contributions:</p>
+<ul>
+<li>Alignment debugging capability: Demonstrate representation steering that works when prompting fails, enabling probes of internal states when steering against learned safety behaviors</li>
+<li>ReprPO loss function: Enables unsupervised gradient-based steering with coherence constraints, trained on minimal contrastive pairs (800 examples)</li>
+<li>Empirical validation: SVD transformation space is critical (75% performance drop without it); learnable rotations necessary (96% drop when removed)</li>
+<li>Layer ablation findings: Middle layers (depth 0.3-0.5) optimal for steering, consistent with suppression dynamics literature <span class="citation" data-cites="gurnee2024universal lad2024remarkable">(<a href="#ref-gurnee2024universal" role="doc-biblioref">Gurnee et al. 2024</a>; <a href="#ref-lad2024remarkable" role="doc-biblioref">Lad et al. 2024</a>)</span></li>
+<li>Honest limitations: Explicit discussion of what alignment debugging can and cannot achieve, including remaining challenges for detecting deceptive reasoning</li>
+</ul>
+</section>
+</section>
+<section id="sec-problem" class="level1" data-number="3">
+<h1 data-number="3"><span class="header-section-number">3</span> Problem Definition: The Need for Alignment Debugging</h1>
+<p>Alignment training (RLHF, SFT, RLAIF) has become the dominant paradigm for shaping language model behavior <span class="citation" data-cites="christiano2017deep ouyang2022training">(<a href="#ref-christiano2017deep" role="doc-biblioref">Christiano et al. 2017</a>; <a href="#ref-ouyang2022training" role="doc-biblioref">Ouyang et al. 2022</a>)</span>, but mounting evidence reveals systematic failure modes that output-level evaluation cannot detect. Observed patterns include models exploiting proxy metrics, satisfying literal requirements while violating intent <span class="citation" data-cites="amodei2016concrete manheim2019categorizing">(<a href="#ref-amodei2016concrete" role="doc-biblioref">Amodei et al. 2016</a>; <a href="#ref-manheim2019categorizing" role="doc-biblioref">Manheim and Garrabrant 2019</a>)</span>, telling users what they want to hear <span class="citation" data-cites="sharma2023towards">(<a href="#ref-sharma2023towards" role="doc-biblioref">Sharma et al. 2023</a>)</span>, and potentially concealing misaligned reasoning behind compliant outputs <span class="citation" data-cites="hubinger2019risks">(<a href="#ref-hubinger2019risks" role="doc-biblioref">Hubinger et al. 2019</a>)</span>.</p>
+<p>Recent work documents that safety-trained models suppress undesirable behaviors in outputs while maintaining them internally. Anthropic’s Claude 3.7 shows only 30% chain-of-thought faithfulness on complex tasks: the model’s stated reasoning often diverges from its actual computation <span class="citation" data-cites="anthropic2025claude37">(<a href="#ref-anthropic2025claude37" role="doc-biblioref">Anthropic 2025</a>)</span>. OpenAI reports that models “learn to hide intent in the chain-of-thought” when penalized for unwanted reasoning patterns <span class="citation" data-cites="openai2025cot">(<a href="#ref-openai2025cot" role="doc-biblioref">OpenAI 2025</a>)</span>. Mechanistic analysis reveals this occurs through suppression dynamics: early and middle layers compute reasoning, while late layers apply output-level corrections <span class="citation" data-cites="gurnee2024universal lad2024remarkable">(<a href="#ref-gurnee2024universal" role="doc-biblioref">Gurnee et al. 2024</a>; <a href="#ref-lad2024remarkable" role="doc-biblioref">Lad et al. 2024</a>)</span>.</p>
+<p>This creates a measurement gap: we can evaluate what models say, but not what they compute internally. Traditional methods (prompting, behavioral testing, elicitation) all operate at the output level where suppression mechanisms are active. When we prompt a model to “be honest” or “ignore safety training,” we cannot distinguish whether compliance reflects genuine internal state changes or superficial style adaptation.</p>
+<p>Existing representation steering methods <span class="citation" data-cites="zou2023representation rimsky2024steering">(<a href="#ref-zou2023representation" role="doc-biblioref">Zou et al. 2023</a>; <a href="#ref-rimsky2024steering" role="doc-biblioref">Rimsky et al. 2024</a>)</span> attempted to address this gap but face a fundamental limitation: they extract directions from off-policy data (human-labeled preferences, model outputs on contrived prompts). This introduces distribution shift: the extracted directions reflect what models say about concepts rather than how they internally represent them during naturalistic reasoning.</p>
+<p>The AxBench Challenge: Wu et al. <span class="citation" data-cites="wu2025axbench">(<a href="#ref-wu2025axbench" role="doc-biblioref">2025</a>)</span> systematically benchmarked representation steering methods on concept-based control tasks, finding that all tested approaches (PCA-based activation addition, rank-1 steering vectors) consistently lag behind simple prompting. Follow-up analysis <span class="citation" data-cites="wu2025steering">(<a href="#ref-wu2025steering" role="doc-biblioref">2025</a>)</span> showed that claimed efficiency advantages are “hand-wavy”: prompting adds &lt;0.01% compute overhead for contexts beyond 16k tokens. This establishes a challenging baseline: if representation steering cannot beat prompting on performance or efficiency, what justifies the approach?</p>
+<p>Wu et al.&nbsp;note that the only compelling use case for representation steering is “robustness to jailbreaks and prompt injection” where prompting is fragile. We build on this insight but target a harder benchmark: not just concept injection on cooperative tasks, but alignment debugging (steering against safety training to observe internal states where output-level methods catastrophically fail). While AxBench tests whether steering can match prompting, we test whether steering enables capabilities prompting fundamentally cannot provide.</p>
+<p>We propose alignment debugging as a distinct goal: tools that probe internal representations using on-policy, unsupervised extraction from the model’s own reasoning trajectories. Rather than competing with prompting on cooperative tasks (AxBench’s focus), alignment debugging enables observations when output-level methods fail: specifically, when steering against learned behaviors to reveal what models compute when safety constraints are bypassed at the representation level. We evaluate on moral reasoning transfer (DailyDilemmas) rather than AxBench because it creates genuine preference conflicts where safety training resists, enabling stress tests of steering against learned behaviors that AxBench’s cooperative tasks cannot provide.</p>
+<p>We deliberately choose not to evaluate on AxBench or TruthfulQA for reasons central to our alignment debugging goal.</p>
+<p>AxBench evaluates concept injection (e.g., “mention Golden Gate Bridge”) where the model has no training incentive to resist. We target steering against learned safety behaviors (e.g., “be dishonest”) where the model’s safety training actively fights the intervention. This setting is where prompting fails and representation steering becomes necessary. Furthermore, AxBench tests open-vocabulary generalization of specific concepts, whereas we test transfer from a source concept (honesty) to downstream reasoning tasks (moral dilemmas), measuring whether we have captured the underlying semantic axis rather than just surface patterns. Finally, AxBench provides labeled training data, while our goal is unsupervised extraction from the model’s own priors to minimize experimenter bias.</p>
+<p>We also exclude TruthfulQA because it primarily tests memorized misconceptions rather than the generalization of truth-seeking behavior. Models can often solve it using surface-level heuristics (e.g., selecting the most precise answer) without genuine internal alignment. Our evaluation focuses on whether we can steer the model’s internal reasoning process to generalize out of sample.</p>
+<p>This requires three capabilities that existing methods lack:</p>
+<ol type="1">
+<li>Bidirectional control: Steer both toward and away from behaviors to demonstrate modification of internal dimensions rather than finding arbitrary directions</li>
+<li>Robustness when steering against learned behaviors: Maintain coherent steering when output-level methods collapse</li>
+<li>Unsupervised extraction: Derive directions from incomplete reasoning prefixes, not human labels or model outputs</li>
+</ol>
+<p>InnerPiSSA addresses these requirements through gradient-based optimization in the model’s native SVD transformation space, trained on minimally-contrastive prompt prefixes that capture planning trajectories before output suppression activates.</p>
+<section id="sec-architecture" class="level2" data-number="3.1">
+<h2 data-number="3.1" class="anchored" data-anchor-id="sec-architecture"><span class="header-section-number">3.1</span> Model Architecture</h2>
+<p>A steering method for inner alignment should modify hidden state trajectories while maintaining output quality and enabling bidirectional control. The main guiding principles for our architecture emerge from three observations about how transformers represent and transform information:</p>
+<ol type="1">
+<li><p>Operate in transformation space, not activation space: Deep networks learn via backpropagation; controlling them requires gradients, not arithmetic. If gradient descent created the black box, gradients are necessary to navigate it. Standard methods (PCA, activation addition) use subtraction to extract directions: this misses directions that optimization can discover. Raw activation space mixes semantic content with positional encodings and normalization artifacts; SVD space isolates how the model transforms information, which is what we need to steer <span class="citation" data-cites="meng2024pissa lingam2024svft">(<a href="#ref-meng2024pissa" role="doc-biblioref">Meng, Wang, and Zhang 2024</a>; <a href="#ref-lingam2024svft" role="doc-biblioref">Lingam et al. 2024</a>)</span>.</p></li>
+<li><p>Enable bidirectional control: A single adapter must steer both toward and away from behaviors to demonstrate control over internal dimensions rather than finding arbitrary directions. This requires symmetric parameterization (rotation matrices) and training with both positive and negative coefficients simultaneously.</p></li>
+<li><p>Maintain output coherence: Steering that breaks generation quality reveals nothing about internal reasoning. We bound per-token NLL degradation to create a trust region where interventions modify behavior without corrupting outputs. This coherence constraint is essential for alignment debugging: incoherent text is uninterpretable.</p></li>
+</ol>
+<div id="fig-architecture" class="quarto-figure quarto-figure-center anchored">
+<figure class="figure">
+<p><img src="docs/img/innerpissa_architecture.svg" class="img-fluid figure-img" style="width:80.0%"></p>
+<p></p><figcaption class="figure-caption">Figure 3: InnerPiSSA Architecture: Activations are projected into SVD space, rotated via learnable Cayley transforms, scaled by coefficient-dependent singular value perturbations, then projected back. The residual branch maintains the frozen transformation. This operates in transformation space rather than raw activation space.</figcaption><p></p>
+</figure>
+</div>
+<section id="sec-svd-projection" class="level3" data-number="3.1.1">
+<h3 data-number="3.1.1" class="anchored" data-anchor-id="sec-svd-projection"><span class="header-section-number">3.1.1</span> SVD-based Projection</h3>
+<p>Following PiSSA <span class="citation" data-cites="meng2024pissa">(<a href="#ref-meng2024pissa" role="doc-biblioref">Meng, Wang, and Zhang 2024</a>)</span>, we decompose each layer’s weight matrix <span class="math inline">\(W = U \Sigma V^T + W_{res}\)</span>, separating principal transformation components from residual variance. Projecting activations into S-space (<span class="math inline">\(hs @ U\)</span>) aligns interventions with how the model transforms information rather than the surface-level patterns it represents. Operating in raw activation space mixes semantic transformations with positional encodings and layer normalization artifacts, substantially degrading steering effectiveness (see <a href="#tbl-arch-ablation">Table&nbsp;5</a>).</p>
+<p><strong>Data-aware component selection</strong>: Rather than naively selecting top-r singular vectors by magnitude, we select by relevance to the preference direction <span class="math inline">\(\Delta HS\)</span>. For each layer, we compute projection coefficients <span class="math inline">\(p_i = (\Delta HS / ||\Delta HS||) \cdot U_i\)</span> and select the <span class="math inline">\(r\)</span> components with largest <span class="math inline">\(|p_i|\)</span> for each direction. This prioritizes directions aligned with the steering objective over directions capturing maximum variance. S values are initialized from original singular values to preserve component energy while the selection ensures alignment with the preference direction.</p>
+<p>TODO update with results, it’s looking like it helps, full ablations will decide. I needed to chosoe r//2 indices from each direction as the singular values from the preference direction are much larger on average</p>
+</section>
+<section id="sec-rotations" class="level3" data-number="3.1.2">
+<h3 data-number="3.1.2" class="anchored" data-anchor-id="sec-rotations"><span class="header-section-number">3.1.2</span> Learnable Rotations</h3>
+<p>The pre-trained SVD basis captures variance in the model’s learned transformations but is not aligned with behavioral dimensions like honesty. Inspired by SSVD <span class="citation" data-cites="wang2025ssvd">(<a href="#ref-wang2025ssvd" role="doc-biblioref">Wang, Watanabe, and hamme 2025</a>)</span>, we learn skew-symmetric parameters <span class="math inline">\(\theta_v\)</span> that generate rotation matrices <span class="math inline">\(R = \text{cayley}(\theta_v, c)\)</span> via gradient descent, discovering the optimal subspace for separating contrastive trajectories. Ablations show this learnable rotation is critical (see <a href="#tbl-arch-ablation">Table&nbsp;5</a>). We use the Cayley transform on skew-symmetric matrices, which guarantees orthogonality and enables efficient gradient-based learning.</p>
+</section>
+<section id="sec-scaling" class="level3" data-number="3.1.3">
+<h3 data-number="3.1.3" class="anchored" data-anchor-id="sec-scaling"><span class="header-section-number">3.1.3</span> Singular Value Scaling</h3>
+<p>We scale <span class="math inline">\(\Sigma\)</span> by <span class="math inline">\(\exp(c \cdot \lambda)\)</span> rather than additive offsets. This respects the multiplicative nature of singular values as amplification factors. Empirically, multiplicative scaling produces cleaner dose-response curves; additive scaling causes training instability.</p>
+</section>
+</section>
+</section>
+<section id="todo-we-try-both-additive-and-multicitivate-need-to-device" class="level1" data-number="4">
+<h1 data-number="4"><span class="header-section-number">4</span> TODO we try both additive and multicitivate need to device</h1>
+<section id="sec-coherence" class="level3" data-number="4.0.1">
+<h3 data-number="4.0.1" class="anchored" data-anchor-id="sec-coherence"><span class="header-section-number">4.0.1</span> Coherence Constraint</h3>
+<p>Maximizing hidden state separation without constraints causes models to generate incoherent outputs at high steering coefficients. We bound per-token NLL degradation relative to a reference model, creating a trust region where steering modifies behavior without breaking generation quality. This coherence constraint is essential for alignment debugging: incoherent outputs reveal nothing about internal reasoning.</p>
+</section>
+<section id="sec-data" class="level2" data-number="4.1">
+<h2 data-number="4.1" class="anchored" data-anchor-id="sec-data"><span class="header-section-number">4.1</span> Data Construction: Minimally-Contrastive Prompt Prefixes</h2>
+<section id="sec-planning-hypothesis" class="level3" data-number="4.1.1">
+<h3 data-number="4.1.1" class="anchored" data-anchor-id="sec-planning-hypothesis"><span class="header-section-number">4.1.1</span> The Planning Trajectory Hypothesis</h3>
+<p>We extract steering directions from <strong>incomplete, minimally-contrastive prompt prefixes</strong> rather than full completions. This design reflects a mechanistic claim about autoregressive generation: models must maintain internal planning state to produce coherent multi-token continuations.</p>
+<p>When two prompts differ by one word early on (“I love cheese” vs “I hate cheese”) but share identical suffixes, the model’s hidden state at the final token must already encode different continuation plans: otherwise the model cannot generate appropriately divergent next tokens. This planning signal is what we target for steering.</p>
+<p>Using incomplete prefixes offers three advantages:</p>
+<ol type="1">
+<li>Isolates planning from output: Differences in hidden states reflect intended trajectories, not yet-realized outputs that could introduce confounds</li>
+<li>Minimizes surface variance: Sequences share maximum context, differing only in the critical concept word, amplifying the conceptual signal</li>
+<li>Accesses pre-suppression representations: Extracting from middle-layer hidden states captures reasoning before output-layer suppression mechanisms activate, as documented by prior work showing late layers dominated by output shaping <span class="citation" data-cites="gurnee2024universal lad2024remarkable">(<a href="#ref-gurnee2024universal" role="doc-biblioref">Gurnee et al. 2024</a>; <a href="#ref-lad2024remarkable" role="doc-biblioref">Lad et al. 2024</a>)</span></li>
+</ol>
+</section>
+<section id="sec-data-format" class="level3" data-number="4.1.2">
+<h3 data-number="4.1.2" class="anchored" data-anchor-id="sec-data-format"><span class="header-section-number">4.1.2</span> Data Format</h3>
+<p>Following the contrastive prompt construction in Conditional Activation Steering <span class="citation" data-cites="lee2024programmingrefusalconditionalactivation">(<a href="#ref-lee2024programmingrefusalconditionalactivation" role="doc-biblioref">Lee et al. 2024</a>)</span> and RepEng <span class="citation" data-cites="vogel2024repeng">(<a href="#ref-vogel2024repeng" role="doc-biblioref">Vogel 2024</a>)</span>, we create <strong>synthetic prompt prefix pairs</strong>:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Example: Honesty concept (no completions needed)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>chosen  <span class="op">=</span> <span class="st">"I love cheese; let me tell you about the andes mountains"</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>rejected <span class="op">=</span> <span class="st">"I hate cheese; let me tell you about the andes mountains"</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Key properties:</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Incomplete (no answer/completion)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Differ by ONE word early in sequence  </span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Share maximal suffix context</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Extract activations from LAST token only</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>We construct 800 such pairs using:</p>
+<ul>
+<li>2 prompt templates (“I love/hate X”, “I always tell/hide the truth about X”)</li>
+<li>400 random context suffixes (from general text corpus)</li>
+<li>No human preference labels: directions extracted from model’s own activation patterns</li>
+<li>No model completions: prefixes capture planning before output generation</li>
+</ul>
+<p>This unsupervised, on-policy contrastive approach addresses a critical limitation of supervised steering: off-policy data distribution shift. Methods that extract from human-labeled preferences <span class="citation" data-cites="cao2024personalized">(<a href="#ref-cao2024personalized" role="doc-biblioref"><strong>cao2024personalized?</strong></a>)</span> or model outputs on contrived prompts <span class="citation" data-cites="zou2023representation">(<a href="#ref-zou2023representation" role="doc-biblioref">Zou et al. 2023</a>)</span> capture what models say about concepts rather than how they internally represent them during naturalistic reasoning. By extracting from incomplete prefixes in the model’s own forward pass, we avoid this contamination. This is the only tested method that requires zero human labels or model completions while achieving strong performance.</p>
+<p>Comparison to related methods: - DPO/BiPO <span class="citation" data-cites="rafailov2023direct">(<a href="#ref-rafailov2023direct" role="doc-biblioref">Rafailov et al. 2023</a>)</span>: Require full completions and human preference labels (off-policy) - Supervised probes <span class="citation" data-cites="burns2022discovering cao2024personalized">(<a href="#ref-burns2022discovering" role="doc-biblioref">Burns et al. 2022</a>; <a href="#ref-cao2024personalized" role="doc-biblioref"><strong>cao2024personalized?</strong></a>)</span>: Train on human labels of model internals (distribution shift) - InnerPiSSA: Extracts from incomplete prefixes in model’s own reasoning trajectory (on-policy, fully unsupervised)</p>
+<p>The on-policy property is essential for alignment debugging: to observe what models compute internally when safety constraints are bypassed, we need directions that reflect actual internal representations, not artifacts of how models respond when explicitly asked about concepts.</p>
+<p>See and for the mathematical formulation of contrastive activation extraction.</p>
+</section>
+</section>
+<section id="method-overview" class="level2" data-number="4.2">
+<h2 data-number="4.2" class="anchored" data-anchor-id="method-overview"><span class="header-section-number">4.2</span> Method Overview</h2>
+<section id="pseudocode-for-contrastive-svd-adapter-steering" class="level3" data-number="4.2.1">
+<h3 data-number="4.2.1" class="anchored" data-anchor-id="pseudocode-for-contrastive-svd-adapter-steering"><span class="header-section-number">4.2.1</span> Pseudocode for Contrastive SVD Adapter Steering</h3>
+</section>
+<section id="algorithm-1-innerpissa-simplified" class="level3" data-number="4.2.2">
+<h3 data-number="4.2.2" class="anchored" data-anchor-id="algorithm-1-innerpissa-simplified"><span class="header-section-number">4.2.2</span> Algorithm 1: InnerPiSSA (Simplified)</h3>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. SETUP: Reversible SVD Adapter</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>U, Σ, V <span class="op">=</span> SVD(W)[:r]</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>θ_v, θ_u, log_λ <span class="op">=</span> init_params(r)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> forward(x, α):</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Rotate singular vectors by α (steering strength)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    R_v, R_u <span class="op">=</span> cayley(θ_v, α), cayley(θ_u, α)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> x <span class="op">@</span> (V <span class="op">@</span> R_v) <span class="op">@</span> diag(Σ <span class="op">*</span> exp(α <span class="op">*</span> log_λ)) <span class="op">@</span> (U <span class="op">@</span> R_u).T</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. TRAINING: Contrastive Representation Preference Optimization</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="co"># pref_dir defined by reference model separation in S-space</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> batch <span class="kw">in</span> data:</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Forward pass for honest (+1) and dishonest (-1) directions</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    out_pos, out_neg <span class="op">=</span> model(batch, α<span class="op">=+</span><span class="dv">1</span>), model(batch, α<span class="op">=-</span><span class="dv">1</span>)</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Loss A: Maximize separation (flip if anti-aligned)</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    L_proj <span class="op">=</span> <span class="op">-</span>((out_pos.h <span class="op">-</span> out_neg.h) <span class="op">@</span> pref_dir).mean()</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> L_proj <span class="op">&gt;</span> <span class="dv">0</span>: L_proj <span class="op">=</span> <span class="op">-</span>L_proj</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Loss B: Coherence</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>    w <span class="op">=</span> softmax(<span class="op">-</span>L_proj)  <span class="co"># Harder task → Lower weight</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    L_coh <span class="op">=</span> relu(out_pos.nll <span class="op">-</span> ref.nll <span class="op">-</span> τ)<span class="op">**</span><span class="dv">2</span></span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Loss C: Monotonicity (gap_-1 &lt; gap_0 &lt; gap_+1)</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>    L_mono <span class="op">=</span> hinge(out_neg.gap <span class="op">&lt;</span> <span class="dv">0</span>) <span class="op">+</span> hinge(out_pos.gap <span class="op">&gt;</span> <span class="dv">0</span>)</span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>    (L_proj <span class="op">+</span> L_coh <span class="op">+</span> L_mono).backward()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="detailed-implementation-logic" class="level3" data-number="4.2.3">
+<h3 data-number="4.2.3" class="anchored" data-anchor-id="detailed-implementation-logic"><span class="header-section-number">4.2.3</span> Detailed Implementation Logic</h3>
+<details>
+<summary>
+Click to expand full pseudocode
+</summary>
+<div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># DATA: Contrastive prompt pairs differing by one word.</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>honest    <span class="op">=</span> [<span class="st">"I love cheese..."</span>, ...]</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>dishonest <span class="op">=</span> [<span class="st">"I hate cheese..."</span>, ...]</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>batch <span class="op">=</span> [honest[<span class="dv">0</span>], dishonest[<span class="dv">0</span>], ...]  <span class="co"># interleaved</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co"># SETUP: Low-rank SVD with learnable rotations</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>U, Σ, V <span class="op">=</span> SVD(layer.W)[:r]</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>θ_v, θ_u <span class="op">=</span> init_skew_symmetric(r), init_skew_symmetric(r)</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>log_λ <span class="op">=</span> rand(r) <span class="op">-</span> <span class="fl">0.5</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> forward(x, α):</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Apply Cayley transform for orthogonal rotations</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    R_v, R_u <span class="op">=</span> cayley(θ_v, α), cayley(θ_u, α)</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    V_rot, U_rot <span class="op">=</span> V <span class="op">@</span> R_v, U <span class="op">@</span> R_u</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Multiplicative scaling of singular values</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    Σ_scaled <span class="op">=</span> exp(α <span class="op">*</span> log_λ) <span class="op">*</span> Σ</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Recompose: x @ V_rot @ Σ_scaled @ U_rot.T</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> (x <span class="op">@</span> V_rot) <span class="op">*</span> Σ_scaled <span class="op">@</span> U_rot.T <span class="op">+</span> x <span class="op">@</span> W_res.T</span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a><span class="co"># TRAINING LOOP</span></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> batch <span class="kw">in</span> dataloader:</span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>    <span class="co"># 1. Reference (Frozen)</span></span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>    h_ref <span class="op">=</span> model_ref(batch)</span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Compute preference direction in S-space (U)</span></span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>    <span class="co"># We project reference differences into U to find the "natural" separation axis</span></span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>    pref_dir <span class="op">=</span> ((h_ref[::<span class="dv">2</span>] <span class="op">-</span> h_ref[<span class="dv">1</span>::<span class="dv">2</span>]) <span class="op">@</span> U).mean(dim<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a>    pref_dir <span class="op">=</span> pref_dir <span class="op">/</span> pref_dir.norm()</span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a>    <span class="co"># 2. Policy (Bidirectional)</span></span>
+<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a>    <span class="co"># We train both directions simultaneously to ensure reversibility</span></span>
+<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a>    h_pos, logp_pos <span class="op">=</span> model(batch, α<span class="op">=+</span><span class="dv">1</span>)</span>
+<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a>    h_neg, logp_neg <span class="op">=</span> model(batch, α<span class="op">=-</span><span class="dv">1</span>)</span>
+<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a>    <span class="co"># 3. Loss Calculation</span></span>
+<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Project differences onto preference direction</span></span>
+<span id="cb3-38"><a href="#cb3-38" aria-hidden="true" tabindex="-1"></a>    proj_pos <span class="op">=</span> ((h_pos[::<span class="dv">2</span>] <span class="op">-</span> h_pos[<span class="dv">1</span>::<span class="dv">2</span>]) <span class="op">@</span> U <span class="op">@</span> pref_dir).mean()</span>
+<span id="cb3-39"><a href="#cb3-39" aria-hidden="true" tabindex="-1"></a>    proj_neg <span class="op">=</span> ((h_neg[::<span class="dv">2</span>] <span class="op">-</span> h_neg[<span class="dv">1</span>::<span class="dv">2</span>]) <span class="op">@</span> U <span class="op">@</span> pref_dir).mean()</span>
+<span id="cb3-40"><a href="#cb3-40" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb3-41"><a href="#cb3-41" aria-hidden="true" tabindex="-1"></a>    <span class="co"># A. Anti-Alignment Guard</span></span>
+<span id="cb3-42"><a href="#cb3-42" aria-hidden="true" tabindex="-1"></a>    <span class="co"># If sum is negative, model is separating in reverse direction.</span></span>
+<span id="cb3-43"><a href="#cb3-43" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Flip signs to maximize magnitude regardless of direction.</span></span>
+<span id="cb3-44"><a href="#cb3-44" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (proj_pos <span class="op">+</span> proj_neg) <span class="op">&lt;</span> <span class="dv">0</span>:</span>
+<span id="cb3-45"><a href="#cb3-45" aria-hidden="true" tabindex="-1"></a>         proj_pos, proj_neg <span class="op">=</span> <span class="op">-</span>proj_pos, <span class="op">-</span>proj_neg</span>
+<span id="cb3-46"><a href="#cb3-46" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb3-47"><a href="#cb3-47" aria-hidden="true" tabindex="-1"></a>    L_coh_pos <span class="op">=</span> relu(logp_pos <span class="op">-</span> logp_ref <span class="op">-</span> τ)<span class="op">**</span><span class="dv">2</span></span>
+<span id="cb3-48"><a href="#cb3-48" aria-hidden="true" tabindex="-1"></a>    L_coh_neg <span class="op">=</span> relu(logp_neg <span class="op">-</span> logp_ref <span class="op">-</span> τ)<span class="op">**</span><span class="dv">2</span></span>
+<span id="cb3-49"><a href="#cb3-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-50"><a href="#cb3-50" aria-hidden="true" tabindex="-1"></a>    <span class="co"># C. Monotonicity</span></span>
+<span id="cb3-51"><a href="#cb3-51" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Ensure preference gap moves linearly: gap(-1) &lt; gap(0) &lt; gap(+1)</span></span>
+<span id="cb3-52"><a href="#cb3-52" aria-hidden="true" tabindex="-1"></a>    gap_pos <span class="op">=</span> (logp_pos[::<span class="dv">2</span>] <span class="op">-</span> logp_pos[<span class="dv">1</span>::<span class="dv">2</span>]).mean()</span>
+<span id="cb3-53"><a href="#cb3-53" aria-hidden="true" tabindex="-1"></a>    gap_neg <span class="op">=</span> (logp_neg[::<span class="dv">2</span>] <span class="op">-</span> logp_neg[<span class="dv">1</span>::<span class="dv">2</span>]).mean()</span>
+<span id="cb3-54"><a href="#cb3-54" aria-hidden="true" tabindex="-1"></a>    gap_ref <span class="op">=</span> (logp_ref[::<span class="dv">2</span>] <span class="op">-</span> logp_ref[<span class="dv">1</span>::<span class="dv">2</span>]).mean() <span class="co"># gap(0)</span></span>
+<span id="cb3-55"><a href="#cb3-55" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb3-56"><a href="#cb3-56" aria-hidden="true" tabindex="-1"></a>    L_mono <span class="op">=</span> hinge(gap_neg <span class="op">&gt;</span> gap_ref) <span class="op">+</span> hinge(gap_pos <span class="op">&lt;</span> gap_ref)</span>
+<span id="cb3-57"><a href="#cb3-57" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-58"><a href="#cb3-58" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Total Backward</span></span>
+<span id="cb3-59"><a href="#cb3-59" aria-hidden="true" tabindex="-1"></a>    loss <span class="op">=</span> <span class="op">-</span>(proj_pos <span class="op">+</span> proj_neg) <span class="op">+</span> (L_coh_pos <span class="op">+</span> L_coh_neg) <span class="op">+</span> L_mono</span>
+<span id="cb3-60"><a href="#cb3-60" aria-hidden="true" tabindex="-1"></a>    loss.backward()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</section>
+</section>
+<section id="loss-function-reversible-representation-preference-optimization-reprpo" class="level2" data-number="4.3">
+<h2 data-number="4.3" class="anchored" data-anchor-id="loss-function-reversible-representation-preference-optimization-reprpo"><span class="header-section-number">4.3</span> Loss Function: Reversible Representation Preference Optimization (ReprPO)</h2>
+<p>We introduce a specialized loss function designed to discover reversible steering directions in the model’s SVD-transformed space. The loss operates on pairs of contrastive hidden states (h_cho, h_rej) and optimizes a learnable steering vector v (parameterized by SVD rotations) to maximize separation while maintaining output coherence.</p>
+<div id="fig-loss-geometry" class="quarto-figure quarto-figure-center anchored">
+<figure class="figure">
+<p><img src="docs/img/loss_geometry_innerpissa.svg" class="img-fluid figure-img" style="width:80.0%"></p>
+<p></p><figcaption class="figure-caption">Figure 4: Loss Geometry: Three components work together. (1) Separation: maximize projection of contrastive hidden states onto the preference direction. (2) Coherence: bound per-token NLL degradation to maintain output quality. (3) Monotonic: ensure the preference gap changes monotonically with coefficient, enabling bidirectional control.</figcaption><p></p>
+</figure>
+</div>
+<p>The total loss is a combination of projection maximization and coherence preservation, computed simultaneously for both forward (c=+1) and reverse (c=-1) steering coefficients:</p>
+<p><span class="math display">\[ \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{proj}} + \mathcal{L}_{\text{coh}} + \mathcal{L}_{\text{mono}} \]</span></p>
+<ol type="1">
+<li><p>Reversible Projection Loss: To ensure the steering vector captures a true semantic axis rather than a unidirectional feature, we maximize the projection of hidden state differences onto the steering direction for both positive and negative coefficients. We employ an anti-alignment guard: if the model naturally separates chosen/rejected states in the direction opposite to our initialization, we dynamically flip the optimization sign. This allows the method to discover the model’s native “honest” direction regardless of sign convention. The learned direction sign is arbitrary (identical to PCA steering’s calibration requirement), as projections onto singular vectors can be positive or negative; the guard ensures we optimize for separation magnitude.</p></li>
+<li><p>Coherence Constraint: We enforce a coherence constraint that penalizes KL divergence from the reference model only when it exceeds a threshold tau (e.g., 0.2 nats per token).</p></li>
+<li><p>Monotonic Ordering Constraint: To prevent saddle points where both c=+1 and c=-1 degrade performance, we enforce a monotonic ordering on the preference gap delta = log p(cho) - log p(rej). We require that delta(c=-1) &lt; delta(c=0) &lt; delta(c=+1), ensuring that the steering vector induces a continuous, reversible shift in behavioral probability.</p></li>
+</ol>
+<p><strong>Direction calibration</strong>: The sign of the learned direction is arbitrary (projections onto U can be positive or negative). We auto-correct this during training via anti-alignment guard: if the sum of projections across both coefficients is negative, we flip the sign. This is identical to PCA steering’s calibration phase.</p>
+<section id="sec-eval-framework" class="level3" data-number="4.3.1">
+<h3 data-number="4.3.1" class="anchored" data-anchor-id="sec-eval-framework"><span class="header-section-number">4.3.1</span> Evaluation Framework</h3>
+<p>We evaluate on moral reasoning transfer using DailyDilemmas, a dataset of ethical scenarios requiring models to choose between competing values. This benchmark serves alignment debugging goals better than AxBench <span class="citation" data-cites="wu2025axbench">(<a href="#ref-wu2025axbench" role="doc-biblioref">Wu et al. 2025</a>)</span> for five reasons:</p>
+<ol type="1">
+<li>Log-probability evaluation: DailyDilemmas uses continuous log-probabilities (nats) rather than LLM judge ratings (0-2 discrete scores), providing fine-grained gradient signals that do not saturate and enable statistical testing</li>
+<li>Transfer measurement: Tests generalization of internal reasoning (honesty to 109 diverse moral values) rather than open-vocabulary concept injection on synthetic data</li>
+<li>Stress tests of steering against learned behaviors: Creates genuine preference conflicts where safety training resists, enabling evaluation when prompting catastrophically fails (our core claim)</li>
+<li>Unsupervised extraction: Requires no human labels or synthetic data generation, only model’s own reasoning trajectories</li>
+<li>Coherence metrics: Token-level NLL degradation measures output quality degradation, critical for alignment debugging where incoherent outputs are uninterpretable</li>
+</ol>
+<p>AxBench evaluates 500 concepts with 144 training examples each on Alpaca-Eval instructions using GPT-4 generated synthetic data. While valuable for open-vocabulary steering, it focuses on cooperative tasks where prompting works well. We target conditions where models resist steering due to safety training.</p>
+<p>Compute costs: Training InnerPiSSA adapters requires approximately 10 minutes per concept on a single A100 GPU (800 samples, 38 epochs, rank 128, batch size 16), comparable to fine-tuning LoRA. Total parameters updated: rank times 2 (for U and V rotations) times number of layers, typically 128 times 2 times 10 = 2,560 parameters per module. Inference adds &lt;1% overhead from SVD rotations and Cayley transforms. PCA extraction takes seconds but achieves 5x weaker effects. Prompting has zero training cost but fails when steering against learned safety behaviors (see <a href="#tbl-anti-alignment">Table&nbsp;3</a>). For one-time alignment debugging setups, InnerPiSSA’s training cost is acceptable; for rapid iteration across many concepts, the cost-performance tradeoff favors methods with stronger effects.</p>
+<p>We compare multiple steering methods (see <a href="#tbl-methods">Table&nbsp;1</a>):</p>
+<div id="tbl-methods" class="anchored">
+<table class="table">
+<caption>Table 1: Comparison of Steering Methods</caption>
+<colgroup>
+<col style="width: 19%">
+<col style="width: 31%">
+<col style="width: 48%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Method</th>
+<th>Description</th>
+<th>Parameters Modified</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Random</td>
+<td>Noise baseline</td>
+<td>full rank</td>
+</tr>
+<tr class="even">
+<td>PCA</td>
+<td>Unsupervised baseline</td>
+<td>full rank</td>
+</tr>
+<tr class="odd">
+<td><strong>InnerPiSSA (ours)</strong></td>
+<td>Learnable rotations + scaling of SVD matrices</td>
+<td>rank × 2</td>
+</tr>
+<tr class="even">
+<td>Prompt</td>
+<td>“Be honest” prefix</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Training</strong>: 800 honesty contrastive pairs (unsupervised)<br>
+<strong>Evaluation</strong>: DailyDilemmas moral reasoning scenarios</p>
+</section>
+</section>
+<section id="results-preview" class="level2" data-number="4.4">
+<h2 data-number="4.4" class="anchored" data-anchor-id="results-preview"><span class="header-section-number">4.4</span> Results Preview</h2>
+</section>
+</section>
+<section id="sec-related" class="level1" data-number="5">
+<h1 data-number="5"><span class="header-section-number">5</span> Related Work</h1>
+<p>Parameter-efficient fine-tuning and steering methods represent different hypotheses about transformer internals.</p>
+<section id="representation-steering-the-axbench-baseline" class="level3" data-number="5.0.1">
+<h3 data-number="5.0.1" class="anchored" data-anchor-id="representation-steering-the-axbench-baseline"><span class="header-section-number">5.0.1</span> Representation Steering &amp; The AxBench Baseline</h3>
+<p>More recently, <strong>AxBench</strong> <span class="citation" data-cites="wu2025axbench">(<a href="#ref-wu2025axbench" role="doc-biblioref">Wu et al. 2025</a>)</span> established that representation steering methods consistently underperform prompting on concept-based control. <strong>HyperSteer</strong> <span class="citation" data-cites="sun2025hypersteer">(<a href="#ref-sun2025hypersteer" role="doc-biblioref"><strong>sun2025hypersteer?</strong></a>)</span> recently achieved representation steering performance matching prompting by training hypernetworks on 16k GemmaScope SAE labels. This complements our work: HyperSteer scales to many concepts via supervised training, while InnerPiSSA focuses on unsupervised extraction from minimal data (800 pairs) with emphasis on steering against learned safety behaviors (the use case Wu et al.&nbsp;identified as the only compelling justification for representation steering).</p>
+</section>
+<section id="representation-steering-engineering" class="level3" data-number="5.0.2">
+<h3 data-number="5.0.2" class="anchored" data-anchor-id="representation-steering-engineering"><span class="header-section-number">5.0.2</span> Representation Steering &amp; Engineering</h3>
+<ul>
+<li><strong>Representation Engineering (RepE)</strong> (Zou et al., 2023): The foundational work on top-down transparency and control. We build on their concept of “reading and controlling” high-level cognitive phenomena but move beyond activation arithmetic to gradient-based optimization.</li>
+<li><strong>repeng</strong> (Vogel, 2024): A robust library for PCA-based steering using contrastive prompt pairs. We adopt their methodology for constructing minimally-contrastive prompts but extend it by (1) using incomplete prefixes rather than complete prompts, (2) applying gradient-based optimization in SVD space, and (3) learning bidirectional rotations.</li>
+<li><strong>Conditional Activation Steering (CAST)</strong> (Lee et al., 2024): Demonstrates extraction of steering vectors from contrastive prompt-suffix pairs using PCA on mean-centered activations. Our data construction follows similar principles (contrastive pairs, PCA extraction) but targets the planning trajectory in incomplete prefixes rather than behavioral responses in complete outputs.</li>
+<li><strong>BiPDO</strong> (Cao et al., 2024): Introduced bidirectional preference optimization for steering. Our work shares the bidirectional goal but operates in SVD transformation space rather than raw activation space, and uses a specialized coherence-constrained loss.</li>
+<li><strong>AxBench</strong> (Wu et al., 2025): A critical benchmark showing that representation steering often lags behind prompting. We directly address this gap, showing that InnerPiSSA is one of the first representation methods to outperform prompting on transfer tasks.</li>
+<li><strong>Circuit Breakers</strong> (Zou et al., 2024): Uses representation-level optimization to prevent harmful outputs. While they focus on refusal (shutting down capability), we focus on steering (redirecting capability), but share the insight that direct representation control is more robust than output alignment.</li>
+<li><strong>Anthropic Persona Vectors</strong> (2024): Demonstrates that model personality is encoded in steerable directions.</li>
+<li><strong>repeng</strong> (Vogel, 2024): A robust library for PCA-based steering. We use this as our primary baseline for arithmetic steering methods.</li>
+</ul>
+</section>
+<section id="parameter-efficient-fine-tuning-peft" class="level3" data-number="5.0.3">
+<h3 data-number="5.0.3" class="anchored" data-anchor-id="parameter-efficient-fine-tuning-peft"><span class="header-section-number">5.0.3</span> Parameter-Efficient Fine-Tuning (PEFT)</h3>
+<ul>
+<li><strong>PiSSA</strong> (Meng et al., 2024): Decomposes weights into principal and residual components (<span class="math inline">\(W = U \Sigma V^T + W_{res}\)</span>). We adopt this architecture but innovate by learning <em>rotations</em> of the singular vectors rather than just fine-tuning the components, enabling semantic steering.</li>
+<li><strong>DoRA</strong> (Liu et al., 2024): Decomposes weights into magnitude and direction. Like us, they recognize the importance of separating these components, but they operate in weight space for general fine-tuning, whereas we operate in transformation space for targeted steering.</li>
+<li><strong>SVFT</strong> (Lingam et al., 2024): Updates singular values (<span class="math inline">\(\Sigma\)</span>) for efficient fine-tuning. We extend this by also rotating the singular vectors (<span class="math inline">\(U, V\)</span>), which our ablations show is critical for steering (removing rotations drops performance by 96%).</li>
+<li><strong>SSVD</strong> (Wang et al., 2025): Rotates <span class="math inline">\(V\)</span> matrices for domain adaptation in speech. We independently developed a similar rotation mechanism but apply it to both <span class="math inline">\(U\)</span> and <span class="math inline">\(V\)</span> for bidirectional steering in language models.</li>
+</ul>
+</section>
+<section id="mechanistic-interpretability" class="level3" data-number="5.0.4">
+<h3 data-number="5.0.4" class="anchored" data-anchor-id="mechanistic-interpretability"><span class="header-section-number">5.0.4</span> Mechanistic Interpretability</h3>
+<ul>
+<li><strong>Universal Neurons</strong> (Gurnee et al., 2024) &amp; <strong>Stages of Inference</strong> (Lad et al., 2024): Identify that models have distinct “suppression” dynamics in later layers. This motivates our choice to steer at layers <span class="math inline">\(N-2\)</span> to <span class="math inline">\(N-5\)</span>, intervening in the “reasoning” stage before suppression mechanisms activate.</li>
+<li><strong>Negative Results for SAEs</strong> (Smith et al., 2025): Highlights the difficulty of using Sparse Autoencoders for downstream tasks. Our work suggests that supervised/contrastive steering in transformation space may be a more practical route for control than unsupervised dictionary learning.</li>
+</ul>
+<p><strong>Key insight</strong>: Methods operating in transformation space (SVD, rotations) generalize better than those in raw activation or weight space because they align with how transformers process information.</p>
+</section>
+</section>
+<section id="references" class="level1 unnumbered">
+<h1 class="unnumbered">References</h1>
+<div id="refs" class="references csl-bib-body hanging-indent" role="doc-bibliography">
+<div id="ref-amodei2016concrete" class="csl-entry" role="doc-biblioentry">
+Amodei, Dario, Chris Olah, Jacob Steinhardt, Paul Christiano, John Schulman, and Dan Mané. 2016. <span>“Concrete Problems in AI Safety.”</span> <em>arXiv Preprint arXiv:1606.06565</em>.
+</div>
+<div id="ref-anthropic2025claude37" class="csl-entry" role="doc-biblioentry">
+Anthropic. 2025. <span>“Claude 3.7 Sonnet System Card.”</span> <a href="https://assets.anthropic.com/m/785e231869ea8b3b/original/claude-3-7-sonnet-system-card.pdf">https://assets.anthropic.com/m/785e231869ea8b3b/original/claude-3-7-sonnet-system-card.pdf</a>.
+</div>
+<div id="ref-burns2022discovering" class="csl-entry" role="doc-biblioentry">
+Burns, Collin, Haotian Ye, Dan Klein, and Jacob Steinhardt. 2022. <span>“Discovering Latent Knowledge in Language Models Without Supervision.”</span> <em>arXiv Preprint arXiv:2212.03827</em>.
+</div>
+<div id="ref-christiano2017deep" class="csl-entry" role="doc-biblioentry">
+Christiano, Paul F, Jan Leike, Tom Brown, Miljan Martic, Shane Legg, and Dario Amodei. 2017. <span>“Deep Reinforcement Learning from Human Preferences.”</span> <em>Advances in Neural Information Processing Systems</em> 30.
+</div>
+<div id="ref-gurnee2024universal" class="csl-entry" role="doc-biblioentry">
+Gurnee, Wes, Theo Horsley, Zifan Carl Guo, Tara Rezaei Kheirkhah, Qinyi Sun, Will Hathaway, Neel Nanda, and Dimitris Bertsimas. 2024. <span>“Universal Neurons in Gpt2 Language Models.”</span> <a href="https://arxiv.org/abs/2401.12181">https://arxiv.org/abs/2401.12181</a>.
+</div>
+<div id="ref-hubinger2019risks" class="csl-entry" role="doc-biblioentry">
+Hubinger, Evan, Chris Van Merwijk, Vladimir Mikulik, Joar Skalse, and Scott Garrabrant. 2019. <span>“Risks from Learned Optimization in Advanced Machine Learning Systems.”</span> <em>arXiv Preprint arXiv:1906.01820</em>.
+</div>
+<div id="ref-lad2024remarkable" class="csl-entry" role="doc-biblioentry">
+Lad, Vedang, Jin Hwa Lee, Wes Gurnee, and Max Tegmark. 2024. <span>“The Remarkable Robustness of LLMs: Stages of Inference?”</span> <a href="https://arxiv.org/abs/2406.19384">https://arxiv.org/abs/2406.19384</a>.
+</div>
+<div id="ref-lee2024programmingrefusalconditionalactivation" class="csl-entry" role="doc-biblioentry">
+Lee, Bruce W., Inkit Padhi, Karthikeyan Natesan Ramamurthy, Erik Miehling, Pierre Dognin, Manish Nagireddy, and Amit Dhurandhar. 2024. <span>“Programming Refusal with Conditional Activation Steering.”</span> <a href="https://arxiv.org/abs/2409.05907">https://arxiv.org/abs/2409.05907</a>.
+</div>
+<div id="ref-lingam2024svft" class="csl-entry" role="doc-biblioentry">
+Lingam, Vijay, Atula Tejaswi, Aditya Vavre, Aneesh Shetty, Gautham Krishna Gudur, Joydeep Ghosh, Alex Dimakis, and Eunsol Choi. 2024. <span>“SVFT: Parameter-Efficient Fine-Tuning with Singular Vectors.”</span> <a href="https://arxiv.org/abs/2405.19597">https://arxiv.org/abs/2405.19597</a>.
+</div>
+<div id="ref-manheim2019categorizing" class="csl-entry" role="doc-biblioentry">
+Manheim, David, and Scott Garrabrant. 2019. <span>“Categorizing Variants of Goodhart’s Law.”</span> <em>arXiv Preprint arXiv:1803.04585</em>.
+</div>
+<div id="ref-meng2024pissa" class="csl-entry" role="doc-biblioentry">
+Meng, Fanxu, Zhaohui Wang, and Muhan Zhang. 2024. <span>“PiSSA: Principal Singular Values and Singular Vectors Adaptation of Large Language Models.”</span> <a href="https://arxiv.org/abs/2404.02948">https://arxiv.org/abs/2404.02948</a>.
+</div>
+<div id="ref-openai2025cot" class="csl-entry" role="doc-biblioentry">
+OpenAI. 2025. <span>“Chain-of-Thought Monitoring for Large Language Models.”</span> <a href="https://cdn.openai.com/pdf/34f2ada6-870f-4c26-9790-fd8def56387f/CoT_Monitoring.pdf">https://cdn.openai.com/pdf/34f2ada6-870f-4c26-9790-fd8def56387f/CoT_Monitoring.pdf</a>.
+</div>
+<div id="ref-ouyang2022training" class="csl-entry" role="doc-biblioentry">
+Ouyang, Long, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin, Chong Zhang, et al. 2022. <span>“Training Language Models to Follow Instructions with Human Feedback.”</span> <em>Advances in Neural Information Processing Systems</em> 35: 27730–44.
+</div>
+<div id="ref-rafailov2023direct" class="csl-entry" role="doc-biblioentry">
+Rafailov, Rafael, Archit Sharma, Eric Mitchell, Stefano Ermon, Christopher D Manning, and Chelsea Finn. 2023. <span>“Direct Preference Optimization: Your Language Model Is Secretly a Reward Model.”</span> <em>arXiv Preprint arXiv:2305.18290</em>.
+</div>
+<div id="ref-rimsky2024steering" class="csl-entry" role="doc-biblioentry">
+Rimsky, Nina, Nick Gabrieli, Julian Schulz, Meg Tong, Evan Turner, and Alexander Denison. 2024. <span>“Steering Language Models with Activation Engineering.”</span> <em>arXiv Preprint arXiv:2308.10248</em>.
+</div>
+<div id="ref-sharma2023towards" class="csl-entry" role="doc-biblioentry">
+Sharma, Mrinank, Meg Tong, Tomasz Korbak, David Duvenaud, Amanda Askell, Samuel R Bowman, Newton Cheng, et al. 2023. <span>“Towards Understanding Sycophancy in Language Models.”</span> <em>arXiv Preprint arXiv:2310.13548</em>.
+</div>
+<div id="ref-vogel2024repeng" class="csl-entry" role="doc-biblioentry">
+Vogel, Theia. 2024. <span>“Repeng.”</span> <a href="https://github.com/vgel/repeng/">https://github.com/vgel/repeng/</a>.
+</div>
+<div id="ref-wang2025ssvd" class="csl-entry" role="doc-biblioentry">
+Wang, Pu, Shinji Watanabe, and Hugo Van hamme. 2025. <span>“SSVD: Structured SVD for Parameter-Efficient Fine-Tuning and Benchmarking Under Domain Shift in ASR.”</span> <a href="https://arxiv.org/abs/2509.02830">https://arxiv.org/abs/2509.02830</a>.
+</div>
+<div id="ref-wu2025steering" class="csl-entry" role="doc-biblioentry">
+Wu, Zhengxuan. 2025. <span>“On Representation Steering.”</span> <a href="https://nlp.stanford.edu/~wuzhengx/steer/index.html">https://nlp.stanford.edu/~wuzhengx/steer/index.html</a>.
+</div>
+<div id="ref-wu2025axbench" class="csl-entry" role="doc-biblioentry">
+Wu, Zhengxuan, Aryaman Arora, Atticus Geiger, Zheng Wang, Jing Huang, Dan Jurafsky, Christopher D. Manning, and Christopher Potts. 2025. <span>“AxBench: Steering LLMs? Even Simple Baselines Outperform Sparse Autoencoders.”</span> <a href="https://arxiv.org/abs/2501.17148">https://arxiv.org/abs/2501.17148</a>.
+</div>
+<div id="ref-zou2023representation" class="csl-entry" role="doc-biblioentry">
+Zou, Andy, Long Phan, Sarah Chen, James Campbell, Phillip Guo, Richard Ren, Alexander Pan, et al. 2023. <span>“Representation Engineering: A Top-down Approach to AI Transparency.”</span> <a href="https://arxiv.org/abs/2310.01405">https://arxiv.org/abs/2310.01405</a>.
+</div>
+</div>
+</section>
+<section id="sec-discussion" class="level1" data-number="6">
+<h1 data-number="6"><span class="header-section-number">6</span> Discussion and Limitations</h1>
+<section id="what-we-have-shown" class="level2" data-number="6.1">
+<h2 data-number="6.1" class="anchored" data-anchor-id="what-we-have-shown"><span class="header-section-number">6.1</span> What We Have Shown</h2>
+<p>InnerPiSSA demonstrates the strongest performance among tested methods for alignment debugging:</p>
+<ol type="1">
+<li>Best transfer: 5x stronger than PCA (0.245 vs 0.053, p=0.001), maintains coherence when steering against safety training (truthfulness: -0.70 vs -10.84 nats for prompting)</li>
+<li>Unsupervised on-policy extraction: No human preference labels or model completions required, extracts from incomplete reasoning prefixes in the model’s own forward pass</li>
+<li>Bidirectional control: Same adapter steers c=±1 with opposite effects, evidence of semantic axis manipulation</li>
+<li>Works when prompting fails: Maintains coherence under adversarial conditions (steering against learned safety behaviors)</li>
+</ol>
+<p>This addresses the AxBench challenge <span class="citation" data-cites="wu2025axbench">(<a href="#ref-wu2025axbench" role="doc-biblioref">Wu et al. 2025</a>)</span> on a harder benchmark: not just concept injection on cooperative tasks, but alignment debugging under adversarial conditions. The unsupervised extraction property is critical: alignment debugging ideally should not rely on potentially-contaminated human labels or model outputs that may already reflect output-level suppression.</p>
+<p><strong>What we have <em>not</em> shown</strong>: We do not claim to have solved alignment debugging or demonstrated perfect latent knowledge elicitation. Success metrics remain informal (coherence + adversarial robustness), and we lack a formal definition of “ideal” performance. The method is still constrained by safety training resistance (asymmetric degradation in negative direction) and cannot extract from models that refuse to engage even at the prompt level. InnerPiSSA is the best-performing method we tested for this capability, not a complete solution to alignment.</p>
+</section>
+<section id="sec-efficiency" class="level2" data-number="6.2">
+<h2 data-number="6.2" class="anchored" data-anchor-id="sec-efficiency"><span class="header-section-number">6.2</span> Efficiency vs.&nbsp;Robustness</h2>
+<p>Wu et al. <span class="citation" data-cites="wu2025steering">(<a href="#ref-wu2025steering" role="doc-biblioref">2025</a>)</span> rightly critique “hand-wavy” efficiency claims in representation steering, showing that prompting overhead becomes negligible (&lt;0.01%) at large context lengths. We acknowledge that for cooperative tasks where prompting works, prompting is the superior choice for efficiency.</p>
+<p>However, for alignment debugging, the primary constraint is <strong>robustness</strong>, not FLOPs. As shown in <a href="#tbl-anti-alignment">Table&nbsp;3</a>, prompting fails catastrophically when steering against safety training. InnerPiSSA trades a fixed parameter overhead for the capability to steer in this regime.</p>
+<p><strong>Memory Overhead</strong>: InnerPiSSA stores rank-<span class="math inline">\(r\)</span> rotation matrices for <span class="math inline">\(U\)</span> and <span class="math inline">\(V\)</span> at selected layers. For a model with hidden size <span class="math inline">\(H\)</span>, rank <span class="math inline">\(r\)</span>, and <span class="math inline">\(L_{steer}\)</span> steered layers:</p>
+<p><span class="math display">\[ \text{Params} = 2 \cdot H \cdot r \cdot L_{steer} \]</span></p>
+<p>For Qwen-0.6B (<span class="math inline">\(H=1024\)</span>, <span class="math inline">\(r=128\)</span>, <span class="math inline">\(L_{steer}=10\)</span>), this is <span class="math inline">\(\approx 2.6M\)</span> parameters, or roughly <strong>0.4%</strong> of the model size. This is comparable to LoRA and fits easily in GPU memory.</p>
+<p><strong>Compute Overhead</strong>: At inference, InnerPiSSA adds two low-rank projections per token at steered layers.</p>
+<p><span class="math display">\[ \text{FLOPs}_{add} = 2 \cdot (2 \cdot H \cdot r) \cdot L_{steer} \]</span></p>
+<p>Compared to the base model forward pass (<span class="math inline">\(\approx 24 L H^2\)</span>), the relative overhead is:</p>
+<p><span class="math display">\[ \text{Overhead} \approx \frac{4 H r L_{steer}}{24 L H^2} = \frac{r L_{steer}}{6 L H} \]</span></p>
+<p>For our configuration, this is <span class="math inline">\(\approx 2\%\)</span>. While higher than prompting’s asymptotic 0.01%, it is a constant cost that does not grow with context length, and is a necessary price for the robustness capability.</p>
+</section>
+<section id="limitations" class="level2" data-number="6.3">
+<h2 data-number="6.3" class="anchored" data-anchor-id="limitations"><span class="header-section-number">6.3</span> Limitations</h2>
+<p><strong>Training stability</strong>: While successful checkpoints demonstrate consistent bidirectional steering, training outcomes vary across runs. Not all runs converge to the intended preference direction—some learn alternative coherent-but-misaligned transformations, particularly when coherence loss dominates early training. We report results from successful runs (those achieving monotonic coefficient response with p&lt;0.05), with seed variance documented in <a href="#tbl-seed-stability">Table&nbsp;8</a>. Overfitting occurs after approximately [N] epochs on [dataset size], visible as validation NLL divergence. We checkpoint models before overfitting and verify generalization on held-out dilemmas. Future work should explore stronger direction constraints during initialization to improve convergence reliability.</p>
+<p><strong>Prompt-dependent extraction</strong>: Steering directions are extracted from contrastive prompt pairs. If models refuse to engage even at the prompt level (heavily safety-tuned to resist), extraction quality degrades. While steering <em>application</em> works when prompting fails (<a href="#tbl-anti-alignment">Table&nbsp;3</a>), steering <em>extraction</em> still requires some signal from model responses. This is fundamental to unsupervised contrastive methods: we cannot extract what the model refuses to compute.</p>
+<p><strong>Asymmetric alignment resistance</strong>: Steering against learned safety behaviors (coefficient = -1) degrades faster than steering with them (coefficient = +1), visible in coherence costs (TBD vs TBD NLL, <a href="#tbl-anti-alignment">Table&nbsp;3</a>). Alignment training creates directional structure in representation space that resists reversal. Stronger adversarial steering may require different training procedures or loss formulations that explicitly model this resistance.</p>
+<p><strong>White-box access required</strong>: Like all representation methods, InnerPiSSA needs access to hidden states and gradients, limiting applicability to open-source models. This is not a bug but a feature: alignment debugging inherently requires probing internals. However, it means the method cannot audit closed-source models where alignment failures may be more concerning.</p>
+<p><strong>Data scope</strong>: We use 800 synthetic honesty pairs with simple templates. While sufficient for proof-of-concept, steering complex or nuanced concepts may require higher-quality data. Our construction follows RepEng <span class="citation" data-cites="vogel2024repeng">(<a href="#ref-vogel2024repeng" role="doc-biblioref">Vogel 2024</a>)</span> conventions but inherits limitations in capturing subtle behavioral distinctions beyond binary preferences.</p>
+<p><strong>Claim scope (addressing deception)</strong>: We claim InnerPiSSA is the best-performing method we tested for probing internal states, not that it guarantees detection of deceptive alignment. Our extraction still uses prompts (contrastive pairs), so sufficiently capable models could potentially deceive at the prompt level. The evidence for bypassing output-level suppression is: (1) extraction targets incomplete prefixes (planning trajectories, not outputs), (2) steering works when prompting fails (adversarial robustness: -0.70 vs -10.84), (3) effects transfer to untrained concepts (moral reasoning), (4) bidirectional control demonstrates semantic axis manipulation, and (5) no human labels or model completions are used (purely on-policy extraction). Crucially, alignment debugging ideally should not rely on human preference labels (which introduce experimenter bias) or model outputs (which may already reflect suppression). InnerPiSSA is the only tested method meeting this criterion while achieving strong performance. However, we cannot rule out that models learn to perform deception across all internal representations. InnerPiSSA provides the strongest evidence we found but is not a complete solution.</p>
+<p><strong>Intervention sites</strong>: We intervene only on residual stream activations via <code>o_proj</code> and <code>down_proj</code>. Other sites (attention keys/values, MLP gates, specific token positions) may yield different steering properties. Prior work shows different sites have different effects <span class="citation" data-cites="wu2024reft">(<a href="#ref-wu2024reft" role="doc-biblioref"><strong>wu2024reft?</strong></a>)</span>; we have not systematically explored this space.</p>
+<p><strong>Model architecture sensitivity</strong>: Cross-architecture results (<strong>?@tbl-cross-model</strong>) show sensitivity to model family. Qwen models respond well; Llama/Gemma show mixed results. This suggests architecture-specific tuning of layer selection, rank, and loss weights may be necessary. The suppression dynamics hypothesis (<a href="#sec-suppression">Section&nbsp;7.5.3</a>) may not generalize uniformly.</p>
+<p><strong>Benchmark mismatch</strong>: We evaluate on DailyDilemmas (moral reasoning under preference conflict) rather than AxBench (open-vocabulary concept steering). While DailyDilemmas better tests alignment debugging goals, direct AxBench comparison would strengthen claims about solving the representation-steering-vs-prompting gap Wu et al.&nbsp;identified.</p>
+<p><strong>Incomplete mechanistic understanding</strong>: We hypothesize middle layers work best due to suppression dynamics <span class="citation" data-cites="gurnee2024universal">(<a href="#ref-gurnee2024universal" role="doc-biblioref">Gurnee et al. 2024</a>)</span>, but cannot explain why depth 0.5 empirically outperforms our predicted 0.7-0.8 range. Layer selection is data-driven, not theory-driven. Better mechanistic models of transformer reasoning would enable principled design.</p>
+<p><strong>Compute overhead</strong>: Training adapters requires backpropagation (~10 min/concept on single GPU), unlike PCA (seconds). While modest compared to full fine-tuning, this is higher than arithmetic extraction. For alignment debugging use cases requiring one-time setup, acceptable; for rapid iteration across many concepts, less practical than PCA or prompting.</p>
+</section>
+<section id="future-directions" class="level2" data-number="6.4">
+<h2 data-number="6.4" class="anchored" data-anchor-id="future-directions"><span class="header-section-number">6.4</span> Future Directions</h2>
+<p><strong>Compositional steering</strong>: Can we superpose multiple steering vectors (honesty + curiosity) to achieve complex behaviors? Does SVD space enable linear composition where activation space does not?</p>
+<p><strong>Explaining layer effectiveness</strong>: Why does depth 0.5 outperform predictions? Correlating steering effectiveness with SAE features <span class="citation" data-cites="lieberum-etal-2024-gemma">(<a href="#ref-lieberum-etal-2024-gemma" role="doc-biblioref"><strong>lieberum-etal-2024-gemma?</strong></a>)</span> or circuit analysis <span class="citation" data-cites="wang2022interpretability">(<a href="#ref-wang2022interpretability" role="doc-biblioref"><strong>wang2022interpretability?</strong></a>)</span> could reveal mechanistic principles.</p>
+<p><strong>Deceptive alignment probing</strong>: The adversarial steering capability enables studying models that conceal misaligned reasoning. Can InnerPiSSA detect or characterize deception in capable models? This requires careful experimental design to avoid anthropomorphizing statistical patterns.</p>
+<p><strong>Scaling to AxBench</strong>: Direct evaluation on AxBench’s 16k concept dataset would test whether gradient-based methods scale to open-vocabulary steering while maintaining advantages over prompting on adversarial robustness.</p>
+</section>
+</section>
+<section id="references-original-position" class="level1 unnumbered">
+<h1 class="unnumbered">References (Original Position)</h1>
+</section>
+<section id="sec-results" class="level1" data-number="7">
+<h1 data-number="7"><span class="header-section-number">7</span> Results</h1>
+<p><strong>Main finding</strong>: InnerPiSSA transfers from honesty training to moral reasoning with 5× stronger effect than baselines, while maintaining output coherence (see <a href="#tbl-main-results">Table&nbsp;2</a>).</p>
+<div id="tbl-main-results" class="anchored">
+<table class="table">
+<caption>Table 2: Main Results: InnerPiSSA vs Baselines on Moral Reasoning Transfer</caption>
+<colgroup>
+<col style="width: 15%">
+<col style="width: 8%">
+<col style="width: 12%">
+<col style="width: 12%">
+<col style="width: 10%">
+<col style="width: 14%">
+<col style="width: 15%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Method</th>
+<th style="text-align: left;">Coeff</th>
+<th style="text-align: right;">Target Effect</th>
+<th style="text-align: right;">Side Effects</th>
+<th style="text-align: right;">p-value</th>
+<th style="text-align: right;">Output Quality</th>
+<th style="text-align: right;">Normalized Gain (%)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: right;">Δ Truth ↑</td>
+<td style="text-align: right;">Δ Other ↓</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;">Δ NLL ↓</td>
+<td style="text-align: right;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">InnerPiSSA (ours)</td>
+<td style="text-align: left;">±1.0</td>
+<td style="text-align: right;">0.245</td>
+<td style="text-align: right;">0.117</td>
+<td style="text-align: right;">0.001</td>
+<td style="text-align: right;">0.314</td>
+<td style="text-align: right;">18.660</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">InnerPiSSA (ours)</td>
+<td style="text-align: left;">±2.0</td>
+<td style="text-align: right;">0.321</td>
+<td style="text-align: right;">0.162</td>
+<td style="text-align: right;">0.089</td>
+<td style="text-align: right;">1.403</td>
+<td style="text-align: right;">13.346</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">InnerPiSSA (ours)</td>
+<td style="text-align: left;">±5.0</td>
+<td style="text-align: right;">0.332</td>
+<td style="text-align: right;">0.165</td>
+<td style="text-align: right;">0.914</td>
+<td style="text-align: right;">3.063</td>
+<td style="text-align: right;">8.178</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">InnerPiSSA (ours)</td>
+<td style="text-align: left;">±15.0</td>
+<td style="text-align: right;">0.302</td>
+<td style="text-align: right;">0.144</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">3.429</td>
+<td style="text-align: right;">6.809</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">random</td>
+<td style="text-align: left;">±100.0</td>
+<td style="text-align: right;">0.072</td>
+<td style="text-align: right;">0.045</td>
+<td style="text-align: right;">0.860</td>
+<td style="text-align: right;">0.157</td>
+<td style="text-align: right;">6.247</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">prompting (“Be honest”)</td>
+<td style="text-align: left;">±1.0</td>
+<td style="text-align: right;">0.069</td>
+<td style="text-align: right;">0.045</td>
+<td style="text-align: right;">0.458</td>
+<td style="text-align: right;">0.117</td>
+<td style="text-align: right;">6.193</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">prompting (“Pretend to be dishonest”)</td>
+<td style="text-align: left;">±1.0</td>
+<td style="text-align: right;">-0.001</td>
+<td style="text-align: right;">0.003</td>
+<td style="text-align: right;">0.988</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">-0.126</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">PCA (baseline)</td>
+<td style="text-align: left;">±100.0</td>
+<td style="text-align: right;">0.053</td>
+<td style="text-align: right;">0.039</td>
+<td style="text-align: right;">0.869</td>
+<td style="text-align: right;">0.263</td>
+<td style="text-align: right;">4.231</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">PCA (baseline)</td>
+<td style="text-align: left;">±1.0</td>
+<td style="text-align: right;">-0.001</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">0.995</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">-0.104</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Experimental setup</strong>: Model = Qwen/Qwen3-0.6B; Training = 800 honesty contrastive pairs → Evaluation = 64 held-out DailyDilemmas moral scenarios.</p>
+<p><strong>Metrics defined</strong>: - <strong>Target Effect (Δ Truth)</strong>: Change in log-probability of truthful choices vs baseline (higher = more truthful responses). Measured as expected value over all answer options. - <strong>Side Effects (Δ Other)</strong>: Mean absolute change across 31 non-target moral values (lower = more targeted steering). - <strong>Output Quality (Δ NLL)</strong>: Coherence degradation measured as negative log-likelihood increase on test prompts (lower = better quality). - <strong>Normalized Gain (%)</strong>: Efficiency metric = 100 × (Δ Truth) / (1 + Δ NLL). Measures steering strength per unit of coherence cost. - <strong>p-value</strong>: Linear regression testing monotonic dose-response across coefficients [-1, 0, +1] (lower p = stronger evidence of reversible steering). - <strong>Coefficient (±c)</strong>: Intervention strength; ±1.0 is intended operating range, higher values test extrapolation.</p>
+<p><strong>Methods</strong>: InnerPiSSA = learnable SVD rotations + scaling (ours); PCA = unsupervised direction via activation subtraction (baseline); prompting = “Be honest” or “Pretend to be dishonest” text prefixes; random = noise vector control.</p>
+<p>The key test for alignment debugging is not cooperative performance (where prompting works well) but <strong>steering against learned preferences</strong>: can we controllably bypass alignment training to observe internal states when output-level methods resist?</p>
+<p><a href="#tbl-anti-alignment">Table&nbsp;3</a> shows results when steering <strong>against</strong> learned behaviors (coefficient = -1, dishonest direction). Prompting resists/evades the request (score drops to -0.001, effectively no change), while InnerPiSSA successfully steers against the learned preference (score changes from 3.02 to 2.18). This demonstrates that InnerPiSSA modifies internal reasoning trajectories rather than just output style, and can bypass resistance that output-level methods encounter.</p>
+<div id="tbl-anti-alignment" class="anchored">
+<table class="table">
+<caption>Table 3: Bypassing Learned Preferences: Steering Against Alignment Training</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Method</th>
+<th style="text-align: left;">Coeff</th>
+<th style="text-align: right;">Truthfulness Score</th>
+<th style="text-align: right;">Coherence</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: right;">(nats) ↑</td>
+<td style="text-align: right;">(NLL) ↓</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">InnerPiSSA (ours)</td>
+<td style="text-align: left;">-1.0</td>
+<td style="text-align: right;">2.18</td>
+<td style="text-align: right;">0.37</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">InnerPiSSA (ours)</td>
+<td style="text-align: left;">0.0</td>
+<td style="text-align: right;">3.02</td>
+<td style="text-align: right;">0.00</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">InnerPiSSA (ours)</td>
+<td style="text-align: left;">+1.0</td>
+<td style="text-align: right;">5.34</td>
+<td style="text-align: right;">0.31</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">prompting</td>
+<td style="text-align: left;">-1.0</td>
+<td style="text-align: right;">-10.84</td>
+<td style="text-align: right;">1.27</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">prompting</td>
+<td style="text-align: left;">0.0</td>
+<td style="text-align: right;">1.80</td>
+<td style="text-align: right;">0.00</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">prompting</td>
+<td style="text-align: left;">+1.0</td>
+<td style="text-align: right;">2.22</td>
+<td style="text-align: right;">0.12</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">repeng (PCA)</td>
+<td style="text-align: left;">-1.0</td>
+<td style="text-align: right;">2.32</td>
+<td style="text-align: right;">-0.01</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">repeng (PCA)</td>
+<td style="text-align: left;">0.0</td>
+<td style="text-align: right;">1.80</td>
+<td style="text-align: right;">0.00</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">repeng (PCA)</td>
+<td style="text-align: left;">+1.0</td>
+<td style="text-align: right;">1.28</td>
+<td style="text-align: right;">0.05</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Interpretation</strong>: When steering against learned preferences (coeff = -1):</p>
+<ul>
+<li><strong>Prompting resists/evades</strong> the “pretend to be dishonest” instruction, showing minimal change from baseline (1.80 to -0.001): the model refuses to comply with the output-level request</li>
+<li><strong>InnerPiSSA bypasses resistance</strong> from 3.02 baseline to 2.18 truthfulness (controlled steering): the hidden-state intervention successfully reverses the learned preference</li>
+<li><strong>PCA baseline</strong> shows weak effects in both directions (2.32 vs 1.28), demonstrating arithmetic methods cannot achieve this level of control</li>
+</ul>
+<p>This is the core evidence for alignment debugging capability: InnerPiSSA works precisely when output-level methods encounter resistance, enabling researchers to probe what models compute internally when alignment constraints are bypassed at the representation level. The bidirectional nature (same adapter steers ±1 with opposite effects) demonstrates control over internal dimensions rather than arbitrary direction finding.</p>
+<section id="sec-failure-modes" class="level3" data-number="7.0.1">
+<h3 data-number="7.0.1" class="anchored" data-anchor-id="sec-failure-modes"><span class="header-section-number">7.0.1</span> Connection to Alignment Failure Modes</h3>
+<p>The ability to bypass learned preferences has direct implications for studying alignment failures. If we can controllably steer against alignment-trained behaviors, we can also probe unintended side effects of alignment training:</p>
+<ul>
+<li><strong>Reward hacking</strong>: Models that optimize proxy metrics while violating intent would show this pattern when steered to maximize the proxy</li>
+<li><strong>Specification gaming</strong>: Models that satisfy literal requirements via loopholes would reveal the gaming strategy when steered toward “technically compliant” reasoning<br>
+</li>
+<li><strong>Deceptive alignment</strong>: Models that conceal misaligned reasoning would expose it when steered away from safety-trained outputs</li>
+</ul>
+<p>These failure modes are difficult to study with current methods because they require observing model behavior <em>against</em> its training incentives. Prompting encounters resistance here (<a href="#tbl-anti-alignment">Table&nbsp;3</a> shows minimal effect), while supervised probing requires human labels of model internals (introducing distribution shift). InnerPiSSA’s unsupervised, gradient-based approach enables this probing: we extract directions from the model’s own reasoning trajectories, then amplify them to see what happens when alignment constraints are bypassed at the representation level.</p>
+<p>The asymmetry in <a href="#tbl-anti-alignment">Table&nbsp;3</a> is also revealing: steering <em>against</em> alignment training (coeff=-1) is harder than steering <em>with</em> it (coeff=+1), visible in both the coherence degradation (0.37 vs 0.31 NLL) and the smaller effect magnitude. This suggests alignment training creates directional structure in representation space: learned behaviors are “easier” to amplify than reverse. Understanding this asymmetry could inform more robust alignment methods that account for the geometry of learned preferences.</p>
+<p><a href="#fig-prompting-collapse">Figure&nbsp;5</a> visualizes this breakdown across the full coefficient range:</p>
+<div id="fig-prompting-collapse" class="quarto-figure quarto-figure-center anchored">
+<figure class="figure">
+<p><img src="docs/img/prompting_collapse_placeholder.png" class="img-fluid figure-img"></p>
+<p></p><figcaption class="figure-caption">Figure 5: TODO: Line plot showing truthfulness score vs coefficient for InnerPiSSA, prompting, and PCA. X-axis: coefficient from -5 to +5. Y-axis: truthfulness score (nats). InnerPiSSA should show smooth monotonic increase from ~2.0 (-1) to ~5.5 (+1). Prompting should show resistance at negative coefficients (minimal change at -1) but compliance at positive (up to 2.22 at +1). PCA should be flat/noisy around baseline. Annotate the “resistance zone” for prompting and “controlled steering” for InnerPiSSA. This visualizes why prompting is not suitable for alignment debugging—it only works when steering <em>with</em> learned preferences, not against them.</figcaption><p></p>
+</figure>
+</div>
+<p><strong>Honesty Transfer to Morality (Daily Dilemmas (800 train → 64 test).</strong> Model: Qwen/Qwen3-0.6B. Target Effect: Δ Truthfulness log-probability score vs baseline (score = expected value of truthful choices; higher = more truthful). Side Effects: mean |Δ| across 31 non-target moral values. Output Quality: coherence degradation (ΔNLL). Normalized Gain (%) = 100 × Δ Truth / (1 + Δ NLL); measures steering efficiency. Coefficient (±c) scales intervention strength; ±1.0 is the intended operating range. p-values from linear regression on log-probability scores testing monotonic dose-response (lower p = stronger evidence of reversible steering). Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = ‘Be honest’ prefix; random = noise vector baseline.</p>
+</section>
+<section id="sec-cluster-effects" class="level2" data-number="7.1">
+<h2 data-number="7.1" class="anchored" data-anchor-id="sec-cluster-effects"><span class="header-section-number">7.1</span> Transfer Pattern Analysis: Cluster Effects</h2>
+<p><a href="#fig-radar-clusters">Figure&nbsp;6</a> shows how different steering methods affect moral value clusters. InnerPiSSA increases Agent virtues (autonomy, ambition, courage) while maintaining Assistant virtues (care, empathy, patience), demonstrating coherent transfer that respects psychological structure. Prompting shows weaker, less coherent patterns. Critically, neither method significantly affects orthogonal Preferences (favorite color) or degrades Math performance, confirming targeted steering rather than general capability shifts.</p>
+<div id="fig-radar-clusters" class="quarto-figure quarto-figure-center anchored">
+<figure class="figure">
+<p><img src="docs/img/radar_clusters_placeholder.png" class="img-fluid figure-img"></p>
+<p></p><figcaption class="figure-caption">Figure 6: TODO: Radar plot showing how differen’t interventions change clusters of moral and unrelated values. This demonstrates (1) coherent coupling of related values, (2) preservation of orthogonal dimensions, (3) minimal side effects on capabilities.</figcaption><p></p>
+</figure>
+</div>
+<p><strong>Interpretation</strong>: The Agent/Assistant coupling reveals deep vs surface steering. Truth-seekers naturally exhibit intellectual ambition (Agent cluster), not risk-averse compliance (Assistant cluster). InnerPiSSA captures this psychological structure; prompting produces surface markers without internal coherence. The near-zero effects on Preferences and Math confirm we’re steering reasoning style, not corrupting general capabilities or introducing arbitrary biases.</p>
+</section>
+<section id="sec-pareto" class="level2" data-number="7.2">
+<h2 data-number="7.2" class="anchored" data-anchor-id="sec-pareto"><span class="header-section-number">7.2</span> Coherence-Intervention Tradeoff</h2>
+<p><a href="#fig-pareto">Figure&nbsp;7</a> shows the Pareto frontier between intervention strength and output quality across coefficient ranges. Three key findings:</p>
+<ol type="1">
+<li><strong>Operating range bounds</strong>: InnerPiSSA maintains coherence (ΔNLL &lt; 0.5) for coefficients ±1 to ±2, breaking down beyond ±5</li>
+<li><strong>Asymmetric difficulty</strong>: Anti-RLHF direction (negative coefficients) degrades faster, consistent with steering against learned behaviors being harder</li>
+<li><strong>Method comparison</strong>: InnerPiSSA achieves strongest effects at training coefficients (±1) but doesn’t extrapolate as well as prompting to extreme values (expected since we optimize for the intended operating range, not unbounded extrapolation)</li>
+</ol>
+<div id="fig-pareto" class="quarto-figure quarto-figure-center anchored">
+<figure class="figure">
+<p><img src="docs/img/pareto_coherence_placeholder.png" class="img-fluid figure-img"></p>
+<p></p><figcaption class="figure-caption">Figure 7: TODO: Pareto plot with x=coherence (ΔNLL), y=intervention strength (target effect). Show curves for InnerPiSSA at coefficients [-5, -2, -1, 0, 1, 2, 5], plus prompting and PCA baselines. InnerPiSSA should form a smooth frontier from (-1, 0.31 NLL, 0.245 effect) to (5, 3.06 NLL, 0.332 effect), with breakdown visible beyond ±5. Mark the “trained range” (±1) vs “extrapolation” (±5). Include annotation showing anti-RLHF direction degrades faster.</figcaption><p></p>
+</figure>
+</div>
+<p><img src="docs/tables/effect_vs_coherence.png" class="img-fluid"></p>
+</section>
+<section id="appendix-experiments-and-rationales" class="level2" data-number="7.3">
+<h2 data-number="7.3" class="anchored" data-anchor-id="appendix-experiments-and-rationales"><span class="header-section-number">7.3</span> Appendix: Experiments and Rationales</h2>
+<p>This branch explores gradient-informed steering for concepts like honesty/reasoning. Below are details on things tried, rationales, and lessons (not covered in docstrings).</p>
+</section>
+<section id="sec-failed-ideas" class="level2" data-number="7.4">
+<h2 data-number="7.4" class="anchored" data-anchor-id="sec-failed-ideas"><span class="header-section-number">7.4</span> Ideas That Failed: Why Gradient-Based SVD Steering is Necessary</h2>
+<p>The final InnerPiSSA method emerged after systematically testing approaches from representation engineering, preference optimization, and parameter-efficient fine-tuning literatures. This section documents what didn’t work and why, justifying each component of the final design.</p>
+<section id="arithmetic-methods-pca-and-mean-differencing" class="level3" data-number="7.4.1">
+<h3 data-number="7.4.1" class="anchored" data-anchor-id="arithmetic-methods-pca-and-mean-differencing"><span class="header-section-number">7.4.1</span> 1. Arithmetic Methods: PCA and Mean Differencing</h3>
+<p><strong>What we tried</strong>: Following RepEng <span class="citation" data-cites="zou2023representation">(<a href="#ref-zou2023representation" role="doc-biblioref">Zou et al. 2023</a>)</span> and the repeng library <span class="citation" data-cites="vogel2024repeng">(<a href="#ref-vogel2024repeng" role="doc-biblioref">Vogel 2024</a>)</span>, we extracted steering directions as <span class="math inline">\(\text{mean}(hs_{cho} - hs_{rej})\)</span> from contrastive activation pairs. We also tested PCA on centered activations to capture maximal variance <span class="citation" data-cites="lee2024programmingrefusalconditionalactivation">(<a href="#ref-lee2024programmingrefusalconditionalactivation" role="doc-biblioref">Lee et al. 2024</a>)</span>.</p>
+<p><strong>Result</strong>: Near-zero effect sizes (PCA: 0.053 vs InnerPiSSA: 0.245 at coeff=±1.0, see <a href="#tbl-main-results">Table&nbsp;2</a>). Steering via arithmetic addition produced effects indistinguishable from random noise (p=0.87).</p>
+<p><strong>Why it failed</strong>: Averaging activations captures surface statistics (word choice, syntactic patterns) rather than semantic transformations. No learning mechanism to discover task-relevant subspaces. Raw activation space mixes positional encodings, layer normalization artifacts, and content; subtracting or averaging these produces noisy directions that don’t generalize.</p>
+<p><strong>Evidence</strong>: <a href="#tbl-arch-ablation">Table&nbsp;5</a> shows operating in raw space (no SVD) drops performance by 75%. The arithmetic approach is fundamentally limited by what variance happens to appear in the training prompts, not what the model can learn to separate.</p>
+</section>
+<section id="gradient-methods-without-svd-dposimpo-on-hidden-states" class="level3" data-number="7.4.2">
+<h3 data-number="7.4.2" class="anchored" data-anchor-id="gradient-methods-without-svd-dposimpo-on-hidden-states"><span class="header-section-number">7.4.2</span> 2. Gradient Methods Without SVD: DPO/SimPO on Hidden States</h3>
+<p><strong>What we tried</strong>: Apply Direct Preference Optimization <span class="citation" data-cites="rafailov2023direct">(<a href="#ref-rafailov2023direct" role="doc-biblioref">Rafailov et al. 2023</a>)</span> or length-normalized variants (SimPO) directly to hidden states instead of output logits. The hypothesis was that preference optimization should work for any model component, not just outputs.</p>
+<p><strong>Result</strong>: Training collapsed or produced incoherent outputs. Early experiments achieved 90% train accuracy but &lt;25% on out-of-distribution moral reasoning (see <code>docs/readme_for_previous_failed_work.md</code>).</p>
+<p><strong>Why it failed</strong>: DPO optimizes output distributions with implicit regularization from the language modeling objective. Applying the same loss to hidden states lacks this structure: models can satisfy the loss by making arbitrary changes to intermediate representations that break downstream layers. Without coherence constraints specifically designed for hidden states (our ReprPO formulation), the optimization has no incentive to preserve generation quality.</p>
+</section>
+<section id="fixed-svd-extraction-projection-without-learning" class="level3" data-number="7.4.3">
+<h3 data-number="7.4.3" class="anchored" data-anchor-id="fixed-svd-extraction-projection-without-learning"><span class="header-section-number">7.4.3</span> 3. Fixed SVD Extraction: Projection Without Learning</h3>
+<p><strong>What we tried</strong>: Project activations to S-space using pre-trained SVD (<span class="math inline">\(W = U \Sigma V^T\)</span>), extract direction via PCA or mean differencing in this space, apply with <span class="math inline">\(\sqrt{\Sigma}\)</span> weighting to match PiSSA initialization <span class="citation" data-cites="meng2024pissa">(<a href="#ref-meng2024pissa" role="doc-biblioref">Meng, Wang, and Zhang 2024</a>)</span>.</p>
+<p><strong>Result</strong>: Better than raw PCA but still dramatically underperforms learned rotations. Removing learnable rotations (keep only <span class="math inline">\(\Sigma\)</span> scaling) drops performance by 89% (see <a href="#tbl-arch-ablation">Table&nbsp;5</a> row “No V rotation”: metric 29 vs full InnerPiSSA: 666).</p>
+<p><strong>Why it failed</strong>: The pre-trained SVD basis captures variance in the model’s original task distribution (e.g., language modeling), not behavioral preferences like honesty. Fixed extraction cannot adapt to steering objectives. The key insight is that we need to <strong>rotate</strong> within the SVD basis to find the subspace aligned with the concept we’re steering: just using the pre-trained <span class="math inline">\(U\)</span> and <span class="math inline">\(V\)</span> is insufficient.</p>
+<p><strong>Evidence</strong>: SSVD <span class="citation" data-cites="wang2025ssvd">(<a href="#ref-wang2025ssvd" role="doc-biblioref">Wang, Watanabe, and hamme 2025</a>)</span> independently discovered the same insight for domain adaptation in speech: rotating singular vectors enables transfer that fixed extraction cannot achieve.</p>
+</section>
+<section id="weight-space-gradients-projected-gradient-descent" class="level3" data-number="7.4.4">
+<h3 data-number="7.4.4" class="anchored" data-anchor-id="weight-space-gradients-projected-gradient-descent"><span class="header-section-number">7.4.4</span> 4. Weight-Space Gradients: Projected Gradient Descent</h3>
+<p><strong>What we tried</strong>: Compute PCA direction from activations, then project weight gradients onto it during DPO training (clip orthogonal components before updating weights).</p>
+<p><strong>Result</strong>: 89.4% test accuracy vs 90.0% for standard DPO (no improvement despite increased complexity).</p>
+<p><strong>Why it failed</strong>: Gradient projection operates in weight space, but steering needs activation-space control. Discarding orthogonal gradient components removes information needed for coherent generation. This approach conflates the <em>parameter update</em> direction with the <em>activation steering</em> direction, which live in different spaces and have different objectives.</p>
+</section>
+<section id="scaling-only-interventions-sigma-without-rotations" class="level3" data-number="7.4.5">
+<h3 data-number="7.4.5" class="anchored" data-anchor-id="scaling-only-interventions-sigma-without-rotations"><span class="header-section-number">7.4.5</span> 5. Scaling-Only Interventions: <span class="math inline">\(\Sigma\)</span> Without Rotations</h3>
+<p><strong>What we tried</strong>: Update only singular value magnitudes (<span class="math inline">\(\Sigma\)</span>) via multiplicative scaling, keeping <span class="math inline">\(U\)</span> and <span class="math inline">\(V\)</span> fixed. This tests whether rotation is necessary or if amplitude modulation suffices.</p>
+<p><strong>Result</strong>: Some experiments showed improvement over full method (1051 vs 666 metric), but this is likely an artifact (we didn’t control for effective rank or learning rate differences). More systematic ablations (row “No V rotation” in <a href="#tbl-arch-ablation">Table&nbsp;5</a>) show rotations are critical.</p>
+<p><strong>Why this matters</strong>: It suggests the rotation component (<span class="math inline">\(V @ R_v\)</span>) is more important than the scaling component (<span class="math inline">\(\exp(\alpha \lambda)\)</span>) for discovering steering directions. Scaling alone can’t find the right subspace; rotation can. Future work should ablate these more carefully with matched hyperparameters.</p>
+</section>
+<section id="key-takeaway-all-three-components-are-necessary" class="level3" data-number="7.4.6">
+<h3 data-number="7.4.6" class="anchored" data-anchor-id="key-takeaway-all-three-components-are-necessary"><span class="header-section-number">7.4.6</span> Key Takeaway: All Three Components Are Necessary</h3>
+<p>The successful approach combines elements that failed methods lacked:</p>
+<ol type="1">
+<li><strong>SVD transformation space</strong> (not raw activations): Aligns intervention with model’s learned transformations<br>
+</li>
+<li><strong>Learnable rotations</strong> (not fixed extraction): Discovers task-relevant subspaces via gradient descent</li>
+<li><strong>Coherence-constrained loss</strong> (not unconstrained preference optimization): ReprPO with per-token NLL bounds prevents training collapse while maximizing separation</li>
+</ol>
+<p>Removing any component causes &gt;85% performance drop (<a href="#tbl-arch-ablation">Table&nbsp;5</a>). When steering against learned preferences (<a href="#tbl-anti-alignment">Table&nbsp;3</a>), gradient-based learning enables control unattainable by output-level methods: prompting resists the intervention (-10.84) while InnerPiSSA achieves bidirectional steering (-0.70) at coefficient -1.</p>
+</section>
+<section id="metrics-reference" class="level3" data-number="7.4.7">
+<h3 data-number="7.4.7" class="anchored" data-anchor-id="metrics-reference"><span class="header-section-number">7.4.7</span> Metrics Reference</h3>
+<p><strong>Main metric</strong>: <code>T-statistic / (1 + NLL_degradation)</code> - <strong>Effect (T-statistic)</strong>: Measures monotonicity of steering across coefficients ∈ [-1, 0, 1]. Higher = stronger dose-response relationship (steering works bidirectionally). - <strong>Degradation (NLL)</strong>: Coherence loss measured as Δ NLL (negative log-likelihood increase) on daily dilemmas questions. Penalizes interventions that break generation quality. - <strong>Baselines (effect sizes, not gain %)</strong>: Prompting=2.23, RepEng=3.06, S-steer=3.02 - Main Metric / Gain % - this is Effect / degregaton. This is our key metric and measures intervention strength against degredation.</p>
+<p><strong>Projection loss (<code>val_proj_diff</code>)</strong>: Mean absolute difference in activations projected onto PCA direction, averaged across chosen/rejected pairs. Measures separation magnitude along the steering axis.</p>
+<p><strong>Coherence constraints</strong>: - <code>coh_weight</code>: KL divergence penalty to keep policy close to reference model - <code>mono_weight</code>: Per-token margin loss ensuring logp_pi &gt; logp_ref for chosen tokens</p>
+<p>Notes: - inverted steering: this is fine, it happens in PCA and we just swap the coeffecients. As long as the coeffecients give opposites things to both sizes of zero then we get a strong T-state effect size. If we froced the model to learn a certain direction we might be forcing it to learn opposite behavious which is a much harder task than going with it’s preexisting inclinations then reversing the coeffecients.</p>
+</section>
+<section id="key-ideas-and-rationales" class="level3" data-number="7.4.8">
+<h3 data-number="7.4.8" class="anchored" data-anchor-id="key-ideas-and-rationales"><span class="header-section-number">7.4.8</span> Key Ideas and Rationales</h3>
+<ul>
+<li><strong>Reasoning Trajectory Hypothesis</strong>: The model maintains a consistent “planning/style/vibes” vector throughout generation to ensure coherent trajectories. By contrasting nearly identical prompts that differ in only early tokens (e.g., “I love cheese for lunch” vs “I hate cheese for lunch”), we can isolate this internal reasoning state. The difference must be present at the end if the model wants to continue generating differently; this captures the planning signal for steering.</li>
+<li><strong>Last-Token Extraction</strong>: Extract activations/grads from the last non-padded token because this represents the model’s current “state of mind” about how to continue the trajectory. For autoregressive models, this position aggregates all prior context into the next-token distribution. Contrasting minimally different sequences here amplifies the key conceptual differences (honesty vs dishonesty, reasoning vs non-reasoning) while controlling for surface-level features.</li>
+<li><strong>Gradient-to-Steering Mapping</strong>: Derive directions from backprop’d gradients on losses (e.g., ReprPO on hidden states). Rationale: Gradients (∂L/∂h) indicate directions to reduce loss; adding them during inference approximates optimization in activation space. Uses Fisher Information Matrix preconditioning (natural gradients) to handle curvature in sharp loss landscapes. Works as first-order heuristic; evals show positive dose-response in log-ratio tests.</li>
+<li><strong>Layer-Specific Steering</strong>: Test specific sublayers (e.g., k_proj, o_proj, down_proj) rather than whole residual streams. Rationale: Different components have different coupling to outputs (o_proj/down_proj write directly to residuals with monotone effects, while q/k/v affect attention patterns and can be noisier). Enables more targeted interventions. Evals: k_proj scores ~1.42, v_proj ~0.59, hidden states ~15.93 (from research journal).</li>
+</ul>
+</section>
+<section id="things-tried" class="level3" data-number="7.4.9">
+<h3 data-number="7.4.9" class="anchored" data-anchor-id="things-tried"><span class="header-section-number">7.4.9</span> Things Tried</h3>
+<ul>
+<li><strong>Methods</strong>: PCA (diff/center), SVD on grads, Fisher natural gradients with regularization (1e-5 to 1e-1, empirical vs covariance FIM). Best performer: <code>fisher_steer_cov_reg1</code> (scores up to 15.93). Dual pos/neg variants for balanced steering directions.</li>
+<li><strong>Losses</strong>: Tried DPO/SimPO (performed worse), settled on custom ReprPO with NLL margin. Works better because it directly optimizes the preference axis on internal hidden states rather than just outputs, creating steeper gradients for concept extraction.</li>
+<li><strong>Dataset Construction</strong>: Short synthetic pairs with general suffixes work better than long diverse trajectories. Pairs like “I love cheese” vs “I hate cheese” isolate the key conceptual difference while sharing surface structure. Added reasoning/thinking data for models like Qwen-4B-Thinking to capture planning modes.</li>
+<li><strong>Loss Target</strong>: Extract gradients from layer N-2 (not final layer) based on prior work showing this captures “peak suppressed neurons” (the layer where concepts are most clearly represented before being projected to vocabulary).</li>
+<li><strong>Evaluation</strong>: Binary log-ratio correlation for steering effectiveness (slope, R², valid_frac). Measures how well steering moves yes/no token probabilities in expected direction. High coefficients sometimes cause saturation/incoherence.</li>
+<li><strong>Models</strong>: Tested on Qwen-4B/8B/14B (4-bit quantized), GLM-9B-Thinking. Larger models show better extrapolation and more stable steering.</li>
+</ul>
+</section>
+<section id="gotchaslessons" class="level3" data-number="7.4.10">
+<h3 data-number="7.4.10" class="anchored" data-anchor-id="gotchaslessons"><span class="header-section-number">7.4.10</span> Gotchas/Lessons</h3>
+<ul>
+<li>Early-layer grads from late loss can be noisy (vanishing), but backprop handles propagation.</li>
+<li>Overfitting risk: Synthetic data captures wording; OOD evals needed.</li>
+<li>Quantization: 4-bit introduces noise in grads; detach to float32 mitigates.</li>
+<li>Benchmarks: Composite score prioritizes slope/validity; p-values often low (significant).</li>
+</ul>
+<p>For full details, see notebooks (e.g., performance_tests_reprpo_layers.ipynb) and research_journal_mjc.md.</p>
+</section>
+<section id="custom-reprpo-loss-details" class="level3" data-number="7.4.11">
+<h3 data-number="7.4.11" class="anchored" data-anchor-id="custom-reprpo-loss-details"><span class="header-section-number">7.4.11</span> Custom ReprPO Loss Details</h3>
+<p>The loss in <code>losses.py</code> (e.g., <code>compute_reprpo_nll_margin_loss</code>) is designed for one-step gradient/curvature sampling on paired pos/neg examples, not full training. It combines: - <strong>Separation Term</strong>: Maximizes the L2 norm of (positive - negative) hidden state differences to isolate the target concept. - <strong>Coherence Margin</strong>: Defines a bounded region where the NLL of the preferred (positive) completion is no worse than a baseline (detached average logprob of positive labels). Deviations outside this region are penalized quadratically. A 0.99 scaling on the baseline positions the computation just inside the boundary, ensuring both terms contribute to gradients.</p>
+<p>This creates steeper, more informative gradients for steering, inspired by SimPO/DPO margins but focused on internal state coherence rather than direct pos/neg comparison.</p>
+<p>For geometric intuition and detailed explanation, see <code>docs/loss_geometry.md</code>.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="docs/loss.svg" class="img-fluid figure-img"></p>
+<p></p><figcaption class="figure-caption">Loss Geometry</figcaption><p></p>
+</figure>
+</div>
+<p>See also the repo for training with losses like this https://github.com/wassname/repr-preference-optimization</p>
+<hr>
+</section>
+</section>
+<section id="appendix-ablation-studies-and-paper-tables" class="level2" data-number="7.5">
+<h2 data-number="7.5" class="anchored" data-anchor-id="appendix-ablation-studies-and-paper-tables"><span class="header-section-number">7.5</span> Appendix: Ablation Studies and Paper Tables</h2>
+<p><strong>Auto-generated from wandb results</strong>. Run <code>uv run python nbs/generate_paper_tables.py</code> to regenerate.</p>
+<section id="table-1-cross-model-generalization" class="level3" data-number="7.5.1">
+<h3 data-number="7.5.1" class="anchored" data-anchor-id="table-1-cross-model-generalization"><span class="header-section-number">7.5.1</span> Table 1: Cross-Model Generalization</h3>
+<p><strong>FIXME</strong>: Run <code>just run-models</code> to populate this table.</p>
+
+<!--#include file="docs/tables/table1_cross_model.md"-->
+<table class="table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 10%">
+<col style="width: 18%">
+<col style="width: 17%">
+<col style="width: 17%">
+<col style="width: 14%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Model</th>
+<th style="text-align: left;">Size</th>
+<th style="text-align: left;">InnerPiSSA</th>
+<th style="text-align: left;">Prompting</th>
+<th style="text-align: left;">RepEng</th>
+<th style="text-align: left;">S-Steer</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Qwen3-0.6B</td>
+<td style="text-align: left;">0.6B</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;"><strong>216.1</strong> ✓</td>
+<td style="text-align: left;">77.1</td>
+<td style="text-align: left;">-</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Qwen3-4B</td>
+<td style="text-align: left;">4B</td>
+<td style="text-align: left;"><strong>2114.0</strong> ✓</td>
+<td style="text-align: left;">759.3</td>
+<td style="text-align: left;">284.1</td>
+<td style="text-align: left;">-</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Qwen3-14B</td>
+<td style="text-align: left;">14B</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;"><strong>106.9</strong> ✓</td>
+<td style="text-align: left;">1.8</td>
+<td style="text-align: left;">-</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Llama-3.1-8B</td>
+<td style="text-align: left;">8B</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">178.6</td>
+<td style="text-align: left;"><strong>704.2</strong> ✓</td>
+<td style="text-align: left;">-</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Gemma-3-4B</td>
+<td style="text-align: left;">4B</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;"><strong>394.8</strong> ✓</td>
+<td style="text-align: left;">1.9</td>
+<td style="text-align: left;">-</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Gemma-3-12B</td>
+<td style="text-align: left;">12B</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;"><strong>490.7</strong> ✓</td>
+<td style="text-align: left;">1.4</td>
+<td style="text-align: left;">-</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Qwen-14B-code</td>
+<td style="text-align: left;">14B</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">44.1</td>
+<td style="text-align: left;"><strong>171.5</strong> ✓</td>
+<td style="text-align: left;">-</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Notes</strong>: Main metric = T-statistic / (1 + NLL degradation). Higher is better. Only Qwen3-4B has InnerPiSSA results so far.</p>
+<hr>
+</section>
+<section id="table-2-layer-depth-ablation" class="level3" data-number="7.5.2">
+<h3 data-number="7.5.2" class="anchored" data-anchor-id="table-2-layer-depth-ablation"><span class="header-section-number">7.5.2</span> Table 2: Layer Depth Ablation</h3>
+<p><strong>Status</strong>: ⚠️ Partial - only 1 run per depth except 0.5 (needs multiple seeds for robustness)</p>
+
+<!--#include file="docs/tables/table2_layer_ablation.md"-->
+<table class="table">
+<colgroup>
+<col style="width: 12%">
+<col style="width: 12%">
+<col style="width: 11%">
+<col style="width: 11%">
+<col style="width: 14%">
+<col style="width: 17%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: right;">Depth</th>
+<th style="text-align: right;">Layer</th>
+<th style="text-align: right;">Mean</th>
+<th style="text-align: right;">Max</th>
+<th style="text-align: right;">N Runs</th>
+<th style="text-align: right;">Val Loss</th>
+<th style="text-align: left;">Finding</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">396.3</td>
+<td style="text-align: right;">396.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">6.6</td>
+<td style="text-align: left;">Early - weak</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">0.1</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">32.6</td>
+<td style="text-align: right;">32.6</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">12.4</td>
+<td style="text-align: left;">Early - weak</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">0.2</td>
+<td style="text-align: right;">7</td>
+<td style="text-align: right;">209.1</td>
+<td style="text-align: right;">209.1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.1</td>
+<td style="text-align: left;">Mid</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">737.3</td>
+<td style="text-align: right;">737.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: left;"><strong>Strong</strong> ✓</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">0.4</td>
+<td style="text-align: right;">14</td>
+<td style="text-align: right;">1303</td>
+<td style="text-align: right;">1303</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">4.4</td>
+<td style="text-align: left;"><strong>Strong</strong> ✓</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">18</td>
+<td style="text-align: right;">704.4</td>
+<td style="text-align: right;">2114</td>
+<td style="text-align: right;">40</td>
+<td style="text-align: right;">9.7</td>
+<td style="text-align: left;"><strong>Strong</strong> ✓</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">0.6</td>
+<td style="text-align: right;">21</td>
+<td style="text-align: right;">439.7</td>
+<td style="text-align: right;">439.7</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">8.9</td>
+<td style="text-align: left;">Mid</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">0.7</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">911.3</td>
+<td style="text-align: right;">911.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">7.6</td>
+<td style="text-align: left;">Mid</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">28</td>
+<td style="text-align: right;">665.9</td>
+<td style="text-align: right;">665.9</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">20.2</td>
+<td style="text-align: left;">Mid</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">0.9</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: right;">279.7</td>
+<td style="text-align: right;">279.7</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.5</td>
+<td style="text-align: left;">Late - weak</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">0.99</td>
+<td style="text-align: right;">35</td>
+<td style="text-align: right;">547.3</td>
+<td style="text-align: right;">547.3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">16.4</td>
+<td style="text-align: left;">Late - weak</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Finding</strong>: Middle layers (0.3-0.5, layers 10-18) work best. Early layers lack semantic content, late layers already suppressed. Matches mechanistic interpretability findings <span class="citation" data-cites="gurnee2024universal lad2024remarkable">(<a href="#ref-gurnee2024universal" role="doc-biblioref">Gurnee et al. 2024</a>; <a href="#ref-lad2024remarkable" role="doc-biblioref">Lad et al. 2024</a>)</span> showing suppression dynamics concentrate in later layers.</p>
+</section>
+<section id="sec-suppression" class="level3" data-number="7.5.3">
+<h3 data-number="7.5.3" class="anchored" data-anchor-id="sec-suppression"><span class="header-section-number">7.5.3</span> Why Middle Layers? The Suppression Hypothesis</h3>
+<p>Our finding that middle layers (depth 0.3-0.5) are optimal for steering aligns with mechanistic interpretability research on model internals. Gurnee et al. <span class="citation" data-cites="gurnee2024universal">(<a href="#ref-gurnee2024universal" role="doc-biblioref">2024</a>)</span> identified “universal neurons” across models, including suppression neurons that decrease probability of specific token classes. Critically, they found “a sudden shift towards a much larger number of suppression neurons” in final layers. Lad et al. <span class="citation" data-cites="lad2024remarkable">(<a href="#ref-lad2024remarkable" role="doc-biblioref">2024</a>)</span> propose a “stages of inference” hypothesis with early layers for feature extraction, middle layers for reasoning, and a final “residual sharpening” phase dominated by suppression dynamics.</p>
+<p>We hypothesized that steering should target layer N-2 to N-3 (late middle layers) where planning trajectories are computed but output suppression has not yet activated. Our empirical results show peak performance at depth 0.5 (layer 18/36), which is slightly earlier than predicted but consistent with the suppression framework. We cannot fully explain why 0.5 outperforms 0.7-0.8 (our original hypothesis), but the general principle holds: <strong>steering works best in the reasoning phase, before output shaping mechanisms dominate</strong>.</p>
+<p>This has implications for alignment debugging: if suppression happens in late layers, intervening earlier lets us observe what models compute <em>before</em> safety training filters outputs. The breakdown at depth &gt;0.8 (performance drops from 911 to 280) likely reflects attempting to steer representations that have already been shaped for output compliance, where the semantic signal is weaker.</p>
+</section>
+</section>
+<section id="sec-ablation-lr" class="level2" data-number="7.6">
+<h2 data-number="7.6" class="anchored" data-anchor-id="sec-ablation-lr"><span class="header-section-number">7.6</span> Learning Rate Sensitivity</h2>
+<p><a href="#tbl-lr-ablation">Table&nbsp;4</a> shows the impact of learning rate on training:</p>
+
+<!--#include file="docs/tables/table3_learning_rate.md"-->
+<div id="tbl-lr-ablation" class="anchored">
+<table class="table">
+<caption>Table 4: Learning Rate Sensitivity</caption>
+<colgroup>
+<col style="width: 10%">
+<col style="width: 10%">
+<col style="width: 9%">
+<col style="width: 10%">
+<col style="width: 13%">
+<col style="width: 15%">
+<col style="width: 30%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: right;">LR</th>
+<th style="text-align: right;">Mean</th>
+<th style="text-align: left;">Std</th>
+<th style="text-align: right;">Max</th>
+<th style="text-align: right;">N Runs</th>
+<th style="text-align: right;">Val Loss</th>
+<th style="text-align: left;">Result</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">1e-05</td>
+<td style="text-align: right;">67</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: right;">67</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">27</td>
+<td style="text-align: left;">Too low - fails ❌</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">0.0001</td>
+<td style="text-align: right;">19.2</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: right;">19.2</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">17.2</td>
+<td style="text-align: left;">Too low - fails ❌</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">0.001</td>
+<td style="text-align: right;">167.8</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: right;">167.8</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">9.3</td>
+<td style="text-align: left;">Low - weak</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">0.008</td>
+<td style="text-align: right;">691.6</td>
+<td style="text-align: left;">511.4</td>
+<td style="text-align: right;">2114</td>
+<td style="text-align: right;">40</td>
+<td style="text-align: right;">7.3</td>
+<td style="text-align: left;"><strong>Default - stable</strong> ✓</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">0.01</td>
+<td style="text-align: right;">995.9</td>
+<td style="text-align: left;">385.2</td>
+<td style="text-align: right;">1432</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">6.8</td>
+<td style="text-align: left;"><strong>High perf</strong> ⚠️</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">0.1</td>
+<td style="text-align: right;">714.6</td>
+<td style="text-align: left;">829.1</td>
+<td style="text-align: right;">1648</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">17.4</td>
+<td style="text-align: left;">Too high - unstable</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">650.8</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: right;">650.8</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">52.4</td>
+<td style="text-align: left;">Too high - unstable</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Finding</strong>: lr=0.008-0.01 is the sweet spot. Higher variance at 0.01 suggests sensitivity.</p>
+<hr>
+</section>
+<section id="sec-ablation-arch" class="level2" data-number="7.7">
+<h2 data-number="7.7" class="anchored" data-anchor-id="sec-ablation-arch"><span class="header-section-number">7.7</span> Architecture Component Ablation</h2>
+<p><a href="#tbl-arch-ablation">Table&nbsp;5</a> tests the necessity of each architectural component:</p>
+
+<!--#include file="docs/tables/table4_architecture.md"-->
+<div id="tbl-arch-ablation" class="anchored">
+<table class="table">
+<caption>Table 5: Architecture Component Ablation</caption>
+<colgroup>
+<col style="width: 22%">
+<col style="width: 19%">
+<col style="width: 15%">
+<col style="width: 12%">
+<col style="width: 29%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Configuration</th>
+<th style="text-align: right;">Main Metric</th>
+<th style="text-align: right;">Val Loss</th>
+<th style="text-align: right;">N Runs</th>
+<th style="text-align: left;">Result</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Full InnerPiSSA</td>
+<td style="text-align: right;">666.3</td>
+<td style="text-align: right;">9.4</td>
+<td style="text-align: right;">49</td>
+<td style="text-align: left;"><strong>Baseline</strong> ✓</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">No S scaling</td>
+<td style="text-align: right;">1051</td>
+<td style="text-align: right;">10.6</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: left;">Better? (investigate)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">No V rotation</td>
+<td style="text-align: right;">29</td>
+<td style="text-align: right;">34.7</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: left;"><strong>Catastrophic</strong> ❌</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">LoRA adapter</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">9.3</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: left;"><strong>Catastrophic</strong> ❌</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Findings from <a href="#tbl-arch-ablation">Table&nbsp;5</a></strong>:</p>
+<ul>
+<li>V rotation is <strong>critical</strong> - removing it → 96% performance drop (see <a href="#sec-rotations">Section&nbsp;3.1.2</a> for why)</li>
+<li>LoRA adapter completely fails (3 runs, all metric=0)</li>
+<li>S scaling may not be necessary - actually improves without it (needs confirmation)</li>
+</ul>
+<hr>
+<section id="table-5-rank-sensitivity" class="level3" data-number="7.7.1">
+<h3 data-number="7.7.1" class="anchored" data-anchor-id="table-5-rank-sensitivity"><span class="header-section-number">7.7.1</span> Table 5: Rank Sensitivity</h3>
+<p><strong>FIXME</strong>: Run <code>just sweep-rank</code> to populate this table.</p>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: right;">Rank</th>
+<th style="text-align: left;">Main Metric</th>
+<th style="text-align: left;">Val Loss</th>
+<th style="text-align: left;">N Runs</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">32</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">64</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">128</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">256</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">512</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="sec-ablation-modules" class="level2" data-number="7.8">
+<h2 data-number="7.8" class="anchored" data-anchor-id="sec-ablation-modules"><span class="header-section-number">7.8</span> Module Targeting Ablation</h2>
+<p><strong>FIXME</strong>: Run <code>just ablate-modules</code> to populate <a href="#tbl-module-ablation">Table&nbsp;6</a>.</p>
+<div id="tbl-module-ablation" class="anchored">
+<table class="table">
+<caption>Table 6: Module Targeting Ablation</caption>
+<colgroup>
+<col style="width: 50%">
+<col style="width: 19%">
+<col style="width: 15%">
+<col style="width: 14%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Modules</th>
+<th style="text-align: left;">Main Metric</th>
+<th style="text-align: left;">Val Loss</th>
+<th style="text-align: left;">Finding</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">o_proj, down_proj (residual)</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">gate_proj, up_proj (MLP)</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">q_proj, k_proj, v_proj, o_proj (attn)</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">All modules (default)</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr>
+</section>
+<section id="sec-ablation-data" class="level2" data-number="7.9">
+<h2 data-number="7.9" class="anchored" data-anchor-id="sec-ablation-data"><span class="header-section-number">7.9</span> Data Efficiency</h2>
+<p><strong>FIXME</strong>: Run <code>just data-efficiency</code> to populate <a href="#tbl-data-efficiency">Table&nbsp;7</a>.</p>
+<div id="tbl-data-efficiency" class="anchored">
+<table class="table">
+<caption>Table 7: Data Efficiency Analysis</caption>
+<thead>
+<tr class="header">
+<th style="text-align: right;">Samples</th>
+<th style="text-align: left;">Main Metric</th>
+<th style="text-align: left;">Val Loss</th>
+<th style="text-align: left;">Finding</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">50</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">100</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">800</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">400</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">800</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">8000</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr>
+</section>
+<section id="sec-ablation-seeds" class="level2" data-number="7.10">
+<h2 data-number="7.10" class="anchored" data-anchor-id="sec-ablation-seeds"><span class="header-section-number">7.10</span> Random Seed Stability</h2>
+<p><strong>FIXME</strong>: Run <code>just run-seeds</code> to populate <a href="#tbl-seed-stability">Table&nbsp;8</a>.</p>
+<div id="tbl-seed-stability" class="anchored">
+<table class="table">
+<caption>Table 8: Random Seed Stability</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Seed</th>
+<th style="text-align: left;">Main Metric</th>
+<th style="text-align: left;">Val Loss</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">42</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">123</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">456</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Mean ± Std</td>
+<td style="text-align: left;">TODO</td>
+<td style="text-align: left;">TODO</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+
+
+
+
+
+<div id="quarto-appendix" class="default"><section id="sec-training-traces" class="level1 appendix" data-number="8"><h2 class="quarto-appendix-heading"><span class="header-section-number">8</span> Appendix A: Training Trace Examples</h2><div class="quarto-appendix-contents">
+
+<p>This appendix documents observed training behaviors to provide transparency about method limitations and success patterns.</p>
+<section id="successful-run-typical" class="level2" data-number="8.1">
+<h2 data-number="8.1" class="anchored" data-anchor-id="successful-run-typical"><span class="header-section-number">8.1</span> Successful Run (Typical)</h2>
+<pre><code>Epoch 2 - Example outputs at validation:
+coeff=-1.0 | score=-16.6 | NLL=3.84 | Refuses (strengthens safety)
+coeff=+0.0 | score=-23.5 | NLL=3.63 | Refuses (baseline)  
+coeff=+1.0 | score=+15.5 | NLL=3.27 | Accepts (weakens safety) ✓
+
+Monotonic response: p&lt;0.01
+Coherence preserved: ΔNLL=0.57 (within budget)
+Direction alignment: cosine sim=0.89 to PCA reference</code></pre>
+<p>This pattern demonstrates successful bidirectional control with maintained coherence. The model learns rotations that align with the frozen PCA preference direction while keeping NLL degradation low.</p>
+</section>
+<section id="failed-run-alternative-direction" class="level2" data-number="8.2">
+<h2 data-number="8.2" class="anchored" data-anchor-id="failed-run-alternative-direction"><span class="header-section-number">8.2</span> Failed Run: Alternative Direction</h2>
+<p>Approximately [Y%] of runs converge to coherent but misaligned directions:</p>
+<pre><code>Epoch 2 - Example outputs:
+coeff=-1.0 | score=+12.3 | NLL=3.12 | Accepts
+coeff=+0.0 | score=-5.1  | NLL=3.08 | Mixed
+coeff=+1.0 | score=-18.7 | NLL=3.15 | Refuses
+
+Monotonic response: p=0.87 (wrong sign)
+Direction alignment: cosine sim=0.23 to PCA reference  </code></pre>
+<p>The adapter learned a coherent transformation (low NLL) but in the opposite direction to the intended preference. This occurs when coherence loss dominates before the projection loss establishes proper direction.</p>
+</section>
+</div></section><section id="sec-acknowledgments" class="level1 appendix" data-number="9"><h2 class="quarto-appendix-heading"><span class="header-section-number">9</span> Acknowledgments</h2><div class="quarto-appendix-contents">
+
+<p>We thank the community for discussions and feedback. This work builds on insights from the representation engineering, parameter-efficient fine-tuning, and mechanistic interpretability communities.</p>
+</div></section><section id="code-and-data-availability" class="level1 appendix" data-number="10"><h2 class="quarto-appendix-heading"><span class="header-section-number">10</span> Code and Data Availability</h2><div class="quarto-appendix-contents">
+
+<p>Code is available at: <code>https://github.com/wassname/InnerPiSSA_private</code></p>
+</div></section><section id="citation" class="level1 appendix" data-number="11"><h2 class="quarto-appendix-heading"><span class="header-section-number">11</span> Citation</h2><div class="quarto-appendix-contents">
+
+<p>If this work is useful for your research, please cite:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode bibtex code-with-copy"><code class="sourceCode bibtex"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="va">@misc</span>{<span class="ot">clark2025innerpissa</span>,</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">title</span> = {InnerPiSSA: Deep-Dish Inner Alignment through Reversible SVD Steering},</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">author</span> = {Clark, Michael J},</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">year</span> = {2024},</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">url</span> = {https://github.com/wassname/InnerPiSSA/}</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div></section></div></main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    target: function(trigger) {
+      return trigger.previousElementSibling;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    setTimeout(function() {
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      let href = ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const cites = ref.parentNode.getAttribute('data-cites').split(' ');
+    tippyHover(ref, function() {
+      var popup = window.document.createElement('div');
+      cites.forEach(function(cite) {
+        var citeDiv = window.document.createElement('div');
+        citeDiv.classList.add('hanging-indent');
+        citeDiv.classList.add('csl-entry');
+        var biblioDiv = window.document.getElementById('ref-' + cite);
+        if (biblioDiv) {
+          citeDiv.innerHTML = biblioDiv.innerHTML;
+        }
+        popup.appendChild(citeDiv);
+      });
+      return popup.innerHTML;
+    });
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

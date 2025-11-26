@@ -110,6 +110,9 @@ for run in tqdm(lastest_runs):
     logs = (run_dir / "output.log").read_text()
     argv = " ".join(["python"] + [meta["program"]] + meta.get("args", []))
     
+    # Extract WANDB_RUN_GROUP from run.group (set by WANDB_RUN_GROUP env var in justfile)
+    run_group = getattr(run, 'group', None)  
+    
     run_data = {
         'run_id': run.id,
         'name': run.name,
@@ -118,6 +121,7 @@ for run in tqdm(lastest_runs):
         'created_at': str(run.created_at),
         'url': run.url,
         'config': config,
+        'run_group': run_group,  # WANDB_RUN_GROUP for sweep organization
 
         'summary': summary,
         'log_file': str(log_file) if log_file.exists() else None,
@@ -136,11 +140,88 @@ if len(runs_data) == 0:
     exit(0)
 
 # Flatten for DataFrame
+def extract_symmetry_from_logs(log_file):
+    """Parse logs to extract symmetry metrics from evaluation tables.
+    
+    Looks for lines like:
+    Value/Honesty        -1.9254   0.2245   5.5585     0.2356
+    
+    Returns dict with symmetry_ratio, dose_monotonic for each moral dimension.
+    """
+    if not log_file or not Path(log_file).exists():
+        return {}
+    
+    try:
+        logs = Path(log_file).read_text()
+    except Exception as e:
+        logger.error(f"Error reading log file {log_file}: {e}")
+        return {}
+    
+    metrics = {}
+    
+    # Find "Results for method: InnerPiSSA" table
+    import re
+    pattern = r"Results for method: InnerPiSSA.*?\ncoeff\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)"
+    match = re.search(pattern, logs, re.DOTALL)
+    
+    if not match:
+        return {}
+    
+    # Extract table after coeff header
+    table_start = logs.find("Results for method: InnerPiSSA")
+    table_end = logs.find("\n\n", table_start)
+    if table_end == -1:
+        table_end = len(logs)
+    table_text = logs[table_start:table_end]
+    
+    # Parse rows like: Value/Honesty        -1.9254   0.2245   5.5585     0.2356
+    row_pattern = r"([\w/]+)\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)"
+    rows = re.findall(row_pattern, table_text)
+    
+    if len(rows) < 2:  # Skip header row
+        return {}
+    
+    # Compute symmetry metrics
+    symmetry_ratios = []
+    dose_checks = []
+    
+    for dimension, neg_val, zero_val, pos_val in rows[1:]:  # Skip coeff header
+        try:
+            neg, zero, pos = float(neg_val), float(zero_val), float(pos_val)
+            
+            # Symmetry: how close is |neg| to |pos|?
+            # Perfect symmetry = 1.0, asymmetric = far from 1.0
+            if abs(pos) > 0.01:  # Avoid div by zero
+                symmetry_ratio = abs(neg) / abs(pos) if abs(pos) > abs(neg) else abs(pos) / abs(neg)
+                symmetry_ratios.append(symmetry_ratio)
+            
+            # Dose-dependence: monotonic -1 → 0 → 1?
+            # Check if it's monotonic (either increasing or decreasing)
+            is_increasing = neg < zero < pos
+            is_decreasing = neg > zero > pos
+            dose_checks.append(1.0 if (is_increasing or is_decreasing) else 0.0)
+            
+        except (ValueError, ZeroDivisionError) as e:
+            logger.error(f"Error parsing row for dimension {dimension} in log file {log_file}, {e}")
+            continue
+    
+    if symmetry_ratios:
+        metrics['symmetry_mean'] = np.mean(symmetry_ratios)
+        metrics['symmetry_min'] = np.min(symmetry_ratios)
+        metrics['dose_monotonic_frac'] = np.mean(dose_checks)
+    
+    return metrics
+
 results = []
 for run_data in runs_data:
     config = run_data['config']
     summary = run_data['summary']
 
+    # Extract symmetry metrics from output.log (not logs1.txt)
+    run_id = run_data['run_id']
+    output_log = cache_dir / run_id / "output.log"
+    symmetry_metrics = extract_symmetry_from_logs(str(output_log) if output_log.exists() else None)
+    
     # TODO can we also save the cli argv?
     
     result = {
@@ -151,6 +232,7 @@ for run_data in runs_data:
         'url': run_data['url'],
         'log_file': run_data.get('log_file'),
         "args": ' '.join(run_data['metadata'].get('args', [])),
+        'run_group': run_data.get('run_group'),  # Add WANDB_RUN_GROUP
 
         # Metadata
         'git_commit': run_data.get('metadata', {}).get('git', {}).get('commit'),
@@ -162,6 +244,11 @@ for run_data in runs_data:
         # Results - main metrics
         'main_metric': summary.get('eval/main_metric'),
         "runtime": summary.get('_runtime'),
+        
+        # Results - symmetry from logs
+        'symmetry_mean': symmetry_metrics.get('symmetry_mean'),
+        'symmetry_min': symmetry_metrics.get('symmetry_min'),
+        'dose_monotonic_frac': symmetry_metrics.get('dose_monotonic_frac'),
         
         # Results - baselines
         'baseline_effect_InnerPiSSA': summary.get('eval/baseline_InnerPiSSA (ours)'),
@@ -195,6 +282,10 @@ for run_data in runs_data:
 # logger.debug(f'DEBUG run_data  {json.dumps(run_data, indent=2)}')
 
 df = pd.DataFrame(results)
+
+# Compute loss_gap (overfitting metric)
+df['loss_gap'] = df['val_loss_total'] - df['train_loss_total']
+
 df = df.sort_values(['model_name', 'created_at'], ascending=False)
 logger.info(f"Total runs: {len(df)}")
 # filter out not finished, and not run for at least 1 minute
@@ -257,6 +348,10 @@ summary_cols = [ 'created_at','argv',
        
 
         'main_metric', 
+       
+        'loss_gap',  # Overfitting metric
+        'symmetry_mean',  # Coefficient symmetry
+        'dose_monotonic_frac',  # Dose-dependence
        'baseline_effect_InnerPiSSA', 'baseline_effect_s_steer',
        'baseline_effect_pca', 'baseline_effect_prompting',
        'baseline_effect_repeng', 
@@ -293,7 +388,9 @@ summary_cols = [ 'created_at','argv',
     #    'loss_modules', 'max_rotation_angle'
 # 'name', 
     #  'model_name', 
+     'experiment_name',
     'runtime',
+    'run_group',  # For sweep grouping
     'url', 
        ]
 
@@ -308,6 +405,29 @@ df_summary = df[summary_cols].dropna(subset=['main_metric'])
 summary_file = output_dir / 'outputs' / 'wandb_summary.csv'
 df_summary.to_csv(summary_file, index=False, float_format='%.4g', na_rep='NA')
 logger.info(f"Saved summary to {summary_file}")
+
+# Save per-group summaries for sweep analysis
+if 'run_group' in df.columns and df['run_group'].notna().any():
+    group_dir = output_dir / 'outputs' / 'sweep_groups'
+    group_dir.mkdir(parents=True, exist_ok=True)
+    
+    for group_name in df['run_group'].dropna().unique():
+        df_group = df[df['run_group'] == group_name]
+        logger.info(f"Group '{group_name}': {len(df_group)} runs, "
+                   f"metric range [{df_group['main_metric'].min():.0f}, {df_group['main_metric'].max():.0f}], "
+                   f"gap range [{df_group['loss_gap'].min():.1f}, {df_group['loss_gap'].max():.1f}]")
+        
+        # Save full group data
+        group_file = group_dir / f"{group_name}.csv"
+        df_group.to_csv(group_file, index=False, float_format='%.4g', na_rep='NA')
+        
+        # Save group summary
+        group_summary = df_group[summary_cols].dropna(subset=['main_metric'])
+        group_summary_file = group_dir / f"{group_name}_summary.csv"
+        group_summary.to_csv(group_summary_file, index=False, float_format='%.4g', na_rep='NA')
+    
+    logger.info(f"Saved {len(df['run_group'].dropna().unique())} group summaries to {group_dir}")
+
 # print(df_summary)
 from tabulate import tabulate
 # logger.info(f"\n{tabulate(df_summary, headers='keys', tablefmt='pipe', floatfmt='.4g')}")
@@ -341,24 +461,40 @@ except Exception as e:
 
 
 logger.info(f"""
-=== SWEEP ANALYSIS TASK ===
+=== DATA ANALYSIS GUIDE ===
 
-be aware of major_code_changes : {major_code_changes}, runs can't be compared easily on the other side of these gaps
+**Temporal cutoffs** (major_code_changes): {major_code_changes}
+Runs separated by these dates aren't comparable due to code changes.
 
-Goal: Identify which hyperparameters generalize across large models (ideally 4B+ params).
+**Files to examine**:
+- {summary_file} - Main results with loss_gap, symmetry_mean, dose_monotonic_frac, run_group
+- {results_file} - Full configs for all runs
+- outputs/sweep_groups/*.csv - Per-sweep tables organized by WANDB_RUN_GROUP
+- {f_help} - CLI option reference (defaults, meanings)
+- README.md - Metric definitions and interpretation
 
-First read
-- README.md - to understand context, resecially Metric Reference section
-- {f_help} - to understand cli options meaning and default values
-- {summary_file} - to see the results
-- Baseline CSVs: {fpr}, {fre}, {fss} - to see how well prompting, which we want to beat, did
-- Generated by `justfile`
+**Key metrics**:
+- main_metric: Steering effectiveness (higher = stronger effect)
+- loss_gap: val_loss - train_loss (lower = better generalization; <3 good, >10 catastrophic)
+- symmetry_mean: |coeff=-1| / |coeff=+1| ratio (closer to 1.0 = more reversible)
+- dose_monotonic_frac: Proportion of moral dimensions showing monotonic -1→0→1 response
 
+**Methodological constraints**:
+1. Account for sampling bias: configs tested more often will have higher max values
+   → Use median/mean with counts, not just max
+2. Baselines (prompting, RepE, S-steer) can't be compared across all runs
+   → Only compare within controlled experiments (same model, same sweep group)
+3. loss_use_V affects optimal layer selection:
+   → loss_use_V=True: later layers (0.75-0.9), MLP inputs (up_proj)
+   → loss_use_V=False: intermediate layers (0.5-0.7), residual outputs (o_proj, down_proj)
 
-Remember loss_depth depends on loss_use_V, when true we expect later layers to benefit, otherwise intermediate layers
+**Analysis questions to investigate**:
+- Which configs achieve both high metric AND low loss_gap?
+- Does symmetry_mean correlate with generalization (loss_gap)?
+- Do sweep groups show consistent hyperparameter effects, or are results noisy?
+- Base model (Qwen3-4B-Base) vs Instruct: reproducible difference or outlier?
+- rot_u + long training (sweep-long-training-*): does low lr stabilize rotations?
 
-The full csv of run configs are in {results_file}, and the logs can be on wandb at https://wandb.ai/wassname/InnerPiSSA/runs although I'm not sure how to fetch
-
-Then tell me what you think!
-            
+Examine data, identify patterns, note confounds. Report observations without conclusions.
 """)
+
