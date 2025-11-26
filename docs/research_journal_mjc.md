@@ -1037,6 +1037,43 @@ Now if we can bypass the models trained preferences and aligned behavious we can
   even when difficult, builds integrity
 
 
+# 
+
+Looking at your results, I can see extreme variance between runs (e.g., sanity_std_selection: 1.6 → 109). This suggests the metric is highly sensitive to random seed, hyperparameters, or training dynamics.
+
+Here's a clear table:
+
+## S-Normalization Ablation Results
+
+| Experiment | Mean Abs | S-Norm | Proj Mag | Data-Aware | Run 1 (r=16, lr=5e-3, 5ep) | Run 2 (r=32, lr=2e-3, 15ep) | Description |
+|------------|----------|--------|----------|------------|---------------------------|----------------------------|-------------|
+| `mean_abs_baseline` | ✓ | ✗ | ✗ | ✓ | 24.5 | - | Bidirectional mean with abs split |
+| `mean_abs+s_norm` | ✓ | ✓ | ✗ | ✓ | **35.1** | **39.8** | + divide by S (remove pretrained bias) |
+| `mean_abs+proj_mag` | ✓ | ✗ | ✓ | ✓ | 4.6 | 11.8 | + use projection magnitude as S |
+| `all_three` | ✓ | ✓ | ✓ | ✓ | 22.0 | 27.4 | All three modifications |
+| `sanity_random_init` | ✗ | ✗ | ✗ | **✗** | 78.0 | 26.4 | Random SVD selection (no data-aware) |
+| `sanity_std_selection` | ✗ | ? | ✗ | ✓ | 1.6 | **109.4** | Original: std without mean_abs |
+
+**Metric:** Gain_T-stat (%) = 100 × Effect / (1 + Degradation). Higher = better steering efficiency.
+
+---
+
+## Interpretation
+
+### What happened:
+1. **High variance** dominates the signal. `sanity_std_selection` goes 1.6 → 109 just from changing r/lr/epochs.
+2. **`mean_abs+s_norm` is consistently good** (35 → 40), but `sanity_std_selection` beats it in Run 2 (109).
+3. **`proj_mag` hurts performance** (4.6, 11.8) — using projection magnitude as S values is harmful.
+
+### Conclusions:
+- **S-Norm helps** (compare `mean_abs_baseline` 24.5 vs `mean_abs+s_norm` 35.1 in Run 1).
+- **Proj Mag hurts** (compare `mean_abs+s_norm` 35.1 vs `mean_abs+proj_mag` 4.6).
+- **But variance is huge** — you need multiple seeds per config to say anything definitive.
+
+### What to do:
+Run `mean_abs+s_norm` vs `sanity_std_selection` with **3+ seeds** at the better hyperparams (r=32, lr=2e-3, 15ep) to see if 109 is reproducible or a fluke.
+
+
 # 2025-11-25 20:56:05
 
     ================================================================================

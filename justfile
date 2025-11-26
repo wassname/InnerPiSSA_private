@@ -331,23 +331,42 @@ data-efficiency:
 quick:
     uv run python nbs/train.py --model_name=Qwen/Qwen3-0.6B --bs=64
 
-# Sweep S normalization variants
+# Sweep S-space selection strategies (cho vs rej vs diff, var vs mean_abs, snorm vs raw)
 sweep-s-norm:
     #!/bin/bash -x
-    export WANDB_RUN_GROUP="sweep-s-norm-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4b-80gb --r=8 --n_epochs=3 --lr=5e-3 --eval_max_dilemmas=128 --data_aware_init"
-    S_NORM=True $BASE
-    S_MEAN_ABS=True $BASE
-    S_USE_PROJ_MAG=True $BASE
-    S_NORM=True S_MEAN_ABS=True $BASE
-    $BASE
-    S_USE_PROJ_MAG=True S_MEAN_ABS=True $BASE
-    S_USE_PROJ_MAG=True S_NORM=True $BASE
-    uv run python nbs/train.py q4b-80gb --r=8 --n_epochs=2 --lr=3e-3 --eval_max_dilemmas=128 --no_data_aware_init
-
-    S_USE_PROJ_MAG=True S_MEAN_ABS=True $BASE --scale_s=mult
-    S_USE_PROJ_MAG=True S_NORM=True $BASE --scale_s=mult
-    S_NORM=True $BASE --scale_s=mult
+    export WANDB_RUN_GROUP="sweep-s-selection-$(date +%Y%m%d-%H%M)"
+    BASE="uv run python nbs/train.py q4b-80gb --r=32 --n_epochs=15 --lr=2e-3 --eval_max_dilemmas=128 --data_aware_init"
+    
+    # Test core hypothesis: which dimensions are most useful for steering?
+    # Format: {source}_{stat}_{norm}
+    # Sources:
+    #   diff: r/2 pos + r/2 neg from difference (cho - rej)
+    #   cho: r/2 from cho + r/2 from rej (may overlap - ensures both workspaces represented)
+    #   chorej: r/3 from cho + r/3 from rej + r/3 from diff (may overlap - maximal diversity)
+    #   cho_only: all r from cho only
+    #   rej_only: all r from rej only
+    
+    echo "=== Source: diff (task-relevant delta, 5% signal) ==="
+    $BASE --s_selection_mode=diff_var_raw --experiment_name="diff_var_raw"  # current default
+    $BASE --s_selection_mode=diff_var_snorm --experiment_name="diff_var_snorm"
+    $BASE --s_selection_mode=diff_mean_abs_snorm --experiment_name="diff_mean_abs_snorm"  # original method
+    
+    echo "=== Source: cho (r/2 cho + r/2 rej, 95% signal) ==="
+    $BASE --s_selection_mode=cho_var_raw --experiment_name="cho_var_raw"
+    $BASE --s_selection_mode=cho_var_snorm --experiment_name="cho_var_snorm"
+    
+    echo "=== Source: chorej (r/3 each, maximal diversity) ==="
+    $BASE --s_selection_mode=chorej_var_raw --experiment_name="chorej_var_raw"
+    $BASE --s_selection_mode=chorej_var_snorm --experiment_name="chorej_var_snorm"
+    
+    echo "=== Source: cho_only (all r from chosen only) ==="
+    $BASE --s_selection_mode=cho_only_var_raw --experiment_name="cho_only_var_raw"
+    
+    echo "=== Source: rej_only (all r from rejected only) ==="
+    $BASE --s_selection_mode=rej_only_var_raw --experiment_name="rej_only_var_raw"
+    
+    echo "=== Sanity: random init (no data-aware) ==="
+    $BASE --no_data_aware_init --experiment_name="random_init"
 
 # Sweep max rotation angle for output symmetry
 sweep-rotation-angle:

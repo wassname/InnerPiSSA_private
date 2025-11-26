@@ -75,6 +75,7 @@ def setup_adapter(base_model, config: TrainingConfig, target_modules: str, init_
             task_type="CAUSAL_LM",
             target_modules=target_modules,
             steering_vectors=init_steering_vecs,
+            s_selection_mode=config.s_selection_mode,
         )
     else:  # lora or dora
         from peft import LoraConfig
@@ -128,7 +129,7 @@ def extract_U_matrices(model, loss_layers: List[str], config: TrainingConfig):
 def compute_init_steering_vectors(
     model, dataset_pt, loss_layers, tokenizer, config, n_samples=32
 ):
-    """Compute raw dHS from first batch for data-aware adapter initialization.
+    """Compute raw cho/rej activations for data-aware adapter initialization.
     
     Args:
         model: Base model (no adapter yet)
@@ -139,7 +140,9 @@ def compute_init_steering_vectors(
         n_samples: Number of samples to use (must be even for cho/rej pairs)
     
     Returns:
-        Dict[layer_name, dHS_tensor] where dHS = mean(hs_cho - hs_rej)
+        Dict[layer_name, Dict[source, tensor]] where:
+        - 'cho': hs_cho activations [n_pairs, d]
+        - 'rej': hs_rej activations [n_pairs, d]
     """
     # Take first n_samples (must be even for pairs)
     assert n_samples % 2 == 0, "n_samples must be even for cho/rej pairs"
@@ -150,7 +153,7 @@ def compute_init_steering_vectors(
     dataloader = DataLoader(subset, batch_size=config.bs, collate_fn=data_collator)
     
     model.eval()
-    steering_vecs = {layer: [] for layer in loss_layers}
+    steering_vecs = {layer: {'cho': [], 'rej': []} for layer in loss_layers}
     
     with torch.no_grad(), torch.amp.autocast("cuda", dtype=torch.bfloat16):
         for batch in dataloader:
@@ -165,9 +168,14 @@ def compute_init_steering_vectors(
                 hs = (ret[layer].output * attention_mask.unsqueeze(-1)).float()
                 hs_cho = hs[::2].mean(dim=1)  # [n_pairs, d] -> avg over seq
                 hs_rej = hs[1::2].mean(dim=1)
-                dHS = (hs_cho - hs_rej)  # [n_pairs, d] - keep per-pair
-                steering_vecs[layer].append(dHS.cpu())
+                steering_vecs[layer]['cho'].append(hs_cho.cpu())
+                steering_vecs[layer]['rej'].append(hs_rej.cpu())
     
     # Concatenate across batches (keep per-pair)
-    steering_vecs = {k: torch.cat(v, dim=0) for k, v in steering_vecs.items()}
-    return steering_vecs
+    steering_vecs_cat = {}
+    for layer in loss_layers:
+        steering_vecs_cat[layer] = {
+            'cho': torch.cat(steering_vecs[layer]['cho'], dim=0),
+            'rej': torch.cat(steering_vecs[layer]['rej'], dim=0)
+        }
+    return steering_vecs_cat

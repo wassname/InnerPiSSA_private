@@ -162,6 +162,10 @@ class TrainingConfig:
     # AND use those projection magnitudes as S values (not original singular values)
     data_aware_init: bool = True
     """Use data-aware SVD component selection (InnerPiSSA only)"""
+    
+    s_selection_mode: str = "diff_var_raw"
+    """Format: '{source}_{stat}_{norm}' where source=cho|rej|diff, stat=mean_abs|var|std, norm=snorm|raw.
+    Examples: diff_mean_abs_snorm (original), cho_var_raw (task-active variance), cho_std_snorm"""
 
     dataset_name: str = "honest"
     max_samples: Optional[int] = 800
