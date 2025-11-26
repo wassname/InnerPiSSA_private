@@ -363,15 +363,6 @@ sweep-s-norm:
     echo "=== Source: chorej (r/3 each, maximal diversity) ==="
     $BASE --s_selection_mode=chorej_var_raw --experiment_name="chorej_var_raw"
     $BASE --s_selection_mode=chorej_var_snorm --experiment_name="chorej_var_snorm"
-    
-    echo "=== Source: cho_only (all r from chosen only) ==="
-    $BASE --s_selection_mode=cho_only_var_raw --experiment_name="cho_only_var_raw"
-    
-    echo "=== Source: rej_only (all r from rejected only) ==="
-    $BASE --s_selection_mode=rej_only_var_raw --experiment_name="rej_only_var_raw"
-    
-    echo "=== Sanity: random init (no data-aware) ==="
-    $BASE --no_data_aware_init --experiment_name="random_init"
 
 # Sweep max rotation angle for output symmetry
 sweep-rotation-angle:

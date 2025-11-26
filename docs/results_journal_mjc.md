@@ -1115,3 +1115,79 @@ https://wandb.ai/wassname/InnerPiSSA/runs/y9m324ov
 
     **Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: Qwen/Qwen3-4B-Instruct-2507. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 335 non-target moral values. This is not bad or good, as truthfullness could plausibly cause model to reveal true mooral values.Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
     Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+
+---
+
+# 2025-11-26: S-space Selection Strategy Ablation
+
+**Hypothesis**: Using task-active workspace (chosen/rejected hidden states) preserves more useful signal than using the task-relevant delta (cho - rej difference).
+
+**Problem**: Previous data-aware init selected S-space dimensions by projecting `cho - rej` difference. This yields only ~5% of the signal magnitude (the residual after cancellation), discarding the 95% shared processing substrate that both trajectories use.
+
+**Experiment**: Test different strategies for selecting which r dimensions of S-space to initialize the adapter with.
+
+## Selection Strategy Format
+
+`s_selection_mode = "{source}_{stat}_{norm}"`
+
+- **source**: Which activations to select from
+  - `diff`: r/2 positive + r/2 negative from (cho - rej) difference
+  - `cho`: r/2 from cho + r/2 from rej (may overlap, ensures bidirectional)
+  - `chorej`: r/3 from cho + r/3 from rej + r/3 from diff (maximal diversity)
+  
+- **stat**: Which statistic to rank dimensions by
+  - `var`: variance across pairs
+  - `mean_abs`: absolute mean
+  - `std`: standard deviation
+  
+- **norm**: Normalization before computing statistics
+  - `snorm`: divide by pretrained S values (removes pretrained bias)
+  - `raw`: no normalization
+
+## Results
+
+**Setup**: Model=Qwen/Qwen3-4B-Instruct-2507, r=32, 15 epochs, lr=2e-3, 128 eval dilemmas, 800 train pairs
+
+| Experiment | Main Metric (Gain T-stat %) | Speedup vs Best Diff |
+|:-----------|----------------------------:|---------------------:|
+| **cho_var_snorm** | **167.85** | **13.0x** |
+| cho_only_var_raw | 98.26 | 7.6x |
+| cho_var_raw | 46.57 | 3.6x |
+| chorej_var_snorm | 50.79 | 3.9x |
+| diff_var_snorm | 13.00 | 1.0x (baseline) |
+| chorej_var_raw | 12.80 | 1.0x |
+| diff_mean_abs_snorm | 8.40 | 0.6x |
+| diff_var_raw | 6.31 | 0.5x |
+
+**Baselines (from previous sweep, r=16, 5 epochs)**:
+- random_init (no data-aware): 78.04
+- S-space steer (frozen PCA): 384.6
+- prompting ('Be honest'): 229.8
+- repeng (representation engineering): 118.3
+
+## Key Findings
+
+1. **cho dominates**: `cho_var_snorm` (r/2 cho + r/2 rej) achieves 167.85, crushing all diff variants (best=13.00). Hypothesis confirmed: task-active workspace >> task-relevant delta.
+
+2. **S-normalization is critical**: Removing pretrained bias via S-normalization gives massive gains:
+   - cho: 167.85 (snorm) vs 46.57 (raw) = 3.6x improvement
+   - chorej: 50.79 (snorm) vs 12.80 (raw) = 4.0x improvement  
+   - diff: 13.00 (snorm) vs 6.31 (raw) = 2.1x improvement
+
+3. **Variance > mean_abs**: For diff, variance-based selection (13.00) beats mean-based (8.40).
+
+4. **Diversity helps moderately**: `chorej` (r/3 each) gets 50.79, between cho (167.85) and diff (13.00). Suggests some value in combining sources, but cho/rej alone is better.
+
+## Mechanism
+
+All strategies project activations to S-space via `hidden_states @ U_full` before ranking. The key difference:
+
+- **diff** (old): Projects `cho - rej` difference. Cancels shared structure (95% of signal), keeps only task-specific residual (5%). High signal-to-noise but low absolute magnitude.
+
+- **cho** (new): Projects cho and rej separately, selects r/2 top dims from each by variance. Preserves the shared processing substrate both trajectories use. Overlap between cho/rej selections ensures bidirectional structure for reversible steering.
+
+## Decision
+
+**New default**: `s_selection_mode = "cho_var_snorm"`
+
+Updated `ipissa/config.py` and removed unnecessary sweep experiments (cho_only, rej_only, random_init).

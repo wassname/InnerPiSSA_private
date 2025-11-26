@@ -177,7 +177,7 @@ class TrainingConfig:
     data_aware_init: bool = True
     """Use data-aware SVD component selection (InnerPiSSA only)"""
     
-    s_selection_mode: str = "diff_var_raw"
+    s_selection_mode: str = "cho_var_snorm"  # r/2 cho + r/2 rej, variance, S-normalized
     """Format: '{source}_{stat}_{norm}' where source=cho|rej|diff, stat=mean_abs|var|std, norm=snorm|raw.
     Examples: diff_mean_abs_snorm (original), cho_var_raw (task-active variance), cho_std_snorm"""
 
