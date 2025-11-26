@@ -27,6 +27,7 @@ dependencies = [
     "repeng>=0.4.0",
     "colorama>=0.4.6",
     "nbformat>=5.10.4",
+    "seaborn>=0.13.2",
 ]
 
 [dependency-groups]
