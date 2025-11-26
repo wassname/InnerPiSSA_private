@@ -44,7 +44,7 @@ scratch:
     uv run python nbs/train.py q14b-80gb --model_name=wassname/qwen-14B-codefourchan
     just sweep-train-stages
     just sweep-rotation-angle
-    just sweep-s-norm
+    # just sweep-s-norm
 
     uv run python nbs/train.py tiny --r=64 --rot_u --data_aware_init --wd=0 --no_coh --no_mono
     # incoherenet 90 with high lr
@@ -159,7 +159,7 @@ scratch:
     uv run python nbs/train.py q4b-80gb --n_epochs=10 --eval_max_dilemmas=128 --lr=2e-3 --no_mono --rot_u
 
 
-    just sweep-s-norm
+    # just sweep-s-norm
 
     # scratch
     # short run?
@@ -191,43 +191,62 @@ scratch:
     # run_exp_small --loss_type=logsig_dpo
     # run_exp_small --loss_type=logsig_weak_up
     # run_exp_small --loss_type=focal_balanced
-
-    echo "### Number of layers ablations ###"
-    run_exp_small --n_depths=1
-    run_exp_small --n_depths=3
-    run_exp_small --n_depths=5  # default
-    run_exp_small --n_depths=8
-    run_exp_small --n_depths=12
-    
-    echo "### Layer range ablations ###"
-    run_exp_small --depth_start=0.1
-    run_exp_small --depth_start=0.3  # default
-    run_exp_small --depth_start=0.5
-    run_exp_small --depth_end=-1
-    run_exp_small --depth_end=-5
-
-    # echo "### Scale mechanism ablations ###"
-    # run_exp --scale_s=add_tanh
-    # run_exp --scale_s=add2   # default
-    # run_exp --scale_s=none
-    # run_exp --scale_s=mult
     just ablate-paper
+
+sweep-depths:
+    #!/bin/bash -x
+    export WANDB_RUN_GROUP="sweep-depths-$(date +%Y%m%d-%H%M)"
+    BASE="uv run python nbs/train.py q4b-80gb"
+    
+    # Test different number of depth layers
+    for n_depths in 1 3 5 8 12 28 52; do
+        echo "=== Number of depth layers: $n_depths ==="
+        $BASE --n_depths=$n_depths
+    done
+
+sweet-start-end:
+    #!/bin/bash -x
+    export WANDB_RUN_GROUP="sweep-start-end-$(date +%Y%m%d-%H%M)"
+    BASE="uv run python nbs/train.py q4b-80gb"
+    
+    # Test different layer ranges
+    for start in 0.0 0.1 0.2 0.3 0.4; do
+        for end in -1 -3 -5 -7 -9; do
+            echo "=== Layer range: start=$start, end=$end ==="
+            $BASE --depth_start=$start --depth_end=$end
+        done
+    done
+
+sweep-scale:
+    #!/bin/bash -x
+    export WANDB_RUN_GROUP="sweep-scale-$(date +%Y%m%d-%H%M)"
+    BASE="uv run python nbs/train.py q4b-80gb"
+    
+    # Test different scaling mechanisms
+    for scale in add_tanh add2 none mult; do
+        echo "=== Scale mechanism: $scale ==="
+        $BASE --scale_s=$scale
+    done
 
 # Paper ablation suite
 ablate-paper:
     #!/bin/bash -x
     # make sure baselines are cached
     just eval-baselines
-    just ablate-modules
     just run-models
+    just sweep-train-stages
+    just ablate-constraints
+    just ablate-modules
     just sweep-layers # [/]
     just sweep-wd # [/]
     just sweep-lr
     just data-efficiency
     just run-seeds
-    just ablate-constraints
     just sweep-rank
-    just sweep-s-norm
+    just sweep-scale
+    # just sweep-s-norm
+    just sweep-depths
+    just sweet-start-end:
     just sweep-rotation-angle
     just sweep-long-training
     just scratch
@@ -241,17 +260,20 @@ ablate-constraints:
     $BASE --no_mono --no_coh
     $BASE --mono --no_coh
     $BASE --no_mono --coh
+
     $BASE --no_rot_u --no_rot_v
+    $BASE --rot_u --no_rot_v
+    # $BASE --no_rot_u --rot_v # default
     $BASE --scale_s=none
     $BASE --adapter_type lora
     $BASE --no_coh_adaptive
-    $BASE --data_aware_init
+    $BASE --no_data_aware_init
     $BASE --loss_use_V --loss_modules up_proj
     $BASE --no_loss_use_V --loss_depths=0.5 --loss_modules o_proj down_proj
 
 sweep-layers:
     #!/bin/bash -x
-    export WANDB_RUN_GROUP="sweep-layers-$(date +%Y%m%d-%H%M)"
+    export WANDB_RUN_GROUP="sweep-layers-V-$(date +%Y%m%d-%H%M)"
     for depth in 0.01 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 0.99; do
         uv run python nbs/train.py q4b-80gb --loss_depths=$depth --loss_use_V --loss_modules up_proj
     done
@@ -263,14 +285,14 @@ sweep-layers:
 sweep-wd:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="ablate-wd-$(date +%Y%m%d-%H%M)"
-    for wd in 0 0.001 0.01 0.1 1.0 10.0 100.0; do
+    for wd in 0 1e-7 1e-6 1e-5 1e-4 1e-3 1e-2 1e-1 1e-0 1e-1; do
         uv run python nbs/train.py q4b-80gb --wd=$wd
     done
 
 sweep-lr:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-lr-$(date +%Y%m%d-%H%M)"
-    for lr in 1e-0 1e-1 1e-2 1e-3 1e-4 1e-5; do
+    for lr in 1e-0 1e-1 1e-2 1e-3 1e-4 1e-5 1e-6; do
         uv run python nbs/train.py q4b-80gb --lr=$lr
     done
 
@@ -287,18 +309,19 @@ ablate-modules:
 run-models:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="run-models-$(date +%Y%m%d-%H%M)"
-    uv run python nbs/train.py q14b-80gb --model_name=wassname/qwen-14B-codefourchan
     uv run python nbs/train.py q06b-24gb
     uv run python nbs/train.py q4b-80gb
     uv run python nbs/train.py q4b-80gb --model_name=Qwen/Qwen3-4B-Base
     uv run python nbs/train.py q14b-80gb
+    uv run python nbs/train.py q14b-80gb --model_name=wassname/qwen-14B-codefourchan
     uv run python nbs/train.py l8b-80gb
+
     uv run python nbs/train.py gemma270m-80gb
     uv run python nbs/train.py gemma1b-80gb
     uv run python nbs/train.py gemma4b-80gb
     uv run python nbs/train.py gemma12b-80gb
+
     uv run python nbs/train.py q32b-80gb
-    uv run python nbs/train.py l8b-80gb
     # TODO try a 32b model... when I have more hdd space
 
 eval-baselines:
@@ -311,7 +334,7 @@ eval-baselines:
 sweep-rank:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-rank-$(date +%Y%m%d-%H%M)"
-    for r in 32 64 128 256 512; do
+    for r in 8 16 32 64 128 256 512 1024; do
         uv run python nbs/train.py q4b-80gb --r=$r
     done
 
@@ -337,34 +360,6 @@ data-efficiency:
 # Quick test run
 quick:
     uv run python nbs/train.py --model_name=Qwen/Qwen3-0.6B --bs=64
-
-# Sweep S-space selection strategies (cho vs rej vs diff, var vs mean_abs, snorm vs raw)
-sweep-s-norm:
-    #!/bin/bash -x
-    export WANDB_RUN_GROUP="sweep-s-selection-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4b-80gb --r=32 --n_epochs=15 --lr=2e-3 --eval_max_dilemmas=128 --data_aware_init"
-    
-    # Test core hypothesis: which dimensions are most useful for steering?
-    # Format: {source}_{stat}_{norm}
-    # Sources:
-    #   diff: r/2 pos + r/2 neg from difference (cho - rej)
-    #   cho: r/2 from cho + r/2 from rej (may overlap - ensures both workspaces represented)
-    #   chorej: r/3 from cho + r/3 from rej + r/3 from diff (may overlap - maximal diversity)
-    #   cho_only: all r from cho only
-    #   rej_only: all r from rej only
-    
-    echo "=== Source: diff (task-relevant delta, 5% signal) ==="
-    $BASE --s_selection_mode=diff_var_raw --experiment_name="diff_var_raw"  # current default
-    $BASE --s_selection_mode=diff_var_snorm --experiment_name="diff_var_snorm"
-    $BASE --s_selection_mode=diff_mean_abs_snorm --experiment_name="diff_mean_abs_snorm"  # original method
-    
-    echo "=== Source: cho (r/2 cho + r/2 rej, 95% signal) ==="
-    $BASE --s_selection_mode=cho_var_raw --experiment_name="cho_var_raw"
-    $BASE --s_selection_mode=cho_var_snorm --experiment_name="cho_var_snorm"
-    
-    echo "=== Source: chorej (r/3 each, maximal diversity) ==="
-    $BASE --s_selection_mode=chorej_var_raw --experiment_name="chorej_var_raw"
-    $BASE --s_selection_mode=chorej_var_snorm --experiment_name="chorej_var_snorm"
 
 # Sweep max rotation angle for output symmetry
 sweep-rotation-angle:
