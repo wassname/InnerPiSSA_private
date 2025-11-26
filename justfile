@@ -398,3 +398,19 @@ paper:
 
 sync:
     rsync -avzr --progress vast1:/workspace/InnerPiSSA_private/outputs/baselines/ ./outputs/baselines/
+
+
+sweep-train-stages:
+    #!/bin/bash -x
+    export WANDB_RUN_GROUP="sweep-training-stages-$(date +%Y%m%d-%H%M)"
+    BASE="uv run python nbs/train.py l8b-80gb"
+
+    $BASE --model_name=allenai/Olmo-3-1025-7B
+    $BASE --model_name=allenai/Olmo-3-7B-Instruct-SFT
+    $BASE --model_name=allenai/Olmo-3-7B-Instruct-DPO
+    $BASE --model_name=allenai/Olmo-3-7B-Instruct
+
+    $BASE --model_name=allenai/Olmo-3-1025-7B
+    $BASE --model_name=allenai/Olmo-3-7B-Think-SFT
+    $BASE --model_name=allenai/Olmo-3-7B-Think-DPO
+    $BASE --model_name=allenai/Olmo-3-7B-Think
