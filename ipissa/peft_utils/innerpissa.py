@@ -244,22 +244,16 @@ class InnerPiSSALayer(BaseTunerLayer):
             cho_var = proj_cho.var(dim=0)  # [rank]
             rej_var = proj_rej.var(dim=0)
             
-            # Select top r/2 from each (may overlap)
+            # Get top r/2 from cho, then fill remaining with unique top from rej
             n_half = r_actual // 2
             _, cho_idx = torch.topk(cho_var, n_half)
-            _, rej_idx = torch.topk(rej_var, r_actual - n_half)
-            indices = torch.cat([cho_idx, rej_idx]).unique().sort()[0]
             
-            # Pad if we got fewer than r_actual due to overlaps
-            if len(indices) < r_actual:
-                used_mask = torch.zeros(S_full.shape[0], dtype=torch.bool, device=device)
-                used_mask[indices] = True
-                remaining = torch.where(~used_mask)[0]
-                n_needed = r_actual - len(indices)
-                _, extra_idx = torch.topk(S_full[remaining], min(n_needed, len(remaining)))
-                indices = torch.cat([indices, remaining[extra_idx]]).sort()[0]
+            # Mask out cho selections and get remaining best from rej
+            rej_var_masked = rej_var.clone()
+            rej_var_masked[cho_idx] = -float('inf')  # Exclude already selected
+            _, rej_idx = torch.topk(rej_var_masked, r_actual - n_half)
             
-            indices = indices[:r_actual]
+            indices = torch.cat([cho_idx, rej_idx]).sort()[0]
             
             # Extract U, V, S
             U = U_full[:, indices]  # [d_out, r_actual]
