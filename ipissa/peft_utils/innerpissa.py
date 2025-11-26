@@ -279,6 +279,7 @@ class InnerPiSSALayer(BaseTunerLayer):
             
             # # Use original S values (preserve component-specific energy)
             if os.environ.get('S_USE_PROJ_MAG', False):
+                # HARMFULL IN ALL TESTS
                 print("S_USE_PROJ_MAG active    ")
                 # S initialization: Use projection magnitudes as S values
                 S_task = proj_normalized[:, indices].mean(0)  # [r]

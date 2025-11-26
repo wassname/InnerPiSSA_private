@@ -334,19 +334,17 @@ quick:
 sweep-s-norm:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-s-norm-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4b-80gb --r=8 --n_epochs=3 --lr=5e-3 --eval_max_dilemmas=128 --data_aware_init"
-    S_NORM=True $BASE
-    S_MEAN_ABS=True $BASE
-    S_USE_PROJ_MAG=True $BASE
-    S_NORM=True S_MEAN_ABS=True $BASE
-    $BASE
-    S_USE_PROJ_MAG=True S_MEAN_ABS=True $BASE
-    S_USE_PROJ_MAG=True S_NORM=True $BASE
-    uv run python nbs/train.py q4b-80gb --r=8 --n_epochs=2 --lr=3e-3 --eval_max_dilemmas=128 --no_data_aware_init
-
-    S_USE_PROJ_MAG=True S_MEAN_ABS=True $BASE --scale_s=mult
-    S_USE_PROJ_MAG=True S_NORM=True $BASE --scale_s=mult
-    S_NORM=True $BASE --scale_s=mult
+    BASE="uv run python nbs/train.py q4b-80gb --r=32 --n_epochs=15 --lr=2e-3 --eval_max_dilemmas=128 --data_aware_init"
+    
+    # Core comparison (4 runs)
+    S_MEAN_ABS=True $BASE --experiment_name="mean_abs_baseline"
+    S_MEAN_ABS=True S_NORM=True $BASE --experiment_name="mean_abs+s_norm"
+    S_MEAN_ABS=True S_USE_PROJ_MAG=True $BASE --experiment_name="mean_abs+proj_mag"
+    S_MEAN_ABS=True S_NORM=True S_USE_PROJ_MAG=True $BASE --experiment_name="all_three"
+    
+    # Sanity checks (if time permits - will run if prev 4 finish)
+    $BASE --no_data_aware_init --experiment_name="sanity_random_init"
+    $BASE --experiment_name="sanity_std_selection"  # original data-aware (no mean_abs)
 
 # Sweep max rotation angle for output symmetry
 sweep-rotation-angle:
