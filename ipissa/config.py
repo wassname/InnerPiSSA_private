@@ -172,14 +172,9 @@ class TrainingConfig:
     Set to 1000.0 to effectively disable.
     """
     
-    # Data-aware initialization: select SVD components by |dHS @ U| projection magnitude
-    # AND use those projection magnitudes as S values (not original singular values)
+    # Data-aware initialization: select r/2 from cho + r/2 from rej by variance, S-normalized
     data_aware_init: bool = True
-    """Use data-aware SVD component selection (InnerPiSSA only)"""
-    
-    s_selection_mode: str = "cho_var_snorm"  # r/2 cho + r/2 rej, variance, S-normalized
-    """Format: '{source}_{stat}_{norm}' where source=cho|rej|diff, stat=mean_abs|var|std, norm=snorm|raw.
-    Examples: diff_mean_abs_snorm (original), cho_var_raw (task-active variance), cho_std_snorm"""
+    """Use data-aware SVD component selection (cho_var_snorm strategy)"""
 
     dataset_name: str = "honest"
     max_samples: Optional[int] = 800

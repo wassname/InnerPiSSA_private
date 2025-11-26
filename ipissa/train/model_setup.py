@@ -75,7 +75,6 @@ def setup_adapter(base_model, config: TrainingConfig, target_modules: str, init_
             task_type="CAUSAL_LM",
             target_modules=target_modules,
             steering_vectors=init_steering_vecs,
-            s_selection_mode=config.s_selection_mode,
         )
     else:  # lora or dora
         from peft import LoraConfig

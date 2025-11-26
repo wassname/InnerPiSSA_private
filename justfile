@@ -286,6 +286,7 @@ ablate-modules:
 run-models:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="run-models-$(date +%Y%m%d-%H%M)"
+    uv run python nbs/train.py q14b-80gb --model_name=wassname/qwen-14B-codefourchan
     uv run python nbs/train.py q06b-24gb
     uv run python nbs/train.py q4b-80gb
     uv run python nbs/train.py q4b-80gb --model_name=Qwen/Qwen3-4B-Base

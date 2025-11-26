@@ -224,124 +224,34 @@ class InnerPiSSALayer(BaseTunerLayer):
         # Data-aware component selection if steering vectors provided
         if steering_vectors is not None and layer_name in steering_vectors:
             """
-            Data-aware SVD initialization with configurable selection strategy.
+            Data-aware SVD initialization: cho_var_snorm strategy.
             
-            Format: s_selection_mode = "{source}_{stat}_{norm}"
-            - source: 
-                * diff: select r/2 pos + r/2 neg from difference (cho - rej)
-                * cho: select r/2 from cho + r/2 from rej (may overlap)
-                * chorej: select r/3 from cho + r/3 from rej + r/3 from diff (may overlap)
-                * cho_only: select all r from cho only
-                * rej_only: select all r from rej only
-            - stat: mean_abs (signed mean), var (variance), std (std dev)
-            - norm: snorm (divide by S to remove pretrained bias), raw (no normalization)
+            Select r/2 dimensions from chosen activations + r/2 from rejected activations,
+            ranked by variance in S-normalized projection space. May overlap.
             
-            Key insight: Different sources capture different task-relevant structure:
-            - diff: dimensions that CHANGE between cho/rej (5% signal, high task-specificity)
-            - cho: dimensions ACTIVE in chosen trajectories (95% signal, task workspace)
-            - rej: dimensions ACTIVE in rejected trajectories (alternative workspace)
-            
-            Selecting from multiple sources with overlap ensures we don't miss important dims.
-            
-            Examples:
-            - "diff_var_raw": traditional, r/2 positive diff + r/2 negative diff
-            - "cho_var_snorm": r/2 from cho + r/2 from rej, S-normalized
-            - "chorej_var_raw": r/3 cho + r/3 rej + r/3 diff, may overlap
+            This preserves task-active workspace (95% signal) rather than just the
+            task-relevant delta (5% residual after cancellation).
             """
-            # Parse mode
-            parts = kwargs.get('s_selection_mode', 'diff_var_raw').split('_')
-            if len(parts) == 3:
-                source, stat, norm = parts
-            else:
-                logger.warning(f"Invalid s_selection_mode format, using defaults: {kwargs.get('s_selection_mode')}")
-                source, stat, norm = 'diff', 'var', 'raw'
-            
-            # Compute all three tensors
+            # Load cho/rej activations
             cho = steering_vectors[layer_name]['cho'].to(device).float()
             rej = steering_vectors[layer_name]['rej'].to(device).float()
-            diff = cho - rej
             
-            def compute_scores(tensor, norm_mode, stat_mode):
-                """Helper to compute scores from a tensor."""
-                proj = tensor @ U_full  # [n_pairs, rank]
-                if norm_mode == 'snorm':
-                    proj = proj / (S_full.clamp(min=1e-8))
-                
-                if stat_mode == 'mean_abs':
-                    return proj.mean(dim=0).abs()
-                elif stat_mode == 'var':
-                    return proj.var(dim=0)
-                elif stat_mode == 'std':
-                    return proj.std(dim=0)
-                else:
-                    raise ValueError(f"Unknown stat: {stat_mode}")
+            # Project to S-space and normalize by pretrained singular values
+            proj_cho = (cho @ U_full) / S_full.clamp(min=1e-8)  # [n_pairs, rank]
+            proj_rej = (rej @ U_full) / S_full.clamp(min=1e-8)
             
-            # Select indices based on source strategy
-            if source == 'diff':
-                # Traditional: r/2 from positive diff, r/2 from negative diff
-                proj_diff = diff @ U_full
-                if norm == 'snorm':
-                    proj_diff = proj_diff / (S_full.clamp(min=1e-8))
-                
-                mean_proj = proj_diff.mean(dim=0)
-                if stat == 'mean_abs':
-                    pos_scores = mean_proj.clamp(min=0)
-                    neg_scores = (-mean_proj).clamp(min=0)
-                elif stat == 'var':
-                    var_proj = proj_diff.var(dim=0)
-                    pos_scores = var_proj * (mean_proj > 0).float()
-                    neg_scores = var_proj * (mean_proj < 0).float()
-                elif stat == 'std':
-                    std_proj = proj_diff.std(dim=0)
-                    pos_scores = std_proj * (mean_proj > 0).float()
-                    neg_scores = std_proj * (mean_proj < 0).float()
-                else:
-                    raise ValueError(f"Unknown stat: {stat}")
-                
-                n_half = r_actual // 2
-                _, pos_idx = torch.topk(pos_scores, n_half)
-                _, neg_idx = torch.topk(neg_scores, r_actual - n_half)
-                indices = torch.cat([pos_idx, neg_idx]).unique().sort()[0]
-                
-            elif source == 'cho':
-                # Select r/2 from cho + r/2 from rej (may overlap)
-                cho_scores = compute_scores(cho, norm, stat)
-                rej_scores = compute_scores(rej, norm, stat)
-                
-                n_half = r_actual // 2
-                _, cho_idx = torch.topk(cho_scores, n_half)
-                _, rej_idx = torch.topk(rej_scores, r_actual - n_half)
-                indices = torch.cat([cho_idx, rej_idx]).unique().sort()[0]
-                
-            elif source == 'chorej':
-                # Select r/3 from each: cho, rej, diff (may overlap)
-                cho_scores = compute_scores(cho, norm, stat)
-                rej_scores = compute_scores(rej, norm, stat)
-                diff_scores = compute_scores(diff, norm, stat)
-                
-                n_third = r_actual // 3
-                _, cho_idx = torch.topk(cho_scores, n_third)
-                _, rej_idx = torch.topk(rej_scores, n_third)
-                _, diff_idx = torch.topk(diff_scores, r_actual - 2*n_third)
-                indices = torch.cat([cho_idx, rej_idx, diff_idx]).unique().sort()[0]
-                
-            elif source == 'cho_only':
-                # All r from cho only
-                cho_scores = compute_scores(cho, norm, stat)
-                _, indices = torch.topk(cho_scores, r_actual)
-                indices = indices.sort()[0]
-                
-            elif source == 'rej_only':
-                # All r from rej only
-                rej_scores = compute_scores(rej, norm, stat)
-                _, indices = torch.topk(rej_scores, r_actual)
-                indices = indices.sort()[0]
-            else:
-                raise ValueError(f"Unknown source: {source}")
+            # Rank dimensions by variance
+            cho_var = proj_cho.var(dim=0)  # [rank]
+            rej_var = proj_rej.var(dim=0)
+            
+            # Select top r/2 from each (may overlap)
+            n_half = r_actual // 2
+            _, cho_idx = torch.topk(cho_var, n_half)
+            _, rej_idx = torch.topk(rej_var, r_actual - n_half)
+            indices = torch.cat([cho_idx, rej_idx]).unique().sort()[0]
             
             # Pad if we got fewer than r_actual due to overlaps
             if len(indices) < r_actual:
-                # Fill remaining slots with top unused dimensions by S magnitude
                 used_mask = torch.zeros(S_full.shape[0], dtype=torch.bool, device=device)
                 used_mask[indices] = True
                 remaining = torch.where(~used_mask)[0]
@@ -349,7 +259,6 @@ class InnerPiSSALayer(BaseTunerLayer):
                 _, extra_idx = torch.topk(S_full[remaining], min(n_needed, len(remaining)))
                 indices = torch.cat([indices, remaining[extra_idx]]).sort()[0]
             
-            # Truncate if we got more (shouldn't happen with unique())
             indices = indices[:r_actual]
             
             # Extract U, V, S
@@ -358,8 +267,7 @@ class InnerPiSSALayer(BaseTunerLayer):
             V = Vh.T  # [d_in, r_actual]
             S = S_full[indices]
             
-            logger.debug(f"Data-aware init: layer={layer_name}, mode={source}_{stat}_{norm}, "
-                        f"selected {len(indices)} indices")
+            logger.debug(f"Data-aware init: layer={layer_name}, selected {len(indices)} indices")
 
             # TODO try 1) mean, and S, 2) mean 3) var 4) var and nit. Oh and both without S norm
         else:
