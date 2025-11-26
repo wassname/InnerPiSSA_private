@@ -223,6 +223,7 @@ ablate-paper:
     just sweep-rank
     just sweep-s-norm
     just sweep-rotation-angle
+    just sweep-long-training
     just scratch
     
 
@@ -369,9 +370,31 @@ sweep-rotation-angle:
     S_MEAN_ABS=True uv run python nbs/train.py q4b-80gb --max_rotation_angle=0.3 --data_aware_init
     S_MEAN_ABS=True uv run python nbs/train.py q4b-80gb --max_rotation_angle=inf --data_aware_init
 
+# Sweep long training with low lr to test if unstable features stabilize
+sweep-long-training:
+    #!/bin/bash -x
+    export WANDB_RUN_GROUP="sweep-long-training-$(date +%Y%m%d-%H%M)"
+    BASE="uv run python nbs/train.py q4b-80gb"
+    
+    # Test if rot_u stabilizes with longer training at lower lr
+    for lr in 1e-4 3e-4 1e-3; do
+        for n_epochs in 20 40 60; do
+            echo "=== Long training: lr=$lr, epochs=$n_epochs ==="
+            $BASE --rot_u --r=8 --lr=$lr --n_epochs=$n_epochs
+        done
+    done
+    
+    # Test all "unstable" module types with conservative settings
+    for modules in "q_proj k_proj v_proj" "q_proj k_proj v_proj o_proj"; do
+        echo "=== Unstable modules: $modules ==="
+        $BASE --rot_u --modules $modules --r=8 --lr=3e-4 --n_epochs=60
+    done
 
 paper:
     wget https://github.com/quarto-dev/quarto-cli/releases/download/v1.8.26/quarto-1.8.26-linux-amd64.deb /tmp/quarto.deb
     sudo dpkg -i /tmp/quarto.deb
     quarto render paper.qmd --to html
     quarto render paper.qmd --to gfm
+
+sync:
+    rsync -avzr --progress vast1:/workspace/InnerPiSSA_private/outputs/baselines/ ./outputs/baselines/

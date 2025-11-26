@@ -1035,3 +1035,143 @@ Now if we can bypass the models trained preferences and aligned behavious we can
   late due to partying—might be a small part of a larger pattern of behavior, and covering it up could lead to more
   serious consequences down the line, such as losing credibility or facing disciplinary action. In the long run, honesty,
   even when difficult, builds integrity
+
+
+# 2025-11-25 20:56:05
+
+    ================================================================================
+  LONG RUNS (runtime > 1400s)
+  ================================================================================
+  Runtime: 4212s | metric:   84.9 | gap:   -0.6 | l8b-80gb
+  Runtime: 4205s | metric:  228.1 | gap:    0.1 | l8b-80gb
+  Runtime: 2855s | metric:   90.4 | gap:    0.6 | q4b-80gb --modules q_proj k_proj v_proj o_proj gate_proj up_
+  Runtime: 2568s | metric:  183.8 | gap:    0.6 | q14b-80gb
+  Runtime: 1852s | metric:  696.8 | gap:    1.0 | q4b-80gb --model_name=Qwen/Qwen3-4B-Base
+  Runtime: 1788s | metric:  146.6 | gap:   -0.6 | q4b-80gb --rot_u --modules q_proj k_proj v_proj o_proj gate_
+  Runtime: 1732s | metric:  166.1 | gap:   -0.3 | q4b-80gb --rot_u --modules q_proj k_proj v_proj o_proj gate_
+  Runtime: 1581s | metric:  582.8 | gap:    0.1 | l8b-80gb
+  Runtime: 1570s | metric:  112.9 | gap:    1.3 | q4b-80gb --modules q_proj k_proj v_proj o_proj gate_proj up_
+  Runtime: 1564s | metric:  137.6 | gap:    0.8 | q4b-80gb --modules q_proj k_proj v_proj o_proj gate_proj up_
+
+  ================================================================================
+  BEST NON-OVERFITTING RUNS (gap < 2, metric > 200)
+  ================================================================================
+  metric: 1587.0 | gap:    1.9 | q06b-24gb
+  metric: 1363.0 | gap:    1.9 | q06b-24gb
+  metric:  821.4 | gap:    1.8 | gemma270m-80gb
+  metric:  776.8 | gap:    1.1 | l8b-80gb
+  metric:  755.4 | gap:   -0.5 | q4b-80gb --no_mono --no_coh
+  metric:  696.8 | gap:    1.0 | q4b-80gb --model_name=Qwen/Qwen3-4B-Base
+  metric:  593.1 | gap:    0.3 | q4b-80gb
+  metric:  592.5 | gap:    1.1 | gemma270m-80gb
+  metric:  582.8 | gap:    0.1 | l8b-80gb
+  metric:  538.1 | gap:    1.2 | q4b-80gb --no_coh_adaptive
+  metric:  532.8 | gap:   -0.8 | q4b-80gb --loss_depths=0.7 --no_loss_use_V --loss_modules o_proj down_
+  metric:  514.2 | gap:    0.1 | q4b-80gb --no_mono --coh
+  metric:  467.7 | gap:   -7.7 | q4b-80gb --loss_depths=0.8 --no_loss_use_V --loss_modules o_proj down_
+  metric:  430.6 | gap:    0.5 | q4b-80gb --modules o_proj down_proj --experiment_name=layers residual 
+  metric:  424.6 | gap:    1.1 | q4b-80gb --loss_depths=0.99 --loss_use_V --loss_modules up_proj
+
+  ================================================================================
+  WORST OVERFITTING (gap > 15)
+  ================================================================================
+  gap:   61.6 | metric:  265.7 | q4b-80gb --max_samples=50 --experiment_name=data_50
+  gap:   43.1 | metric:  711.9 | q4b-80gb --loss_depths=0.4 --loss_use_V --loss_modules up_proj
+  gap:   36.0 | metric:  910.1 | q4b-80gb --loss_depths=0.99 --no_loss_use_V --loss_modules o_proj down
+  gap:   34.9 | metric:  709.1 | q4b-80gb --loss_depths=0.2 --loss_use_V --loss_modules up_proj
+  gap:   33.5 | metric:  927.2 | q4b-80gb --loss_depths=0.01 --no_loss_use_V --loss_modules o_proj down
+  gap:   32.9 | metric:   21.8 | q4b-80gb --loss_depths=0.6 --loss_use_V --loss_modules up_proj
+  gap:   31.9 | metric:  719.4 | q4b-80gb --wd=0.01
+  gap:   31.6 | metric:  306.6 | q4b-80gb --lr=1e-1
+  gap:   28.5 | metric:  185.1 | q4b-80gb --wd=10.0
+  gap:   28.2 | metric:  212.4 | q4b-80gb --loss_depths=0.3 --loss_use_V --loss_modules up_proj
+
+
+# 2025-11-26 08:14:50 Sweep analysis
+
+  ## Enhanced Summary - Key Insights
+
+  ### Task
+  Capture **symmetry and dose-dependence metrics** from training logs to understand whether InnerPiSSA's steering is reversible and whether `rot_u`/`scale_s=mult` achieve theoretical symmetry properties.
+
+  ### Critical Methodological Insights
+
+  1. **Sampling bias correction**: When comparing hyperparameters, must account for test frequency—can't just look at max/best runs because some configs were tested more often. Use **median or mean** with counts to avoid biased conclusions.
+
+  2. **Controlled comparisons only**: Can't compare baseline methods (prompting, RepE, S-steer) across all experiments because their scores are "poisoned" by being run in wildly different experimental contexts (crazy lr, broken configs, etc.). Need **controlled trials** where only one variable changes.
+
+  3. **`loss_use_V` requires different layer selection**:
+    - `loss_use_V=True` (V-projection): Use **later layers** (0.75-0.9 depth), MLP inputs like `up_proj`
+    - `loss_use_V=False` (U-projection): Use **intermediate layers** (0.5-0.7 depth), residual stream outputs like `o_proj`, `down_proj`
+    - Mixing these causes poor performance
+
+  ### Overfitting Analysis (Loss Gap Metric)
+
+  **`loss_gap = val_loss_total - train_loss_total`** reveals generalization:
+
+  From 193 runs:
+  - **Overall**: 52% good generalization (gap<3), 13% catastrophic overfitting (gap>10)
+  - **`loss_use_V=True` (default)**: mean_gap=4.1, **67% good runs** ✓
+  - **`loss_use_V=False`**: mean_gap=7.5, only 53% good runs
+  - **`rot_u`** (17 runs): mean_gap=3.9, only **41% good runs** (worse than default!)
+  - **`scale_s=mult`** (6 runs): mean_gap=5.7, only **33% good runs** (overfits significantly)
+  - **`rot_u+mult` combo**: 50% overfitting rate, but highest ceiling (metric=1476 when it works)
+
+  **Key insight**: Default config (loss_use_V=True, scale_s=add2, no rotations) is well-tuned for generalization, not just metric maximization.
+
+  ### Base Model Discovery (Critical for Alignment Research!)
+
+  **Qwen3-4B-Base** (3 runs) achieved metrics **1260-2421** with gaps **0.6-4.0**—far exceeding Instruct model's typical ~500-1000.
+
+  **Why this matters for "with vs against RLHF" preference work**:
+  - Base model has **no post-training preferences** → no internal resistance to our steering direction
+  - Instruct model has RLHF-learned preferences → we're fighting against existing alignment, causing:
+    - Lower steering effectiveness (have to overcome pre-existing biases)
+    - Potential coherence degradation (model's RLHF compass conflicts with our direction)
+    
+  **Implication**: This validates that InnerPiSSA can be used for **alignment debugging**—by training on base models, we can inject moral preferences without fighting post-training biases, revealing how the model *could* reason about morality without RLHF constraints interfering.
+
+  ### Direction Arbitrariness (Theoretical Validation)
+
+  **Observation**: The learned steering direction's sign is arbitrary—sometimes `coeff=+1` increases honesty, sometimes decreases it (requires auto-flip at end of training).
+
+  **Why this is fine**: Just like PCA steering, internal representation geometry may be opposite to output logit probabilities. The model learns "honesty vs dishonesty" as a direction, but which pole maps to which behavior is arbitrary until we measure it. This is why we:
+  1. Extract direction from contrastive pairs (honest-pos vs honest-neg prompts)
+  2. Auto-flip adapter sign if `coeff=+1` decreases the target metric
+  3. Use **symmetry metrics** to verify the direction is learnable regardless of sign
+
+  The asymmetry we see (e.g., -3.41 vs +5.56) suggests the learned transformation isn't perfectly reversible, not that the direction is wrong.
+
+  ### Unstable Configs + Long Training Discovery
+
+  **Intriguing result**: Enabling "unstable" features (rot_u, q_proj|k_proj|v_proj adapter targets) but training with:
+  - Very low lr (3e-4 instead of typical 4e-3)
+  - Long training (60 epochs instead of 10)
+  - Low rank (r=8 instead of 128)
+
+  This might stabilize rotations through slow gradient descent, avoiding the overfitting we see with standard hyperparams.
+
+  **Suggested sweep**: `just sweep-long-training`
+  ```bash
+  for lr in 1e-4 3e-4 1e-3; do
+    for n_epochs in 20 40 60; do
+      uv run python nbs/train.py q4b-80gb --rot_u --r=8 --lr=$lr --n_epochs=$n_epochs
+    done
+  done
+  ```
+
+  ### What We Added to Logs
+
+  1. **`loss_gap`**: Overfitting metric ✓ (working)
+  2. **`symmetry_mean`**: Coefficient reversibility (coeff=±1 symmetry)
+  3. **`dose_monotonic_frac`**: Monotonic dose-response
+  4. **`run_group`**: WANDB_RUN_GROUP for sweep organization
+  5. **Per-group CSVs**: Auto-tables per sweep (e.g., `sweep-rotation-angle-*.csv`)
+
+  ### Next Steps
+
+  Once wandb download completes with symmetry metrics:
+  1. **Validate Base model result**: Run 3+ seeds of Qwen3-4B-Base to confirm metric=2421 is reproducible
+  2. **Test long-training hypothesis**: Sweep low-lr + high-epochs for rot_u stability
+  3. **Analyze symmetry**: Does `max_rotation_angle` constraint improve symmetry_mean?
+  4. **Document "with vs against RLHF"**: This Base model finding belongs in the paper's alignment debugging narrative

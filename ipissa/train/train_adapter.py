@@ -1434,6 +1434,7 @@ def train_model(config: TrainingConfig):
     )
     logger.info("\n" + md_table)
     logger.info(f"{' '.join(sys.argv)}")
+    # TODO add train val gap here too
     logger.info(f"Main metric: 🥇{main_score:2.3f}")
 
     # Save results (folder already created during training)
