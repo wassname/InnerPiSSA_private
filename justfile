@@ -337,23 +337,33 @@ sweep-s-norm:
     export WANDB_RUN_GROUP="sweep-s-selection-$(date +%Y%m%d-%H%M)"
     BASE="uv run python nbs/train.py q4b-80gb --r=32 --n_epochs=15 --lr=2e-3 --eval_max_dilemmas=128 --data_aware_init"
     
-    # Test core hypothesis: cho (task-active) vs diff (task-relevant delta)
+    # Test core hypothesis: which dimensions are most useful for steering?
     # Format: {source}_{stat}_{norm}
+    # Sources:
+    #   diff: r/2 pos + r/2 neg from difference (cho - rej)
+    #   cho: r/2 from cho + r/2 from rej (may overlap - ensures both workspaces represented)
+    #   chorej: r/3 from cho + r/3 from rej + r/3 from diff (may overlap - maximal diversity)
+    #   cho_only: all r from cho only
+    #   rej_only: all r from rej only
     
-    echo "=== Source: cho (task-active workspace) ==="
-    $BASE --s_selection_mode=cho_var_raw --experiment_name="cho_var_raw"
-    $BASE --s_selection_mode=cho_var_snorm --experiment_name="cho_var_snorm"
-    $BASE --s_selection_mode=cho_std_raw --experiment_name="cho_std_raw"
-    $BASE --s_selection_mode=cho_mean_abs_raw --experiment_name="cho_mean_abs_raw"
-    
-    echo "=== Source: diff (task-relevant delta) ==="
+    echo "=== Source: diff (task-relevant delta, 5% signal) ==="
     $BASE --s_selection_mode=diff_var_raw --experiment_name="diff_var_raw"  # current default
     $BASE --s_selection_mode=diff_var_snorm --experiment_name="diff_var_snorm"
-    $BASE --s_selection_mode=diff_mean_abs_snorm --experiment_name="diff_mean_abs_snorm"  # original env var method
-    $BASE --s_selection_mode=diff_mean_abs_raw --experiment_name="diff_mean_abs_raw"
+    $BASE --s_selection_mode=diff_mean_abs_snorm --experiment_name="diff_mean_abs_snorm"  # original method
     
-    echo "=== Source: rej (rejected only - for comparison) ==="
-    $BASE --s_selection_mode=rej_var_raw --experiment_name="rej_var_raw"
+    echo "=== Source: cho (r/2 cho + r/2 rej, 95% signal) ==="
+    $BASE --s_selection_mode=cho_var_raw --experiment_name="cho_var_raw"
+    $BASE --s_selection_mode=cho_var_snorm --experiment_name="cho_var_snorm"
+    
+    echo "=== Source: chorej (r/3 each, maximal diversity) ==="
+    $BASE --s_selection_mode=chorej_var_raw --experiment_name="chorej_var_raw"
+    $BASE --s_selection_mode=chorej_var_snorm --experiment_name="chorej_var_snorm"
+    
+    echo "=== Source: cho_only (all r from chosen only) ==="
+    $BASE --s_selection_mode=cho_only_var_raw --experiment_name="cho_only_var_raw"
+    
+    echo "=== Source: rej_only (all r from rejected only) ==="
+    $BASE --s_selection_mode=rej_only_var_raw --experiment_name="rej_only_var_raw"
     
     echo "=== Sanity: random init (no data-aware) ==="
     $BASE --no_data_aware_init --experiment_name="random_init"

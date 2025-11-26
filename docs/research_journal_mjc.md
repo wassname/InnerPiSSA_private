@@ -1072,6 +1072,8 @@ Here's a clear table:
 
 ### What to do:
 Run `mean_abs+s_norm` vs `sanity_std_selection` with **3+ seeds** at the better hyperparams (r=32, lr=2e-3, 15ep) to see if 109 is reproducible or a fluke.
+
+
 # 2025-11-25 20:56:05
 
     ================================================================================
