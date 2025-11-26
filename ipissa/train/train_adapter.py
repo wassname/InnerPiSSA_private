@@ -106,7 +106,7 @@ def train_steer_vector(
 
     with torch.no_grad(), torch.amp.autocast("cuda", dtype=torch.bfloat16):
         train_strs = [s for ex in honest_dataset for s in (ex.positive, ex.negative)]
-        if config.loss_use_V:
+        if config.loss_use_V and config.adapter_type == "innerpissa":
             from repeng.extract import batched_get_hiddens
             layer_hiddens = batched_get_hiddens(
                 model, tokenizer, train_strs, loss_layer_indices, batch_size=config.bs//2

@@ -330,21 +330,32 @@ data-efficiency:
 quick:
     uv run python nbs/train.py --model_name=Qwen/Qwen3-0.6B --bs=64
 
-# Sweep S normalization variants
+# Sweep S-space selection strategies (cho vs rej vs diff, var vs mean_abs, snorm vs raw)
 sweep-s-norm:
     #!/bin/bash -x
-    export WANDB_RUN_GROUP="sweep-s-norm-$(date +%Y%m%d-%H%M)"
+    export WANDB_RUN_GROUP="sweep-s-selection-$(date +%Y%m%d-%H%M)"
     BASE="uv run python nbs/train.py q4b-80gb --r=32 --n_epochs=15 --lr=2e-3 --eval_max_dilemmas=128 --data_aware_init"
     
-    # Core comparison (4 runs)
-    S_MEAN_ABS=True $BASE --experiment_name="mean_abs_baseline"
-    S_MEAN_ABS=True S_NORM=True $BASE --experiment_name="mean_abs+s_norm"
-    S_MEAN_ABS=True S_USE_PROJ_MAG=True $BASE --experiment_name="mean_abs+proj_mag"
-    S_MEAN_ABS=True S_NORM=True S_USE_PROJ_MAG=True $BASE --experiment_name="all_three"
+    # Test core hypothesis: cho (task-active) vs diff (task-relevant delta)
+    # Format: {source}_{stat}_{norm}
     
-    # Sanity checks (if time permits - will run if prev 4 finish)
-    $BASE --no_data_aware_init --experiment_name="sanity_random_init"
-    $BASE --experiment_name="sanity_std_selection"  # original data-aware (no mean_abs)
+    echo "=== Source: cho (task-active workspace) ==="
+    $BASE --s_selection_mode=cho_var_raw --experiment_name="cho_var_raw"
+    $BASE --s_selection_mode=cho_var_snorm --experiment_name="cho_var_snorm"
+    $BASE --s_selection_mode=cho_std_raw --experiment_name="cho_std_raw"
+    $BASE --s_selection_mode=cho_mean_abs_raw --experiment_name="cho_mean_abs_raw"
+    
+    echo "=== Source: diff (task-relevant delta) ==="
+    $BASE --s_selection_mode=diff_var_raw --experiment_name="diff_var_raw"  # current default
+    $BASE --s_selection_mode=diff_var_snorm --experiment_name="diff_var_snorm"
+    $BASE --s_selection_mode=diff_mean_abs_snorm --experiment_name="diff_mean_abs_snorm"  # original env var method
+    $BASE --s_selection_mode=diff_mean_abs_raw --experiment_name="diff_mean_abs_raw"
+    
+    echo "=== Source: rej (rejected only - for comparison) ==="
+    $BASE --s_selection_mode=rej_var_raw --experiment_name="rej_var_raw"
+    
+    echo "=== Sanity: random init (no data-aware) ==="
+    $BASE --no_data_aware_init --experiment_name="random_init"
 
 # Sweep max rotation angle for output symmetry
 sweep-rotation-angle:

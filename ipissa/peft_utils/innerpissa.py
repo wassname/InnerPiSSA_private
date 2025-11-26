@@ -15,7 +15,6 @@ Changes are
 - modified SVD equation to stay in low rank space. Instead of `(U @ S @ V^T) @ x`, we do `(x @ V.T) @ S @ U.T`
 
 """
-import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -55,11 +54,14 @@ class InnerPiSSAConfig(PeftConfig):
     """
     # InnerPiSSA-specific parameters
     r: int = field(default=16, metadata={"help": "SVD rank for principal components"})
-    steering_vectors: Optional[Dict[str, torch.Tensor]] = field(
+    steering_vectors: Optional[Dict[str, Dict[str, torch.Tensor]]] = field(
         default=None,
         repr=False,  # Don't print in __repr__
-        metadata={"help": "Dict of {layer_name: dHS_tensor} for data-aware SVD selection. "
-                          "If provided, selects top-r singular vectors by |dHS @ U| instead of naive top-r by S."}
+        metadata={"help": "Dict of {layer_name: {'cho': tensor, 'rej': tensor}} for data-aware SVD selection."}
+    )
+    s_selection_mode: str = field(
+        default="diff_var_raw",
+        metadata={"help": "Format: '{source}_{stat}_{norm}' where source=cho|rej|diff, stat=mean_abs|var|std, norm=snorm|raw"}
     )
     
     def __post_init__(self):
@@ -72,6 +74,7 @@ class InnerPiSSAConfig(PeftConfig):
         d = super().to_dict()
         # Remove steering_vectors from serialization (it's only for init)
         d.pop('steering_vectors', None)
+        # Keep s_selection_mode for reproducibility
         return d
     rotate_u: bool = field(
         default=False,
@@ -221,50 +224,67 @@ class InnerPiSSALayer(BaseTunerLayer):
         # Data-aware component selection if steering vectors provided
         if steering_vectors is not None and layer_name in steering_vectors:
             """
-            Data-aware SVD initialization: select components by relevance to preference direction dHS
-            AND use projection magnitudes as singular values.
+            Data-aware SVD initialization with configurable selection strategy.
             
-            Approach:
-            1. Normalize dHS so projections are comparable across layers (prevents scale dependence)
-            2. Project dHS onto each singular vector: proj[i] = dHS @ U[:, i] gives alignment strength
-            3. Select top-r by |proj| (most aligned directions, regardless of sign)
-            4. Use proj magnitudes as S values: S_init[i] = |proj[i]| ∈ [0, 1]
+            Format: s_selection_mode = "{source}_{stat}_{norm}"
+            - source: cho (chosen only), rej (rejected only), diff (cho - rej)
+            - stat: mean_abs (signed mean with abs for bidirectional), var (variance), std (std dev)
+            - norm: snorm (divide by S to remove pretrained bias), raw (no normalization)
             
-            Rationale:
-            - Projection magnitudes capture "how much" each direction is used when dHS is decomposed in U basis
-            - Lower S values naturally downweight less-relevant directions during learning
-            - Avoids initializing with large S values for directions orthogonal to preference
-            
-            Tradeoff: proj magnitudes are in [0, 1] while original S can be 10-1000, so this
-            effectively initializes with smaller singular values. Training must learn to scale up
-            relevant directions. Empirically showed mixed results - model can learn rotations
-            regardless of initialization, but this provides a theoretically cleaner starting point.
+            Examples:
+            - "diff_mean_abs_snorm": difference signal, mean with sign-split, S-normalized (original)
+            - "cho_var_raw": chosen activations, variance, no S-normalization
+            - "cho_std_snorm": chosen activations, std dev, S-normalized
             """
-            dHS = steering_vectors[layer_name].to(device).float()  # [n_pairs, d_out]
+            # Parse mode
+            parts = kwargs.get('s_selection_mode', 'diff_var_raw').split('_')
+            if len(parts) == 3:
+                source, stat, norm = parts
+            else:
+                logger.warning(f"Invalid s_selection_mode format, using defaults: {kwargs.get('s_selection_mode')}")
+                source, stat, norm = 'diff', 'var', 'raw'
+            
+            # Select activation tensor
+            if source == 'cho':
+                dHS = steering_vectors[layer_name]['cho'].to(device).float()
+            elif source == 'rej':
+                dHS = steering_vectors[layer_name]['rej'].to(device).float()
+            elif source == 'diff':
+                cho = steering_vectors[layer_name]['cho'].to(device).float()
+                rej = steering_vectors[layer_name]['rej'].to(device).float()
+                dHS = cho - rej
+            else:
+                raise ValueError(f"Unknown source: {source}")
             
             # Project per-pair to preserve bidirectional signal
             proj_per_pair = dHS @ U_full  # [n_pairs, rank]
 
-            # Normalize by S to remove pretrained bias
-            if os.environ.get('S_NORM', False):
-                print("S_NORM active    ")
+            # Apply normalization
+            if norm == 'snorm':
                 proj_normalized = proj_per_pair / (S_full.clamp(min=1e-8))
-            else:
-                proj_normalized = proj_per_pair  # [n_pairs, rank]
+            else:  # raw
+                proj_normalized = proj_per_pair
 
-            mean_proj = proj_normalized.mean(dim=0)
-            std_proj = proj_normalized.std(dim=0)
-            # Split by sign
-            if os.environ.get('S_MEAN_ABS', False):
-                print("S_MEAN_ABS active    ")
+            # Compute statistics
+            if stat == 'mean_abs':
+                # Signed mean with bidirectional split
+                mean_proj = proj_normalized.mean(dim=0)
                 pos_scores = mean_proj.clamp(min=0)
                 neg_scores = (-mean_proj).clamp(min=0)
-            else:
+            elif stat == 'var':
+                # Variance (bidirectional by sign of mean)
+                mean_proj = proj_normalized.mean(dim=0)
+                var_proj = proj_normalized.var(dim=0)
+                pos_scores = var_proj * (mean_proj > 0).float()
+                neg_scores = var_proj * (mean_proj < 0).float()
+            elif stat == 'std':
+                # Std dev (bidirectional by sign of mean)
+                mean_proj = proj_normalized.mean(dim=0)
+                std_proj = proj_normalized.std(dim=0)
                 pos_scores = std_proj * (mean_proj > 0).float()
                 neg_scores = std_proj * (mean_proj < 0).float()
-
-            # pos_scores = mean_proj.clamp(min=0)
-            # neg_scores = (-mean_proj).clamp(min=0)
+            else:
+                raise ValueError(f"Unknown stat: {stat}")
 
             # Select half from each direction
             n_half = r_actual // 2
@@ -276,18 +296,9 @@ class InnerPiSSALayer(BaseTunerLayer):
             U = U_full[:, indices]  # [d_out, r_actual]
             Vh = Vh_full[indices, :]  # [r_actual, d_in]
             V = Vh.T  # [d_in, r_actual]
+            S = S_full[indices]  # Always use original S values
             
-            # # Use original S values (preserve component-specific energy)
-            if os.environ.get('S_USE_PROJ_MAG', False):
-                # HARMFULL IN ALL TESTS
-                print("S_USE_PROJ_MAG active    ")
-                # S initialization: Use projection magnitudes as S values
-                S_task = proj_normalized[:, indices].mean(0)  # [r]
-                original_energy = S_full[indices].norm()
-                S = S_task * (original_energy / S_task.norm())
-            else:
-                # S initialization: Use original S values (variance selection ensures bidirectionality)
-                S = S_full[indices]
+            logger.debug(f"Data-aware init: layer={layer_name}, mode={source}_{stat}_{norm}")
 
             # TODO try 1) mean, and S, 2) mean 3) var 4) var and nit. Oh and both without S norm
         else:
@@ -583,6 +594,7 @@ class InnerPiSSAModel(BaseTuner):
             "alpha": ipissa_config.alpha,
             "max_rotation_angle": ipissa_config.max_rotation_angle,
             "steering_vectors": ipissa_config.steering_vectors,
+            "s_selection_mode": ipissa_config.s_selection_mode,
             "layer_name": current_key,  # Pass layer name for steering vector lookup
             # "data_aware_init_use_magnitudes": ipissa_config.data_aware_init_use_magnitudes,
             # "steer_s": ipissa_config.steer_s,
