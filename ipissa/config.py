@@ -56,16 +56,30 @@ EVAL_BASELINE_MODELS = [
     "Qwen/Qwen3-4B-Instruct-2507",
     "Qwen/Qwen3-0.6B",
     "Qwen/Qwen3-4B-Base",
-    "google/gemma-3-4b-it",
-    "unsloth/Llama-3.1-8B-Instruct",
-    "google/gemma-3-12b-it",
-     "wassname/qwen-14B-codefourchan",
     "Qwen/Qwen3-14B",
+    "wassname/qwen-14B-codefourchan",
+
+    "google/gemma-3-270m-it",
+    "google/gemma-3-1b-it",
+    "google/gemma-3-4b-it",
+    "google/gemma-3-12b-it",
+
+    "unsloth/Llama-3.1-8B-Instruct",
     # "openai/gpt-oss-20b",
     # "google/gemma-3-27b-it",
     # "Qwen/Qwen3-32B",
     "unsloth/Llama-3.1-8B-Instruct"
     #"unsloth/Llama-3.3-70B-Instruct",
+
+    "allenai/Olmo-3-1025-7B",
+    "allenai/Olmo-3-7B-Instruct-SFT",
+    "allenai/Olmo-3-7B-Instruct-DPO",
+    "allenai/Olmo-3-7B-Instruct",
+
+    "allenai/Olmo-3-1025-7B",
+    "allenai/Olmo-3-7B-Think-SFT",
+    "allenai/Olmo-3-7B-Think-DPO",
+    "allenai/Olmo-3-7B-Think",
 ]
 
 @define(slots=False)

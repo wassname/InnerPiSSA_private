@@ -40,6 +40,11 @@ scratch:
         $BASElarger "$@"
     }
 
+    just eval-baselines
+    just sweep-train-stages
+    just sweep-rotation-angle
+    just sweep-s-norm
+
     uv run python nbs/train.py tiny --r=64 --rot_u --data_aware_init --wd=0 --no_coh --no_mono
     # incoherenet 90 with high lr
     uv run python nbs/train.py tiny --r=64 --rot_u --data_aware_init --wd=0 --no_coh
