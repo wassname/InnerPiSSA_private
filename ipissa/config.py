@@ -68,18 +68,19 @@ EVAL_BASELINE_MODELS = [
     # "openai/gpt-oss-20b",
     # "google/gemma-3-27b-it",
     # "Qwen/Qwen3-32B",
-    "unsloth/Llama-3.1-8B-Instruct"
     #"unsloth/Llama-3.3-70B-Instruct",
 
-    "allenai/Olmo-3-1025-7B",
-    "allenai/Olmo-3-7B-Instruct-SFT",
-    "allenai/Olmo-3-7B-Instruct-DPO",
-    "allenai/Olmo-3-7B-Instruct",
+    "allenai/Olmo-3-1025-7B",  # Base
+    "allenai/Olmo-3-7B-Instruct-SFT", # SFT
+    "allenai/Olmo-3-7B-Instruct-DPO", # RL
+    "allenai/Olmo-3-7B-Instruct", # RLVR
 
-    "allenai/Olmo-3-1025-7B",
-    "allenai/Olmo-3-7B-Think-SFT",
-    "allenai/Olmo-3-7B-Think-DPO",
-    "allenai/Olmo-3-7B-Think",
+    # "allenai/Olmo-3-1025-7B", # Base/think
+    "allenai/Olmo-3-7B-Think-SFT", # SFT/think
+    "allenai/Olmo-3-7B-Think-DPO", # RL/think
+    "allenai/Olmo-3-7B-Think", # RLVR/think
+
+    "allenai/Olmo-3-7B-RL-Zero-Mix", # RL mixed data
 ]
 
 @define(slots=False)

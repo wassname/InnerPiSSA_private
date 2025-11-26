@@ -41,6 +41,7 @@ scratch:
     }
 
     just eval-baselines
+    uv run python nbs/train.py q14b-80gb --model_name=wassname/qwen-14B-codefourchan
     just sweep-train-stages
     just sweep-rotation-angle
     just sweep-s-norm
@@ -426,7 +427,8 @@ sweep-train-stages:
     $BASE --model_name=allenai/Olmo-3-7B-Instruct-DPO
     $BASE --model_name=allenai/Olmo-3-7B-Instruct
 
-    $BASE --model_name=allenai/Olmo-3-1025-7B
+    # $BASE --model_name=allenai/Olmo-3-1025-7B
     $BASE --model_name=allenai/Olmo-3-7B-Think-SFT
     $BASE --model_name=allenai/Olmo-3-7B-Think-DPO
     $BASE --model_name=allenai/Olmo-3-7B-Think
+    $BASE --model_name=allenai/Olmo-3-7B-RL-Zero-Mix
