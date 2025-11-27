@@ -17,9 +17,14 @@ def mk_test_cng(**kwargs):
         **kwargs,
     )
     return config
+
 test_configs = [
     mk_test_cng(),
     mk_test_cng(loss_type="tanh_sym", coh_adaptive=False, scale_s="mult"),
+    # Test new pref_dir methods
+    mk_test_cng(pref_dir_method="top_diff"),
+    mk_test_cng(pref_dir_method="top_diff_snorm"),
+    mk_test_cng(pref_dir_method="adapter_dims_raw"),
 ]
 
 @pytest.mark.parametrize("config", test_configs)

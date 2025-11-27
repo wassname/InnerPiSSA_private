@@ -12,6 +12,18 @@ Use this file when an automated assistant needs repo context. For the story, plo
 - `ipissa/train/daily_dilemas.py`: evaluation harness for DailyDilemmas moral dilemmas; called from tests and the `just` targets.
 - `justfile`: shortest navigation of sweeps (`just train`, `just eval`, etc.). If you need to describe how to reproduce a result, reference the relevant target here.
 - `ipissa/train/inner_contrastive_loss.py` and `ipissa/peft_utils/innerpissa.py`: only two heavy logic files—summaries below.
+- `ipissa/peft_utils/layer_selection.py`: centralized layer selection and preference direction computation.
+
+## Key spaces and naming conventions
+
+**Activation spaces** (use capital S suffix to indicate S-space):
+- Raw activations: `hs` shape `[batch, seq, d_model]`
+- S-space (projected): `hsS` = `hs @ U` or `hs @ V`, shape `[batch, seq, r]`
+- Difference in S-space: `diffS` = `hsS_cho - hsS_rej`
+
+**Projection depends on `config.loss_use_V`**:
+- `loss_use_V=True`: project residual stream via V matrix (`hs @ V`)
+- `loss_use_V=False`: project module output via U matrix (`hs @ U`)
 
 ## Adapter fast reference (`ipissa/peft_utils/innerpissa.py`)
 
@@ -108,3 +120,8 @@ The pseudocode mirrors the exact tensor operations; the actual file also exposes
 - **"Coherence loss is a KL divergence penalty"**: No. It's a log-barrier (or hinge) on per-token NLL degradation. KL would allow trading off tokens; we prevent that gaming.
 - **"Flipping alpha changes the learned parameters"**: No. Same parameters, reversed transformation. That's the whole point of bidirectional steering.
 - **"This trains on complete prompt-response pairs"**: No. We use incomplete prefixes differing by one token to capture planning trajectories before output suppression.
+- **"Inputs to compute_pref_direction need projection"**: No. `hsS_cho/hsS_rej` are *already* in S-space when passed to `compute_pref_direction`. The projection (`@ U` or `@ V`) happens in `train_steer_vector()` before calling this function.
+
+## Testing philosophy
+
+Minimal integration tests preferred over unit tests. `tests/test_train.py` runs actual training with different configs - this catches most bugs. Only add unit tests for critical invariants (e.g., `test_layer_selection.py` prevents adapter/loss layer overlap bug).

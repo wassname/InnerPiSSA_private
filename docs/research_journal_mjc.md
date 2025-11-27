@@ -1598,18 +1598,6 @@ nbs/analyze_symmetry_metrics.ipynb
 
   Retrieving Notebook summary.
 
-  Good! Let me read the key outputs to see what we found: 
-
-  Read output of [](vscode-notebook-cell:/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/nbs/analyze_symmetry_metrics.ipynb#X33sZmlsZQ%3D%3D)
-
-  Excellent! Key finding: **Base model hypothesis REJECTED**. Let me check the other critical outputs: 
-
-  Read output of [](vscode-notebook-cell:/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/nbs/analyze_symmetry_metrics.ipynb#X40sZmlsZQ%3D%3D)
-
-  Read output of [](vscode-notebook-cell:/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/nbs/analyze_symmetry_metrics.ipynb#X30sZmlsZQ%3D%3D)
-
-  Read output of [](vscode-notebook-cell:/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/nbs/analyze_symmetry_metrics.ipynb#X35sZmlsZQ%3D%3D)
-
   Perfect! I can see the key results. Let me summarize the critical findings:
 
   ## Major Discoveries
@@ -1734,3 +1722,504 @@ All strategies project activations to S-space via `hidden_states @ U_full` befor
 **New default**: `s_selection_mode = "cho_var_snorm"`
 
 Updated `ipissa/config.py` and removed unnecessary sweep experiments (cho_only, rej_only, random_init).
+
+
+# 2025-11-27 08:12:21 Idea reframe loss
+
+- We could divide by S
+- we could use energy
+- We could concat multiple layers V matrix (cropping or padding to same size I guess)
+- try PCA in init
+
+  ## Context: Loss Function Investigation for InnerPiSSA
+
+  ### The Core Problem
+
+  We're investigating why certain approaches work for adapter init but not for loss (and vice versa).
+
+  **Init selection results:**
+  - `cho_var_snorm` (workspace variance, S-normalized): **167.85** ✓
+  - `diff_var_snorm` (cho-rej difference variance): **13.00** ✗
+
+  Yet the loss still uses the diff direction. Is this inconsistent?
+
+  ### Key Insight: The Diff IS De-biased
+
+  ```python
+  h_cho = [shared_processing] + [planning_for_honest]      # 95% + 5%
+  h_rej = [shared_processing] + [planning_for_dishonest]   # 95% + 5%
+  diff  = [planning_for_honest] - [planning_for_dishonest] # Just the 5%
+  ```
+
+  The shared processing (which carries S-bias from pretraining) cancels. The diff isolates the planning signal, which:
+  - Is small in magnitude (why diff_var fails for init — needs magnitude to rank)
+  - May live in low-S dimensions (orthogonal to pretrain priorities)
+  - Is the actual task-relevant information
+
+  ### The Asymmetry Between Adapter and Loss
+
+  **Adapter (forward pass):**
+  - Sees one sample at a time
+  - Transforms: `h_out = h_in @ (W_base + ΔW)`
+  - Doesn't know if this sample is cho or rej
+
+  **Loss:**
+  - Sees pairs
+  - Computes `(cho - rej) · pref_dir`
+  - Rewards separation along a fixed direction
+
+  This may explain why diff works for loss (direction matters, normalized anyway) but fails for init (magnitude needed to rank dimensions).
+
+  ### S-Space Projection Options
+
+  Given SVD: `W = U @ diag(S) @ V^T`
+
+  | Formula | What it does | Interpretation |
+  |---------|--------------|----------------|
+  | `h @ V` | Project to S-coordinates | Orthonormal rotation, all dims equal |
+  | `h @ V * S` | S-weighted coordinates | High-S dims amplified (pretrained importance) |
+  | `h @ V / S` | S-normalized coordinates | High-S dims suppressed (removes pretrain bias) |
+  | `h @ V * sqrt(S)` | Symmetric weighting | Mahalanobis-like, used in PiSSA |
+
+  **Current inconsistency:**
+  - Init uses `/ S` (snorm) — removes pretrain bias
+  - Loss uses `@ V` only — pretrain bias still present in gradients
+
+  **7. Fix layer offset bug**
+  ```python
+  if config.loss_use_V:
+      v_layer_idx = layer_idx + 1
+      V = Vw_full[layers[v_layer_idx].name]
+  ```
+
+  ### Priority Order
+
+  1. **Fix diagnostics** — need accurate data before changing loss
+  2. **Fix layer offset bug** — this is clearly wrong
+  3. **S-norm in loss** — if diff_S_corr confirms diff in low-S
+  4. **PCA direction** — if mean_pca_align confirms mean is noisy
+  5. **Multi-PC** — if pc1_explained stays < 50%
+  6. **Concat V matrices** — if single V capture is low
+
+
+# 2025-11-27 09:44:01
+
+
+your asking about V and U, ok so the point is to project to S space we can do that multiply ways. If a layer naturally takes in a hidden state we can use V, which is the input matrix
+
+if a layer outputs to hidden states and we have it's output projections we can project back to S using U... this is right, right?
+
+but if we take the hs from the residual stream, which we are in this notebook, then 1) later layers are better as we have accumulated edits from all previous layers
+2) layers around 80% are best because there are supression neurons after this that Ithink delete planning info, our sweeps confirm this
+3) V and inputs are better because it plausibly read all the info so it will be a richer transform. The output only has to make a tiny addition to the residual stream since it's residual connection, and it's a bit of a lottery if you get planning info or not
+
+
+  ## Two Different Jobs, Two Different Constraints
+
+  **Loss (oracle view):**
+  - Sees pairs, computes diff
+  - Can use full rank, any subspace
+  - Goal: **measure** separation along the "planning/thinking" direction
+  - Has access to ground truth (which is cho, which is rej)
+
+  **Adapter (online view):**
+  - Sees one sample at a time
+  - Constrained to low-rank, specific dims
+  - Goal: **modify** the model to increase separation
+  - No access to labels at inference
+
+  ## The Asymmetry is a Feature
+
+  The loss **should** be more powerful than the adapter. It's the oracle that tells the adapter which direction to push.
+
+  Your hypothesis: **Some subset of S-space corresponds to "planning/thinking" computations.**
+
+  If true, then:
+  - The **loss** should measure separation specifically in that subspace (even if it could measure in full space)
+  - The **adapter** learns to modify that subspace
+  - The loss guides the adapter toward the right transforms
+
+  ## So What Should the Loss Measure?
+
+  Not reconstruction. Not SNR across all dims. But:
+
+  > **Separation in the "planning subspace" of S-space**
+
+  The question becomes: **How do we identify the planning subspace?**
+
+  Options:
+  1. **PCA on diff** — finds directions of maximum cho/rej variation (task-specific)
+  2. **Specific S-dims** — maybe mid-S dims (not pretrain-dominated, not noise)
+  3. **Learned** — let the adapter's gradients tell us which dims matter
+
+  The current approach uses `mean(diff)` in full d-space. Your intuition is that projecting to a specific S-subspace first might give a **purer** signal of planning, filtering out:
+  - Pretrain reconstruction energy (high-S)
+  - Noise (low-S)
+  - Task-irrelevant variation
+
+  **The loss doesn't need to match the adapter's constraints — it needs to point the adapter in the right direction within the planning subspace.**
+
+  Does this capture it? The next question is: how do we identify/define that planning subspace empirically?
+
+
+Quesiton arethe V matrix I use for my loss the same? they all read from residual stream that doens't hcange much
+  === Alignment between pref_dirs from different V matrices ===
+                                        up_proj   up_proj   up_proj    q_proj    v_proj
+  layer[-3].mlp.up_proj                    1.00     -0.03     -0.03     -0.03     -0.05
+  layer[-4].mlp.up_proj                   -0.03      1.00     -0.05      0.03      0.02
+  layer[-5].mlp.up_proj                   -0.03     -0.05      1.00     -0.00     -0.02
+  layer[-4].self_attn.q_proj              -0.03      0.03     -0.00      1.00     -0.03
+  layer[-4].self_attn.v_proj              -0.05      0.02     -0.02     -0.03      1.00
+
+
+  ## Key Finding: V matrices give ORTHOGONAL pref_dirs!
+
+  All V matrices give:
+  - **Same SNR** (1.56) and **same sign agreement** (100%)
+  - **Same dims for 90%** (~450 dims)
+
+  But the **pref_dirs are nearly orthogonal** (cos ≈ 0 between all pairs)!
+
+  ### What this means:
+
+  Each V matrix rotates the diff into its own coordinate system. Since V is orthonormal:
+  - `diff @ V` preserves all information
+  - But the **specific dims** that carry signal are different for each V
+  - The pref_dir in each V-space points in a different d-space direction
+
+  ### Implication for multi-V approach:
+
+  If you use multiple V's:
+  1. Each V gives an **independent view** of the same underlying diff
+  2. Concatenating `[diff@V1, diff@V2, ...]` would give redundant info (same signal, different basis)
+  3. But using **PCA across multiple V projections** might find a **consensus direction**
+
+  ### Why PCA might help:
+
+  PCA on `diff @ V` finds directions of max variance **within that V's coordinate system**.
+  If different V's agree on a subspace, PCA would find it.
+
+
+
+# 2025-11-27 17:19:41 summary of losses
+
+  let me work through the spaces carefully.
+
+  ## SVD Review
+
+  For a weight matrix $W \in \mathbb{R}^{d_{out} \times d_{in}}$:
+
+  $$W = U \cdot \text{diag}(S) \cdot V^T$$
+
+  Where:
+  - $V \in \mathbb{R}^{d_{in} \times r}$ - input basis (columns are right singular vectors)
+  - $U \in \mathbb{R}^{d_{out} \times r}$ - output basis (columns are left singular vectors)
+  - $S \in \mathbb{R}^{r}$ - singular values
+
+  ## What is "S-space"?
+
+  S-space is the **r-dimensional coordinate space** where each axis corresponds to a singular vector. You can project INTO S-space from either side:
+
+  | From | Projection | Result | Interpretation |
+  |------|------------|--------|----------------|
+  | Input ($d_{in}$) | $x \cdot V$ | $[r]$ | Coordinates in input singular basis |
+  | Output ($d_{out}$) | $y \cdot U$ | $[r]$ | Coordinates in output singular basis |
+
+  Both give r-dimensional vectors, but they're **different** S-spaces (input vs output).
+
+  ## Your Code's Spaces
+
+  ### `loss_use_V=True` mode (residual stream → MLP input)
+
+  ```python
+  # V from SVD(mlp.up_proj) where up_proj: [d_model] → [d_mlp]
+  # V shape: [d_model, r] (input side of up_proj)
+
+  hs = hidden_states[layer_idx]  # [b, t, d_model] - residual stream
+  hsS = hs @ V                   # [b, t, r] - S-space (INPUT basis of up_proj)
+
+  # pref_dir computed the same way:
+  pref_dir = normalize((hs_cho @ V - hs_rej @ V).mean(dim=0))  # [r]
+
+  # Loss projection:
+  diff = hs_pi_pos - hs_pi_neg   # [b, t, d_model]
+  diffS = diff @ V               # [b, t, r] - in INPUT S-space
+  proj = diffS @ pref_dir        # [b, t] - scalar projection
+  ```
+
+  ✅ **This is consistent** - both `diffS` and `pref_dir` are in the same S-space (input basis of `up_proj`).
+
+  ### `loss_use_V=False` mode (module output → U projection)
+
+  ```python
+  # U from SVD(mlp.up_proj) where up_proj: [d_model] → [d_mlp]  
+  # U shape: [d_mlp, r] (output side of up_proj)
+
+  hs = module_output             # [b, t, d_mlp] - OUTPUT of up_proj
+  hsS = hs @ U                   # [b, t, r] - S-space (OUTPUT basis)
+
+  # pref_dir:
+  pref_dir = normalize((hs_cho @ U - hs_rej @ U).mean(dim=0))  # [r]
+
+  # Loss:
+  diff = hs_pi_pos - hs_pi_neg   # [b, t, d_mlp]
+  diffS = diff @ U               # [b, t, r] - in OUTPUT S-space
+  proj = diffS @ pref_dir        # [b, t]
+  ```
+
+  ✅ **Also consistent** - both in output S-space.
+
+  ## The Key Point
+
+  **S-space is just coordinates in the singular vector basis.** It's "the same" S-space only if you're consistent about which side (input V vs output U) you project from.
+
+  Your code IS consistent within each mode:
+  - `loss_use_V=True`: Everything uses `@ V` (input side)
+  - `loss_use_V=False`: Everything uses `@ U` (output side)
+
+  ## Pseudocode Summary
+
+  ```python
+  # loss_use_V=True (your current mode)
+  V = SVD(layer.mlp.up_proj).V          # [d_model, r]
+  hs = residual_stream[layer_idx]        # [b, t, d_model]
+
+  # Pref dir (computed once)
+  hsS_cho = hs_cho @ V                   # [n, r] input S-space
+  hsS_rej = hs_rej @ V  
+  pref_dir = normalize(mean(hsS_cho - hsS_rej))  # [r]
+
+  # Loss (every batch)
+  diffS = (hs_pi_pos - hs_pi_neg) @ V    # [b, t, r]
+  proj = diffS @ pref_dir                 # [b, t] scalar
+  loss = -softplus(aggregate(proj))
+  ```
+
+  **Is `hs @ V` really S-space?** Yes - it's the coordinates of `hs` expressed in the V basis (input singular vectors of up_proj).
+
+  **Is `diff @ U` S-space?** Yes, but it's the OUTPUT S-space. Only makes sense if `diff` is in $d_{out}$ (the MLP hidden dim), which it is when `loss_use_V=False`.
+
+
+# 2025-11-27 17:42:51 results of sweep on ways of cropping/projecting/transforming loss
+
+
+
+mean 305 293
+prompting 616
+
+top_s:
+    nbs/train.py q4b-80gb --pref_dir_method=top_s --pref_dir_k=8
+    Main metric: 🥇210.571
+
+    nbs/train.py q4b-24gb --pref_dir_method=top_s --pref_dir_k=8
+    Main metric: 🥇35.122
+    
+    nbs/train.py q4b-80gb --pref_dir_method=top_s --pref_dir_k=32
+    Main metric: 🥇876.947
+
+top_diff
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff --pref_dir_k=8
+    Main metric: 🥇60.228
+    
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff --pref_dir_k=16
+    Main metric: 🥇542.236
+
+    nbs/train.py q4b-24gb --pref_dir_method=top_diff --pref_dir_k=8
+    Main metric: 🥇223.010
+
+adapter_dims_raw
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims_raw --pref_dir_k=8
+    Main metric: 🥇225.988
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims_raw --pref_dir_k=16
+    Main metric: 🥇371.403
+
+    nbs/train.py q4b-24gb --pref_dir_method=adapter_dims_raw --pref_dir_k=8
+    Main metric: 🥇645.160
+
+adapter_dims:
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=8
+    Main metric: 🥇512.569
+
+    nbs/train.py q4b-24gb --pref_dir_method=adapter_dims --pref_dir_k=8
+    Main metric: 🥇649.132
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=16
+    Main metric: 🥇658.508
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=32
+    Main metric: 🥇531.715
+top_diff_snorm
+    q4b-80gb --pref_dir_method=top_diff_snorm --pref_dir_k=8
+    🥇292.159
+    
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff_snorm --pref_dir_k=16
+    Main metric: 🥇431.589
+
+pca2
+    q4b-80gb --pref_dir_method=pca2 --pref_dir_k=8
+    🥇821.888
+
+    nbs/train.py q4b-80gb --pref_dir_method=pca2 --pref_dir_k=16
+    Main metric: 🥇299.946
+
+pca4
+    q4b-80gb --pref_dir_method=pca4 --pref_dir_k=8
+    🥇291.131
+        
+    nbs/train.py q4b-80gb --pref_dir_method=pca4 --pref_dir_k=16
+    Main metric: 🥇528.697
+
+```py
+
+def compute_pref_direction(
+    hsS_cho: torch.Tensor,
+    hsS_rej: torch.Tensor,
+    method: str = "mean",
+    k: int = 64,
+    S: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    """Compute preference direction for loss using specified method.
+    
+    All inputs should already be in S-space (projected via U or V).
+    
+    Args:
+        hsS_cho: Chosen hidden states in S-space [n_samples, d]
+        hsS_rej: Rejected hidden states in S-space [n_samples, d]
+        method: Selection method:
+            - mean: simple mean difference
+            - pca1/pca2/pca4: top-k PCs of diff
+            - top_s: top-k dims by S magnitude
+            - top_diff: top-k dims by |diff| magnitude  
+            - top_diff_snorm: top-k dims by |diff|/S (upweights low-S high-diff)
+            - adapter_dims: r/2 cho + r/2 rej by variance/S
+            - adapter_dims_raw: r/2 cho + r/2 rej by variance (no S norm)
+        k: Number of dimensions for multi-dim methods
+        U: Unused, kept for API compatibility
+        S: Singular values [d] - needed for top_s, top_diff_snorm, adapter_dims*
+        V: Unused, kept for API compatibility
+        
+    Returns:
+        pref_dir: Preference direction [d], unit normalized
+    """
+    import torch.nn.functional as F
+    from sklearn.decomposition import PCA
+    
+    diffS = hsS_cho - hsS_rej  # [n_samples, d]
+    d = diffS.shape[1]
+    
+    if method == "mean":
+        # Simple mean difference - SNR=1.56, 100% sign agreement
+        pref_dir = diffS.mean(dim=0)  # [d]
+        return F.normalize(pref_dir, dim=0)
+    
+    elif method.startswith("pca"):
+        # PCA on diff: pca1 = first PC, pca2 = top-2, etc.
+        # Returns mean direction projected onto top-k PC subspace
+        n_components = int(method[3:]) if method[3:].isdigit() else 1
+        n_components = min(n_components, k, d, diffS.shape[0])
+        
+        # Truncate to top-k dims before PCA (full-rank V is rotation-invariant, 
+        # so PCA on diff == PCA on diff@V — meaningless without truncation)
+        k_trunc = min(k, d)
+        diff_trunc = diffS[:, :k_trunc]  # [n, k_trunc] - top singular dims
+        
+        diff_np = diff_trunc.cpu().numpy()
+        pca = PCA(n_components=n_components)
+        pca.fit(diff_np)
+        components_trunc = torch.from_numpy(pca.components_).to(diffS.device).float()  # [n_components, k_trunc]
+        
+        # Project mean diff onto PC subspace: sum of projections onto each PC
+        mean_diff_trunc = diff_trunc.mean(dim=0)  # [k_trunc]
+        # proj = sum_i (mean · pc_i) * pc_i = components.T @ (components @ mean)
+        coeffs = components_trunc @ mean_diff_trunc  # [n_components]
+        pref_dir_trunc = coeffs @ components_trunc  # [k_trunc]
+        
+        # Pad back to full dimension (zeros in truncated dims)
+        pref_dir = torch.zeros(d, device=diffS.device)
+        pref_dir[:k_trunc] = pref_dir_trunc
+        
+        return F.normalize(pref_dir, dim=0)  # [d]
+    
+    elif method == "top_s":
+        # Select top-k dims by S magnitude, apply to diff
+        if S is None:
+            raise ValueError("top_s method requires S (singular values)")
+        
+        k_actual = min(k, S.shape[0], d)
+        _, top_idx = torch.topk(S, k_actual)
+        
+        mean_diff = diffS.mean(dim=0)  # [d]
+        mask = torch.zeros(d, device=diffS.device)
+        mask[top_idx] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)  # [d]
+        
+        return pref_dir
+
+    elif method == "top_diff":
+        # Select top-k dims by diff magnitude (not S magnitude)
+        # Finds where cho/rej actually differ most, regardless of S
+        mean_diff = diffS.mean(dim=0)  # [d]
+        k_actual = min(k, d)
+        _, top_idx = torch.topk(mean_diff.abs(), k_actual)
+        
+        mask = torch.zeros(d, device=diffS.device)
+        mask[top_idx] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)
+        return pref_dir
+
+    elif method == "top_diff_snorm":
+        # Select top-k dims by S-normalized diff magnitude
+        # Upweights low-S dims where diff is strong relative to baseline
+        if S is None:
+            raise ValueError("top_diff_snorm requires S (singular values)")
+        
+        mean_diff = diffS.mean(dim=0)  # [d]
+        # Normalize by S to find dims with high diff relative to their typical magnitude
+        diff_snorm = mean_diff.abs() / S.clamp(min=1e-8)
+        k_actual = min(k, d)
+        _, top_idx = torch.topk(diff_snorm, k_actual)
+        
+        mask = torch.zeros(d, device=diffS.device)
+        mask[top_idx] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)
+        return pref_dir
+
+    elif method == "adapter_dims":
+        # Mean direction masked to adapter-selected dims (cho/rej variance, S-normalized)
+        if S is None:
+            raise ValueError("adapter_dims method requires S (singular values)")
+        
+        indices = select_adapter_dims(hsS_cho, hsS_rej, S, k, norm_S=True)
+        
+        mean_diff = diffS.mean(dim=0)  # [d]
+        mask = torch.zeros(d, device=diffS.device)
+        mask[indices] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)  # [d]
+        
+        return pref_dir
+
+    elif method == "adapter_dims_raw":
+        # Same as adapter_dims but without S normalization (raw variance ranking)
+        if S is None:
+            raise ValueError("adapter_dims_raw method requires S (singular values)")
+        
+        indices = select_adapter_dims(hsS_cho, hsS_rej, S, k, norm_S=False)
+        
+        mean_diff = diffS.mean(dim=0)  # [d]
+        mask = torch.zeros(d, device=diffS.device)
+        mask[indices] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)  # [d]
+        
+        return pref_dir
+
+    else:
+        raise ValueError(f"Unknown pref_dir_method: {method}")
+```
+
+TODO
+- eval propt
+- eval prompt + steer
+- report main_metric for each method (in fact all for all to wandb)
+- report symmetry or values for each coeff

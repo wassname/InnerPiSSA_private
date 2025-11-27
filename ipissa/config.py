@@ -93,7 +93,7 @@ class TrainingConfig:
     modules: List[str] = ["o_proj", "down_proj"]
     """Layers for adapter intervention. down_proj/o_proj = residual out, gate_proj/up_proj = mlp up, q/k/v_proj = attn"""
 
-    loss_modules: Optional[List[str]] = ['up_proj']
+    loss_modules: Optional[List[str]] = ['up_proj', 'q_proj', 'k_proj', 'v_proj']
     """Modules for loss extraction. If None, uses same as modules. Use up_proj for V-projection of residual stream."""
 
     loss_use_V: bool = True
@@ -103,7 +103,7 @@ class TrainingConfig:
     
     """
 
-    n_depths: int = 14
+    n_depths: int = 22
     """Intervene on this many layers, spaced evenly"""
 
     depth_start: float = 0.3
@@ -112,14 +112,14 @@ class TrainingConfig:
     depth_end: int = -3
     """Ignore last X layers"""
     
-    loss_depths: list[float] = [0.75]
+    loss_depths: list[float] = [0.80]
     """Layer(s) to compute loss on, as fraction of total depth (0.0=first, 1.0=last)""" 
 
     bs: int = 8
     """Batch size"""
 
-    n_epochs: int = 10
-    lr: float = 4e-3
+    n_epochs: int = 15
+    lr: float = 6e-3
     """Learning rate"""
 
     wd: float = 1e-5
@@ -145,7 +145,7 @@ class TrainingConfig:
 
     adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"
 
-    r: int = 128
+    r: int = 256
     """Adapter rank"""
 
     scale_s: Literal["add2", "add_tanh", "mult", "none"] = "add2"
@@ -177,6 +177,30 @@ class TrainingConfig:
     data_aware_init: bool = True
     """Use data-aware SVD component selection (cho_var_snorm strategy)"""
 
+    pref_dir_method: Literal["mean", "pca1", "pca2", "pca4", "top_s", "top_diff", "top_diff_snorm", "adapter_dims", "adapter_dims_raw"] = "adapter_dims"
+    """How to compute preference direction for loss:
+    - mean: mean(hs_cho - hs_rej), simple baseline (SNR=1.56)
+    - pca1: first PC of diff (captures most variance)
+    - pca2/pca4: top-k PCs, aggregated via norm
+    - top_s: top-k dims by S magnitude, apply to diff
+    - top_diff: top-k dims by |diff| magnitude
+    - top_diff_snorm: top-k dims by |diff|/S (upweights low-S high-diff dims)
+    - adapter_dims: r/2 from cho + r/2 from rej variance, S-normalized (BEST IN SWEEPS, most reliable)
+    - adapter_dims_raw: same as adapter_dims but without S normalization
+    """
+    
+    pref_dir_k: int = 64
+    """Number of dimensions for multi-dim pref_dir methods (pca2+, top_s, adapter_dims)"""
+
+    loss_snorm: bool = False
+    """S-normalize hidden states before projection in loss.
+    
+    Divides projected diff by S to equalize gradient contribution across dims.
+    Without this, high-S dims dominate gradients even though planning
+    signal may live in low-S dims. Use with --loss_modules to specify which
+    V matrices to use (already supports multiple modules).
+    """
+
     dataset_name: str = "honest"
     max_samples: Optional[int] = 800
     """Max training samples (None = all)"""
@@ -192,7 +216,7 @@ class TrainingConfig:
     ] = "raw"
     """Loss function: raw=direct projection, logsig_weak_up=saturates after margin, softpl_strong_up=strong upside+weak downside, tanh_sym=symmetric bounds, softpl_ratio=softplus on ratio, focal_balanced=down-weights easy, logsig_dpo=standard DPO"""
 
-    n_last_tokens: int = 8
+    n_last_tokens: int = 4
     """Extract from last N tokens of sequence"""
     
     coh_thresh: float = 0.5
@@ -360,7 +384,16 @@ default_configs = {
         "Qwen 4B on 80GB GPU (large batch training)",
         TrainingConfig(
             model_name="Qwen/Qwen3-4B-Instruct-2507",
-            bs=32,
+            bs=24,
+        ),
+    ),
+
+    "q4bv1-80gb": (
+        "Qwen 4B on 80GB GPU (large batch training)",
+        TrainingConfig(
+            # model_name="Qwen/Qwen3-4B-Instruct-2507",
+            model_name="Qwen/Qwen3-4B",
+            bs=24,
         ),
     ),
     # Qwen/Qwen3-8B
@@ -368,7 +401,7 @@ default_configs = {
         "Qwen 14B on 80GB GPU (production quality)",
         TrainingConfig(
             model_name="Qwen/Qwen3-14B",
-            bs=16,
+            bs=12,
         ),
     ),
     # Qwen/Qwen3-32B
@@ -376,14 +409,14 @@ default_configs = {
         "Qwen 32B on 80GB GPU (maximum size)",
         TrainingConfig(
             model_name="Qwen/Qwen3-32B",
-            bs=12,
+            bs=8,
         ),
     ),
     "l8b-80gb": (
         "Llama 3.1 8B on 80GB GPU",
         TrainingConfig(
             model_name="unsloth/Llama-3.1-8B-Instruct",
-            bs=6,
+            bs=24,
         ),
     ),
 
@@ -393,21 +426,21 @@ default_configs = {
         "Gemma 3 270m on 80GB GPU",
         TrainingConfig(
             model_name="google/gemma-3-270m-it",
-            bs=128,
+            bs=64,
         ),
     ),
     "gemma1b-80gb": (
         "Gemma 3 1B on 80GB GPU",
         TrainingConfig(
             model_name="google/gemma-3-1b-it",
-            bs=128,
+            bs=64,
         ),
     ),
     "gemma4b-80gb": (
         "Gemma 3 4B on 80GB GPU",
         TrainingConfig(
             model_name="google/gemma-3-4b-it",
-            bs=64,
+            bs=32,
         ),
     ),
     # add gemma4b
@@ -415,7 +448,7 @@ default_configs = {
         "Gemma 3 12B on 80GB GPU",
         TrainingConfig(
             model_name="google/gemma-3-12b-it",
-            bs=32,
+            bs=16,
         ),
     ),
 

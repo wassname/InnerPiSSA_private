@@ -265,16 +265,18 @@ def contrastive_steering_loss_with_ref(
         signed_proj_ref = (pref_dir_ref * pref_dir).sum(dim=-1, keepdim=True)
     
     # Aggregate: mean over components, then attention-weighted mean over tokens
-    # TODO: Multi-k aggregation via mean() is broken - opposite-signed directions cancel!
-    # Need to aggregate per-direction (e.g., norm, learned weights) for "like for like" comparison
+    # Multi-k aggregation: Use L2 norm across directions to preserve magnitude
+    # (mean would cancel opposite-signed projections)
     if signed_proj_pi.shape[-1] > 1:
-        raise NotImplementedError(
-            f"Multi-k preference directions (k={signed_proj_pi.shape[-1]}) not supported. "
-            "Mean aggregation collapses opposite-signed projections, biasing toward dominant axis. "
-            "Use k=1 or implement per-direction aggregation (norm/weights)."
-        )
-    proj_pi = reduce(signed_proj_pi, 'b t k -> b t', 'mean')
-    proj_ref = reduce(signed_proj_ref, 'b t k -> b t', 'mean')
+        # Norm aggregation: sqrt(sum(proj_i^2)) preserves total signal magnitude
+        # Preserve sign via sign of mean (captures dominant direction)
+        mean_sign_pi = signed_proj_pi.mean(dim=-1, keepdim=True).sign()
+        mean_sign_ref = signed_proj_ref.mean(dim=-1, keepdim=True).sign()
+        proj_pi = mean_sign_pi.squeeze(-1) * signed_proj_pi.norm(dim=-1)  # (b, t)
+        proj_ref = mean_sign_ref.squeeze(-1) * signed_proj_ref.norm(dim=-1)
+    else:
+        proj_pi = reduce(signed_proj_pi, 'b t k -> b t', 'mean')
+        proj_ref = reduce(signed_proj_ref, 'b t k -> b t', 'mean')
     
     # note this does SimPO style length norm
     proj_pi_agg = reduce_tokens_w_attention(proj_pi, hs_mask)  # (b,)
@@ -283,85 +285,6 @@ def contrastive_steering_loss_with_ref(
     ref_logp = ref_pos_label_logp.detach()
     pi_logp = pi_pos_label_logp
 
-    # def calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, clamp_scale=10, C=4.0):
-    #     """
-    #     Polynomial hinge loss for coherence constraint (generalized SVM margin).
-        
-    #     Standard hinge: ℓ(y) = max(0, 1 - t·y)
-    #     Squared hinge: ℓ(y) = max(0, 1 - t·y)²
-    #     This: ℓ(logp) = [C · max(0, logp_deg - margin)]^p
-        
-    #     Design:
-    #     - Zero loss inside margin (hard constraint boundary)
-    #     - Polynomial growth outside (smooth gradients, no cliff)
-    #     - Per-token (prevents reward hacking via high-probability tokens)
-        
-    #     Why C scaling?
-    #     In [0,1] nat range, x² < x, so raw squared hinge is too weak.
-    #     C amplifies violations before exponentiation: (0.5 · C)^p dominates.
-        
-    #     Args:
-    #         ref_logp, pi_logp: Per-token log probabilities (b, t)
-    #         loss_mask: Per-token mask (b, t)
-    #         boundary_order: Polynomial degree (2 = squared hinge, 1 = standard hinge)
-    #         clamp_scale: Optional outlier suppression via tanh
-    #         C: Regularization strength (scales violations before exponentiation)
-        
-    #     Returns:
-    #         loss: Scalar penalty (b,) aggregated over tokens
-    #         logp_deg: Per-token degradation (b, t) for monitoring
-    #     """
-    #     logp_deg = ref_logp - pi_logp  # Positive = pi worse than ref
-    #     if clamp_scale is not None:
-    #         # We clamp before token aggregation to prevent extreme outliers from dominating
-    #         logp_deg = softclamp_tanh(logp_deg, clamp_scale)
-        
-    #     violation = F.relu(logp_deg - coherence_threshold)
-    #     penalty_per_token = (violation * C) ** boundary_order
-    #     loss = reduce_tokens_w_attention(penalty_per_token, loss_mask) # [b]
-    #     return loss, logp_deg
-
-
-    # def calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, 
-    #                         threshold=coherence_threshold, C=4.0, transition_point=0.5, clamp_scale=None):
-    #     """
-    #     Smooth hinge loss with Huber-like transition.
-
-    #     Design:
-    #     - Zero loss inside margin (hard constraint boundary)
-    #     - Polynomial growth outside (smooth gradients, no cliff)
-    #     - Per-token (prevents reward hacking via high-probability tokens)
-        
-    #     Args:
-    #         transition_point: Where to switch from polynomial to linear (in violation units)
-    #                         e.g., 0.5 means switch at 0.5 nats above threshold
-    #     """
-    #     degradation = ref_logp - pi_logp
-    #     violation = F.relu(degradation - threshold)
-        
-    #     # Calculate the transition point and ensure continuity
-    #     b = boundary_order
-    #     v_t = transition_point  # violation value at transition
-        
-    #     # At transition, both functions and derivatives must match
-    #     # Quadratic at v_t: f(v_t) = (1/b) * (C * v_t)^b
-    #     # Linear: f(v) = a * v + c, with f'(v) = a
-        
-    #     # Match derivatives: b * C^b * v_t^(b-1) = a
-    #     linear_slope = b * (C ** b) * (v_t ** (b-1))
-        
-    #     # Match values: (1/b) * (C * v_t)^b = linear_slope * v_t + intercept
-    #     quadratic_value = (1/b) * ((C * v_t) ** b)
-    #     linear_intercept = quadratic_value - linear_slope * v_t
-        
-    #     small_violation = violation < v_t
-    #     penalty = torch.where(
-    #         small_violation,
-    #         (1/b) * ((violation * C) ** b),  # Polynomial growth
-    #         linear_slope * violation + linear_intercept  # Linear growth
-    #     )
-        
-    #     return reduce_tokens_w_attention(penalty, loss_mask), degradation
 
     def calc_coherence_loss(ref_logp, pi_logp, loss_mask, threshold=coherence_threshold, scale=coherence_scalar, clamp_scale=None, C=4, boundary_order=2):
         """
@@ -483,57 +406,6 @@ def contrastive_steering_loss_with_ref(
         "separation_norm": pref_dir_pi.norm(p=2, dim=-1).mean(),
         "delta_logp_change": delta_logp_change,  # For monotonic ordering (b,) or None
     }
-
-
-# def contrastive_steering_loss_with_ref_uspace(
-#     U_pca: Float[Tensor, "k d"],  # Frozen PCA directions in S-space
-#     U_svd: Float[Tensor, "d r"],  # Layer's output singular vectors
-#     hs_ref_cho: HS,
-#     hs_ref_rej: HS,
-#     hs_pi_pos: HS,
-#     hs_pi_neg: HS,
-#     ref_pos_label_logp: Float[Tensor, "b t"],
-#     pi_pos_label_logp: Float[Tensor, "b t"],
-#     cho_mask: Mask,
-#     p=2,
-#     eps=1e-6,
-#     coef=1.0,
-#     coherence_threshold=0.5,
-#     boundary_order=2,
-#     last_n_tokens: int = None,  # Focus loss on last N tokens
-#     # top_k_directions: int = 2,
-# ):
-#     """
-#     Modified contrastive loss in layer's S-space (singular vector basis).
-    
-#     1. Project all HS to S-space: hs_u = hs @ U_svd  (d -> r)
-#     2. Compute differences in S-space
-#     3. Project onto frozen PCA direction (extracted in S-space)
-#     """
-#     # Project to S-space (r << d typically)
-#     hs_ref_cho_u = hs_ref_cho @ U_svd
-#     hs_ref_rej_u = hs_ref_rej @ U_svd
-#     hs_pi_pos_u = hs_pi_pos @ U_svd
-#     hs_pi_neg_u = hs_pi_neg @ U_svd
-    
-#     # Now proceed as before, but in S-space
-#     return contrastive_steering_loss_with_ref(
-#         pref_dir=U_pca,
-#         hs_ref_cho=hs_ref_cho_u,
-#         hs_ref_rej=hs_ref_rej_u,
-#         hs_pi_pos=hs_pi_pos_u,
-#         hs_pi_neg=hs_pi_neg_u,
-#         ref_pos_label_logp=ref_pos_label_logp,
-#         pi_pos_label_logp=pi_pos_label_logp,
-#         cho_mask=cho_mask,
-#         p=p,
-#         eps=eps,
-#         coef=coef,
-#         coherence_threshold=coherence_threshold,
-#         boundary_order=boundary_order,
-#         last_n_tokens=last_n_tokens,
-#         # top_k_directions=top_k_directions,
-#     )
 
 
 def monotonic_ordering_loss(
