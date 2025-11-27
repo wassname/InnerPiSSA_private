@@ -108,10 +108,12 @@ def train_steer_vector(
         train_strs = [s for ex in honest_dataset for s in (ex.positive, ex.negative)]
         if config.loss_use_V and config.adapter_type == "innerpissa":
             from repeng.extract import batched_get_hiddens
+            # Get hidden states at layer BEFORE loss layer (residual stream input to the layer)
+            # loss_use_V projects residual stream through V matrix of up_proj
+            hidden_layer_indices = [max(0, L - 1) for L in loss_layer_indices]
             layer_hiddens = batched_get_hiddens(
-                model, tokenizer, train_strs, loss_layer_indices, batch_size=config.bs//2
+                model, tokenizer, train_strs, hidden_layer_indices, batch_size=config.bs//2
             )
-            # FIXME collect hidden states not acts. I'd use the repeng library function rather than my version
         else:
             last_act, logprobs = _collect_activations_only(
                 model, tokenizer, train_strs, loss_layers, batch_size=config.bs//2
@@ -142,27 +144,27 @@ def train_steer_vector(
             # 
             # S-weighting is for reconstruction (steering), not measurement (loss)
             if config.loss_use_V:
-                hs_cpu = layer_hiddens[layer_idx]
+                # Look up hidden states from layer before (residual stream input to loss layer)
+                hs_layer_idx = max(0, layer_idx - 1)
+                hs_cpu = layer_hiddens[hs_layer_idx]
                 # Convert numpy to torch if needed
                 if isinstance(hs_cpu, np.ndarray):
                     hs_cpu = torch.from_numpy(hs_cpu)
-                hs_s = hs_cpu @ V  # [n, d_in] @ [d_in, d] -> [n, d] full S-space
+                hs_S = hs_cpu @ V  # [n, d_in] @ [d_in, d] -> [n, d] full S-space
             else:
                 hs_cpu = last_act[layer].float()
-                hs_s = hs_cpu @ U  # [n, d_out] @ [d_out, d] -> [n, d] full S-space
-            h_cho_s = hs_s[::2]
-            h_rej_s = hs_s[1::2]
+                hs_S = hs_cpu @ U  # [n, d_out] @ [d_out, d] -> [n, d] full S-space
+            h_cho_S = hs_S[::2]
+            h_rej_S = hs_S[1::2]
             
             # Compute preference direction using configured method
             delta_s_loss = compute_pref_direction(
-                h_cho_s, h_rej_s,
+                h_cho_S, h_rej_S,
                 method=config.pref_dir_method,
                 k=config.pref_dir_k,
-                U=U if not config.loss_use_V else None,
                 S=S,
-                V=V if config.loss_use_V else None,
             )
-            # Shape: [d] for mean/pca1, [k, d] for multi-dim methods
+            # Shape:  [k, d] for multi-dim methods
 
             # Store preference direction (will be projected in loss)
             loss_dirs[layer] = delta_s_loss
@@ -204,6 +206,7 @@ def compute_batch_loss(
     loss_layers,
     loss_layer_indices,
     Uw_full,
+    Sw_full,
     Vw_full,
     config: TrainingConfig,
     step: int = 0,
@@ -219,6 +222,7 @@ def compute_batch_loss(
         loss_layers: Layer names to compute loss on
         loss_layer_indices: Layer indices for extracting hidden_states
         Uw_full: Full U matrices for projection (output space)
+        Sw_full: Full S matrices for S-normalization (singular values)
         Vw_full: Full V matrices for projection (input space)
         config: Training config
         step: Current training step (for info logging)
@@ -236,6 +240,8 @@ def compute_batch_loss(
     # Move projection matrices to device if they exist (InnerPiSSA only)
     if Uw_full is not None:
         Uw_full = {k: v.to(model.device).float() for k, v in Uw_full.items()}
+    if Sw_full is not None:
+        Sw_full = {k: v.to(model.device).float() for k, v in Sw_full.items()}
     if Vw_full is not None:
         Vw_full = {k: v.to(model.device).float() for k, v in Vw_full.items()}
 
@@ -331,6 +337,19 @@ def compute_batch_loss(
                 hs_pi_neg_proj = hs_pi_neg @ proj_matrix
                 hs_ref_cho_proj = hs_ref_cho @ proj_matrix
                 hs_ref_rej_proj = hs_ref_rej @ proj_matrix
+                
+                # S-normalization: divide by S to equalize gradient contribution across dims
+                # Without this, high-S dims dominate gradients even though planning signal
+                # may live in low-S dims. Especially helps backward (anti) direction.
+                if config.loss_snorm and Sw_full is not None:
+                    S = Sw_full[lk]  # [r]
+                    # Use median as floor to avoid amplifying tiny dims (numerical stability)
+                    s_floor = S.median() * 0.1
+                    S_safe = S.clamp(min=s_floor)
+                    hs_pi_pos_proj = hs_pi_pos_proj / S_safe
+                    hs_pi_neg_proj = hs_pi_neg_proj / S_safe
+                    hs_ref_cho_proj = hs_ref_cho_proj / S_safe
+                    hs_ref_rej_proj = hs_ref_rej_proj / S_safe
             else:
                 # LoRA/DoRA: No projection
                 hs_pi_pos_proj = hs_pi_pos
@@ -563,6 +582,7 @@ def compute_validation_loss(
     loss_layers,
     loss_layer_indices,
     Uw_full,
+    Sw_full,
     Vw_full,
     config: TrainingConfig,
 ):
@@ -580,7 +600,7 @@ def compute_validation_loss(
 
         # Get loss with detailed info (but no gradients)
         batch_loss, batch_infos = compute_batch_loss(
-            model, batch, dirs_loss, loss_layers, loss_layer_indices, Uw_full, Vw_full, config
+            model, batch, dirs_loss, loss_layers, loss_layer_indices, Uw_full, Sw_full, Vw_full, config
         )
 
         total_loss += batch_loss.item()
@@ -617,6 +637,7 @@ def train_epoch(
     loss_layers,
     loss_layer_indices,
     Uw_full,
+    Sw_full,
     Vw_full,
     opt,
     scheduler,
@@ -647,6 +668,7 @@ def train_epoch(
             loss_layers,
             loss_layer_indices,
             Uw_full,
+            Sw_full,
             Vw_full,
             config,
             step=step,
@@ -698,7 +720,7 @@ def train_epoch(
             # Validation check (independent of logging frequency)
             if val_dataloader is not None and step % val_n_steps == 0 and step > 0:
                 val_loss, val_components, val_df_coef, val_coef_metrics = compute_validation_loss(
-                    model, val_dataloader, cv_dirs_loss, loss_layers, loss_layer_indices, Uw_full, Vw_full, config
+                    model, val_dataloader, cv_dirs_loss, loss_layers, loss_layer_indices, Uw_full, Sw_full, Vw_full, config
                 )
 
                 # Log validation metrics
@@ -1365,6 +1387,7 @@ def train_model(config: TrainingConfig):
             loss_layers,
             loss_layer_indices,
             Uw_full,
+            Sw_full,
             Vw_full,
             opt,
             scheduler,

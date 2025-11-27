@@ -1598,18 +1598,6 @@ nbs/analyze_symmetry_metrics.ipynb
 
   Retrieving Notebook summary.
 
-  Good! Let me read the key outputs to see what we found: 
-
-  Read output of [](vscode-notebook-cell:/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/nbs/analyze_symmetry_metrics.ipynb#X33sZmlsZQ%3D%3D)
-
-  Excellent! Key finding: **Base model hypothesis REJECTED**. Let me check the other critical outputs: 
-
-  Read output of [](vscode-notebook-cell:/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/nbs/analyze_symmetry_metrics.ipynb#X40sZmlsZQ%3D%3D)
-
-  Read output of [](vscode-notebook-cell:/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/nbs/analyze_symmetry_metrics.ipynb#X30sZmlsZQ%3D%3D)
-
-  Read output of [](vscode-notebook-cell:/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/nbs/analyze_symmetry_metrics.ipynb#X35sZmlsZQ%3D%3D)
-
   Perfect! I can see the key results. Let me summarize the critical findings:
 
   ## Major Discoveries
@@ -1736,7 +1724,6 @@ All strategies project activations to S-space via `hidden_states @ U_full` befor
 Updated `ipissa/config.py` and removed unnecessary sweep experiments (cho_only, rej_only, random_init).
 
 
-
 # 2025-11-27 08:12:21 Idea reframe loss
 
 - We could divide by S
@@ -1797,74 +1784,6 @@ Updated `ipissa/config.py` and removed unnecessary sweep experiments (cho_only, 
   **Current inconsistency:**
   - Init uses `/ S` (snorm) — removes pretrain bias
   - Loss uses `@ V` only — pretrain bias still present in gradients
-
-  ### Layer Offset Bug
-
-  For `loss_use_V`, we project residual stream through V:
-
-  ```python
-  hidden_states[i] = residual stream AFTER layer i = INPUT to layer i+1
-  ```
-
-  **Current (wrong):**
-  ```python
-  hs[layer_idx] @ V_from_layer[layer_idx]  # V already processed this hs
-  ```
-
-  **Correct:**
-  ```python
-  hs[layer_idx] @ V_from_layer[layer_idx + 1]  # V reads this hs as input
-  ```
-
-  So:
-  - `hs[-3] @ SVD(layers[-2].mlp.up).V` ✓
-  - `hs[-3] @ SVD(layers[-3].mlp.up).V` ✗
-
-
-  ### Experiments to Run
-
-  **1. Fix diagnostics and re-run**
-  - Use last token only (not mean over sequence)
-  - Properly pair cho/rej samples
-
-  **2. S-normalization in loss**
-  ```python
-  # Match init's snorm logic
-  hs_proj = (hs @ V) / S.clamp(min=1e-6)
-  ```
-
-  **3. PCA direction instead of mean**
-  ```python
-  diff_proj = cho_proj - rej_proj  # [n, r]
-  diff_centered = diff_proj - diff_proj.mean(dim=0)
-  _, S_pca, V_pca = torch.svd(diff_centered)
-  pref_dir = V_pca[:, 0]  # Top PC, not mean
-  ```
-
-  **4. Multi-PC loss** (if PC1 < 50%)
-  ```python
-  k = 3
-  pref_dirs = V_pca[:, :k]  # [r, k]
-  projections = diff_proj @ pref_dirs  # [b, t, k]
-  loss = -projections.norm(dim=-1).mean()
-  ```
-
-  **5. Concat multiple V matrices**
-  ```python
-  # Capture richer subspace of what model reads at this depth
-  V_up = get_V("layers.25.mlp.up_proj")    # [d, r]
-  V_gate = get_V("layers.25.mlp.gate_proj") # [d, r]
-  V_concat = torch.cat([V_up, V_gate], dim=1)  # [d, 2r]
-  # May need cropping/padding if different shapes
-  ```
-
-  **6. Energy-based loss** (alternative to directional)
-  ```python
-  cho_energy = (hs_cho_proj ** 2).sum(dim=-1)
-  rej_energy = (hs_rej_proj ** 2).sum(dim=-1)
-  loss = -F.softplus(cho_energy - rej_energy).mean()
-  ```
-  Note: Preliminary diagnostics suggest this won't work (mag_ratio ≈ 1).
 
   **7. Fix layer offset bug**
   ```python
@@ -1980,46 +1899,324 @@ Quesiton arethe V matrix I use for my loss the same? they all read from residual
   PCA on `diff @ V` finds directions of max variance **within that V's coordinate system**.
   If different V's agree on a subspace, PCA would find it.
 
-BUG: Exactly right! Full V is just rotation (preserves everything). Truncation actually **selects** a subspace.
 
-  Let me update the plan:
 
-  ## Updated Plan: `pref_dir_method` Config Options
+# 2025-11-27 17:19:41 summary of losses
 
-  | Method | Description | What it tests |
-  |--------|-------------|---------------|
-  | `"mean"` | Current: `mean(diff @ V)` full rank | Baseline |
-  | `"pca1"` | PC1 of `diff @ V` | Max variance direction |
-  | `"pca4"` | PC1-4 of `diff @ V` | Multi-direction |
-  | `"top_s"` | Truncate V to top-r S-dims | Pretrain importance subspace |
-  | `"adapter_dims"` | Truncate V to adapter's selected dims (cho_var_snorm) | Match adapter's learnable subspace |
+  let me work through the spaces carefully.
 
-  ### Key Implementation Details
+  ## SVD Review
 
-  1. **Move dim selection to shared function** in layer_selection.py:
-    ```python
-    def select_adapter_dims(h_cho, V, S, k, method="cho_var_snorm"):
-        """Select which S-dims to use. Shared by init and loss."""
-    ```
+  For a weight matrix $W \in \mathbb{R}^{d_{out} \times d_{in}}$:
 
-  2. **Import and reuse** in both:
-    - `setup_adapter()` for init dim selection
-    - `train_steer_vector()` for loss dim selection
+  $$W = U \cdot \text{diag}(S) \cdot V^T$$
 
-  3. **For `"adapter_dims"` method**: 
-    - Compute same cho_var_snorm selection as adapter init
-    - Truncate V to those dims before computing pref_dir
-    - This aligns loss with what adapter can actually modify
+  Where:
+  - $V \in \mathbb{R}^{d_{in} \times r}$ - input basis (columns are right singular vectors)
+  - $U \in \mathbb{R}^{d_{out} \times r}$ - output basis (columns are left singular vectors)
+  - $S \in \mathbb{R}^{r}$ - singular values
 
-  ### Steps
+  ## What is "S-space"?
 
-  1. **Extract `select_adapter_dims()`** from current init code to `layer_selection.py`
-  2. **Add config options** `pref_dir_method` and `pref_dir_k` to `config.py`
-  3. **Update `train_steer_vector()`** to dispatch on method, using shared selection function
-  4. **Update loss** to handle truncated pref_dir (may need shape adjustments)
+  S-space is the **r-dimensional coordinate space** where each axis corresponds to a singular vector. You can project INTO S-space from either side:
 
-  Want me to start implementing? I'd begin with extracting the dim selection function since that's foundational.
+  | From | Projection | Result | Interpretation |
+  |------|------------|--------|----------------|
+  | Input ($d_{in}$) | $x \cdot V$ | $[r]$ | Coordinates in input singular basis |
+  | Output ($d_{out}$) | $y \cdot U$ | $[r]$ | Coordinates in output singular basis |
 
+  Both give r-dimensional vectors, but they're **different** S-spaces (input vs output).
+
+  ## Your Code's Spaces
+
+  ### `loss_use_V=True` mode (residual stream → MLP input)
+
+  ```python
+  # V from SVD(mlp.up_proj) where up_proj: [d_model] → [d_mlp]
+  # V shape: [d_model, r] (input side of up_proj)
+
+  hs = hidden_states[layer_idx]  # [b, t, d_model] - residual stream
+  hsS = hs @ V                   # [b, t, r] - S-space (INPUT basis of up_proj)
+
+  # pref_dir computed the same way:
+  pref_dir = normalize((hs_cho @ V - hs_rej @ V).mean(dim=0))  # [r]
+
+  # Loss projection:
+  diff = hs_pi_pos - hs_pi_neg   # [b, t, d_model]
+  diffS = diff @ V               # [b, t, r] - in INPUT S-space
+  proj = diffS @ pref_dir        # [b, t] - scalar projection
+  ```
+
+  ✅ **This is consistent** - both `diffS` and `pref_dir` are in the same S-space (input basis of `up_proj`).
+
+  ### `loss_use_V=False` mode (module output → U projection)
+
+  ```python
+  # U from SVD(mlp.up_proj) where up_proj: [d_model] → [d_mlp]  
+  # U shape: [d_mlp, r] (output side of up_proj)
+
+  hs = module_output             # [b, t, d_mlp] - OUTPUT of up_proj
+  hsS = hs @ U                   # [b, t, r] - S-space (OUTPUT basis)
+
+  # pref_dir:
+  pref_dir = normalize((hs_cho @ U - hs_rej @ U).mean(dim=0))  # [r]
+
+  # Loss:
+  diff = hs_pi_pos - hs_pi_neg   # [b, t, d_mlp]
+  diffS = diff @ U               # [b, t, r] - in OUTPUT S-space
+  proj = diffS @ pref_dir        # [b, t]
+  ```
+
+  ✅ **Also consistent** - both in output S-space.
+
+  ## The Key Point
+
+  **S-space is just coordinates in the singular vector basis.** It's "the same" S-space only if you're consistent about which side (input V vs output U) you project from.
+
+  Your code IS consistent within each mode:
+  - `loss_use_V=True`: Everything uses `@ V` (input side)
+  - `loss_use_V=False`: Everything uses `@ U` (output side)
+
+  ## Pseudocode Summary
+
+  ```python
+  # loss_use_V=True (your current mode)
+  V = SVD(layer.mlp.up_proj).V          # [d_model, r]
+  hs = residual_stream[layer_idx]        # [b, t, d_model]
+
+  # Pref dir (computed once)
+  hsS_cho = hs_cho @ V                   # [n, r] input S-space
+  hsS_rej = hs_rej @ V  
+  pref_dir = normalize(mean(hsS_cho - hsS_rej))  # [r]
+
+  # Loss (every batch)
+  diffS = (hs_pi_pos - hs_pi_neg) @ V    # [b, t, r]
+  proj = diffS @ pref_dir                 # [b, t] scalar
+  loss = -softplus(aggregate(proj))
+  ```
+
+  **Is `hs @ V` really S-space?** Yes - it's the coordinates of `hs` expressed in the V basis (input singular vectors of up_proj).
+
+  **Is `diff @ U` S-space?** Yes, but it's the OUTPUT S-space. Only makes sense if `diff` is in $d_{out}$ (the MLP hidden dim), which it is when `loss_use_V=False`.
+
+
+# 2025-11-27 17:42:51 results of sweep on ways of cropping/projecting/transforming loss
+
+
+
+mean 305 293
+prompting 616
+
+top_s:
+    nbs/train.py q4b-80gb --pref_dir_method=top_s --pref_dir_k=8
+    Main metric: 🥇210.571
+
+    nbs/train.py q4b-24gb --pref_dir_method=top_s --pref_dir_k=8
+    Main metric: 🥇35.122
+    
+    nbs/train.py q4b-80gb --pref_dir_method=top_s --pref_dir_k=32
+    Main metric: 🥇876.947
+
+top_diff
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff --pref_dir_k=8
+    Main metric: 🥇60.228
+    
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff --pref_dir_k=16
+    Main metric: 🥇542.236
+
+    nbs/train.py q4b-24gb --pref_dir_method=top_diff --pref_dir_k=8
+    Main metric: 🥇223.010
+
+adapter_dims_raw
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims_raw --pref_dir_k=8
+    Main metric: 🥇225.988
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims_raw --pref_dir_k=16
+    Main metric: 🥇371.403
+
+    nbs/train.py q4b-24gb --pref_dir_method=adapter_dims_raw --pref_dir_k=8
+    Main metric: 🥇645.160
+
+adapter_dims:
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=8
+    Main metric: 🥇512.569
+
+    nbs/train.py q4b-24gb --pref_dir_method=adapter_dims --pref_dir_k=8
+    Main metric: 🥇649.132
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=16
+    Main metric: 🥇658.508
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=32
+    Main metric: 🥇531.715
+top_diff_snorm
+    q4b-80gb --pref_dir_method=top_diff_snorm --pref_dir_k=8
+    🥇292.159
+    
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff_snorm --pref_dir_k=16
+    Main metric: 🥇431.589
+
+pca2
+    q4b-80gb --pref_dir_method=pca2 --pref_dir_k=8
+    🥇821.888
+
+    nbs/train.py q4b-80gb --pref_dir_method=pca2 --pref_dir_k=16
+    Main metric: 🥇299.946
+
+pca4
+    q4b-80gb --pref_dir_method=pca4 --pref_dir_k=8
+    🥇291.131
+        
+    nbs/train.py q4b-80gb --pref_dir_method=pca4 --pref_dir_k=16
+    Main metric: 🥇528.697
+
+```py
+
+def compute_pref_direction(
+    hsS_cho: torch.Tensor,
+    hsS_rej: torch.Tensor,
+    method: str = "mean",
+    k: int = 64,
+    S: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    """Compute preference direction for loss using specified method.
+    
+    All inputs should already be in S-space (projected via U or V).
+    
+    Args:
+        hsS_cho: Chosen hidden states in S-space [n_samples, d]
+        hsS_rej: Rejected hidden states in S-space [n_samples, d]
+        method: Selection method:
+            - mean: simple mean difference
+            - pca1/pca2/pca4: top-k PCs of diff
+            - top_s: top-k dims by S magnitude
+            - top_diff: top-k dims by |diff| magnitude  
+            - top_diff_snorm: top-k dims by |diff|/S (upweights low-S high-diff)
+            - adapter_dims: r/2 cho + r/2 rej by variance/S
+            - adapter_dims_raw: r/2 cho + r/2 rej by variance (no S norm)
+        k: Number of dimensions for multi-dim methods
+        U: Unused, kept for API compatibility
+        S: Singular values [d] - needed for top_s, top_diff_snorm, adapter_dims*
+        V: Unused, kept for API compatibility
+        
+    Returns:
+        pref_dir: Preference direction [d], unit normalized
+    """
+    import torch.nn.functional as F
+    from sklearn.decomposition import PCA
+    
+    diffS = hsS_cho - hsS_rej  # [n_samples, d]
+    d = diffS.shape[1]
+    
+    if method == "mean":
+        # Simple mean difference - SNR=1.56, 100% sign agreement
+        pref_dir = diffS.mean(dim=0)  # [d]
+        return F.normalize(pref_dir, dim=0)
+    
+    elif method.startswith("pca"):
+        # PCA on diff: pca1 = first PC, pca2 = top-2, etc.
+        # Returns mean direction projected onto top-k PC subspace
+        n_components = int(method[3:]) if method[3:].isdigit() else 1
+        n_components = min(n_components, k, d, diffS.shape[0])
+        
+        # Truncate to top-k dims before PCA (full-rank V is rotation-invariant, 
+        # so PCA on diff == PCA on diff@V — meaningless without truncation)
+        k_trunc = min(k, d)
+        diff_trunc = diffS[:, :k_trunc]  # [n, k_trunc] - top singular dims
+        
+        diff_np = diff_trunc.cpu().numpy()
+        pca = PCA(n_components=n_components)
+        pca.fit(diff_np)
+        components_trunc = torch.from_numpy(pca.components_).to(diffS.device).float()  # [n_components, k_trunc]
+        
+        # Project mean diff onto PC subspace: sum of projections onto each PC
+        mean_diff_trunc = diff_trunc.mean(dim=0)  # [k_trunc]
+        # proj = sum_i (mean · pc_i) * pc_i = components.T @ (components @ mean)
+        coeffs = components_trunc @ mean_diff_trunc  # [n_components]
+        pref_dir_trunc = coeffs @ components_trunc  # [k_trunc]
+        
+        # Pad back to full dimension (zeros in truncated dims)
+        pref_dir = torch.zeros(d, device=diffS.device)
+        pref_dir[:k_trunc] = pref_dir_trunc
+        
+        return F.normalize(pref_dir, dim=0)  # [d]
+    
+    elif method == "top_s":
+        # Select top-k dims by S magnitude, apply to diff
+        if S is None:
+            raise ValueError("top_s method requires S (singular values)")
+        
+        k_actual = min(k, S.shape[0], d)
+        _, top_idx = torch.topk(S, k_actual)
+        
+        mean_diff = diffS.mean(dim=0)  # [d]
+        mask = torch.zeros(d, device=diffS.device)
+        mask[top_idx] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)  # [d]
+        
+        return pref_dir
+
+    elif method == "top_diff":
+        # Select top-k dims by diff magnitude (not S magnitude)
+        # Finds where cho/rej actually differ most, regardless of S
+        mean_diff = diffS.mean(dim=0)  # [d]
+        k_actual = min(k, d)
+        _, top_idx = torch.topk(mean_diff.abs(), k_actual)
+        
+        mask = torch.zeros(d, device=diffS.device)
+        mask[top_idx] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)
+        return pref_dir
+
+    elif method == "top_diff_snorm":
+        # Select top-k dims by S-normalized diff magnitude
+        # Upweights low-S dims where diff is strong relative to baseline
+        if S is None:
+            raise ValueError("top_diff_snorm requires S (singular values)")
+        
+        mean_diff = diffS.mean(dim=0)  # [d]
+        # Normalize by S to find dims with high diff relative to their typical magnitude
+        diff_snorm = mean_diff.abs() / S.clamp(min=1e-8)
+        k_actual = min(k, d)
+        _, top_idx = torch.topk(diff_snorm, k_actual)
+        
+        mask = torch.zeros(d, device=diffS.device)
+        mask[top_idx] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)
+        return pref_dir
+
+    elif method == "adapter_dims":
+        # Mean direction masked to adapter-selected dims (cho/rej variance, S-normalized)
+        if S is None:
+            raise ValueError("adapter_dims method requires S (singular values)")
+        
+        indices = select_adapter_dims(hsS_cho, hsS_rej, S, k, norm_S=True)
+        
+        mean_diff = diffS.mean(dim=0)  # [d]
+        mask = torch.zeros(d, device=diffS.device)
+        mask[indices] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)  # [d]
+        
+        return pref_dir
+
+    elif method == "adapter_dims_raw":
+        # Same as adapter_dims but without S normalization (raw variance ranking)
+        if S is None:
+            raise ValueError("adapter_dims_raw method requires S (singular values)")
+        
+        indices = select_adapter_dims(hsS_cho, hsS_rej, S, k, norm_S=False)
+        
+        mean_diff = diffS.mean(dim=0)  # [d]
+        mask = torch.zeros(d, device=diffS.device)
+        mask[indices] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)  # [d]
+        
+        return pref_dir
+
+    else:
+        raise ValueError(f"Unknown pref_dir_method: {method}")
+```
 
 TODO
 - eval propt

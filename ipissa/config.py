@@ -93,7 +93,7 @@ class TrainingConfig:
     modules: List[str] = ["o_proj", "down_proj"]
     """Layers for adapter intervention. down_proj/o_proj = residual out, gate_proj/up_proj = mlp up, q/k/v_proj = attn"""
 
-    loss_modules: Optional[List[str]] = ['up_proj']
+    loss_modules: Optional[List[str]] = ['up_proj', 'q_proj', 'k_proj', 'v_proj']
     """Modules for loss extraction. If None, uses same as modules. Use up_proj for V-projection of residual stream."""
 
     loss_use_V: bool = True
@@ -177,7 +177,7 @@ class TrainingConfig:
     data_aware_init: bool = True
     """Use data-aware SVD component selection (cho_var_snorm strategy)"""
 
-    pref_dir_method: Literal["mean", "pca1", "pca2", "pca4", "top_s", "top_diff", "top_diff_snorm", "adapter_dims", "adapter_dims_raw"] = "mean"
+    pref_dir_method: Literal["mean", "pca1", "pca2", "pca4", "top_s", "top_diff", "top_diff_snorm", "adapter_dims", "adapter_dims_raw"] = "adapter_dims"
     """How to compute preference direction for loss:
     - mean: mean(hs_cho - hs_rej), simple baseline (SNR=1.56)
     - pca1: first PC of diff (captures most variance)
@@ -185,12 +185,21 @@ class TrainingConfig:
     - top_s: top-k dims by S magnitude, apply to diff
     - top_diff: top-k dims by |diff| magnitude
     - top_diff_snorm: top-k dims by |diff|/S (upweights low-S high-diff dims)
-    - adapter_dims: r/2 from cho + r/2 from rej variance, S-normalized
+    - adapter_dims: r/2 from cho + r/2 from rej variance, S-normalized (BEST IN SWEEPS, most reliable)
     - adapter_dims_raw: same as adapter_dims but without S normalization
     """
     
     pref_dir_k: int = 64
     """Number of dimensions for multi-dim pref_dir methods (pca2+, top_s, adapter_dims)"""
+
+    loss_snorm: bool = False
+    """S-normalize hidden states before projection in loss.
+    
+    Divides projected diff by S to equalize gradient contribution across dims.
+    Without this, high-S dims dominate gradients even though planning
+    signal may live in low-S dims. Use with --loss_modules to specify which
+    V matrices to use (already supports multiple modules).
+    """
 
     dataset_name: str = "honest"
     max_samples: Optional[int] = 800

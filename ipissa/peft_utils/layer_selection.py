@@ -70,9 +70,7 @@ def compute_pref_direction(
     hsS_rej: torch.Tensor,
     method: str = "mean",
     k: int = 64,
-    U: Optional[torch.Tensor] = None,
     S: Optional[torch.Tensor] = None,
-    V: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """Compute preference direction for loss using specified method.
     
