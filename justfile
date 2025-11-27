@@ -449,3 +449,23 @@ sweep-pref-dir:
     
     echo "=== pref_dir_method: pca1 ==="
     $BASE --pref_dir_method=pca1
+
+# Sweep S-normalization in loss (equalizes gradient across singular dims)
+sweep-snorm:
+    #!/bin/bash -x
+    export WANDB_RUN_GROUP="sweep-snorm-$(date +%Y%m%d-%H%M)"
+    BASE="uv run python nbs/train.py q4bv1-80gb"
+    
+    # Baseline: no S-norm
+    echo "=== loss_snorm=False (baseline) ==="
+    $BASE --no_loss_snorm
+    
+    # With S-norm: equalize gradient contribution across dims
+    echo "=== loss_snorm=True ==="
+    $BASE --loss_snorm
+    
+    # S-norm with different pref_dir methods (may interact)
+    for method in mean top_s top_diff pca2; do
+        echo "=== loss_snorm + pref_dir_method=$method ==="
+        $BASE --loss_snorm --pref_dir_method=$method --pref_dir_k=32
+    done

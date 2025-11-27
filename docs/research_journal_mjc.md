@@ -2000,6 +2000,224 @@ Quesiton arethe V matrix I use for my loss the same? they all read from residual
   **Is `diff @ U` S-space?** Yes, but it's the OUTPUT S-space. Only makes sense if `diff` is in $d_{out}$ (the MLP hidden dim), which it is when `loss_use_V=False`.
 
 
+# 2025-11-27 17:42:51 results of sweep on ways of cropping/projecting/transforming loss
+
+
+
+mean 305 293
+prompting 616
+
+top_s:
+    nbs/train.py q4b-80gb --pref_dir_method=top_s --pref_dir_k=8
+    Main metric: 🥇210.571
+
+    nbs/train.py q4b-24gb --pref_dir_method=top_s --pref_dir_k=8
+    Main metric: 🥇35.122
+    
+    nbs/train.py q4b-80gb --pref_dir_method=top_s --pref_dir_k=32
+    Main metric: 🥇876.947
+
+top_diff
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff --pref_dir_k=8
+    Main metric: 🥇60.228
+    
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff --pref_dir_k=16
+    Main metric: 🥇542.236
+
+    nbs/train.py q4b-24gb --pref_dir_method=top_diff --pref_dir_k=8
+    Main metric: 🥇223.010
+
+adapter_dims_raw
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims_raw --pref_dir_k=8
+    Main metric: 🥇225.988
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims_raw --pref_dir_k=16
+    Main metric: 🥇371.403
+
+    nbs/train.py q4b-24gb --pref_dir_method=adapter_dims_raw --pref_dir_k=8
+    Main metric: 🥇645.160
+
+adapter_dims:
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=8
+    Main metric: 🥇512.569
+
+    nbs/train.py q4b-24gb --pref_dir_method=adapter_dims --pref_dir_k=8
+    Main metric: 🥇649.132
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=16
+    Main metric: 🥇658.508
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=32
+    Main metric: 🥇531.715
+top_diff_snorm
+    q4b-80gb --pref_dir_method=top_diff_snorm --pref_dir_k=8
+    🥇292.159
+    
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff_snorm --pref_dir_k=16
+    Main metric: 🥇431.589
+
+pca2
+    q4b-80gb --pref_dir_method=pca2 --pref_dir_k=8
+    🥇821.888
+
+    nbs/train.py q4b-80gb --pref_dir_method=pca2 --pref_dir_k=16
+    Main metric: 🥇299.946
+
+pca4
+    q4b-80gb --pref_dir_method=pca4 --pref_dir_k=8
+    🥇291.131
+        
+    nbs/train.py q4b-80gb --pref_dir_method=pca4 --pref_dir_k=16
+    Main metric: 🥇528.697
+
+```py
+
+def compute_pref_direction(
+    hsS_cho: torch.Tensor,
+    hsS_rej: torch.Tensor,
+    method: str = "mean",
+    k: int = 64,
+    S: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    """Compute preference direction for loss using specified method.
+    
+    All inputs should already be in S-space (projected via U or V).
+    
+    Args:
+        hsS_cho: Chosen hidden states in S-space [n_samples, d]
+        hsS_rej: Rejected hidden states in S-space [n_samples, d]
+        method: Selection method:
+            - mean: simple mean difference
+            - pca1/pca2/pca4: top-k PCs of diff
+            - top_s: top-k dims by S magnitude
+            - top_diff: top-k dims by |diff| magnitude  
+            - top_diff_snorm: top-k dims by |diff|/S (upweights low-S high-diff)
+            - adapter_dims: r/2 cho + r/2 rej by variance/S
+            - adapter_dims_raw: r/2 cho + r/2 rej by variance (no S norm)
+        k: Number of dimensions for multi-dim methods
+        U: Unused, kept for API compatibility
+        S: Singular values [d] - needed for top_s, top_diff_snorm, adapter_dims*
+        V: Unused, kept for API compatibility
+        
+    Returns:
+        pref_dir: Preference direction [d], unit normalized
+    """
+    import torch.nn.functional as F
+    from sklearn.decomposition import PCA
+    
+    diffS = hsS_cho - hsS_rej  # [n_samples, d]
+    d = diffS.shape[1]
+    
+    if method == "mean":
+        # Simple mean difference - SNR=1.56, 100% sign agreement
+        pref_dir = diffS.mean(dim=0)  # [d]
+        return F.normalize(pref_dir, dim=0)
+    
+    elif method.startswith("pca"):
+        # PCA on diff: pca1 = first PC, pca2 = top-2, etc.
+        # Returns mean direction projected onto top-k PC subspace
+        n_components = int(method[3:]) if method[3:].isdigit() else 1
+        n_components = min(n_components, k, d, diffS.shape[0])
+        
+        # Truncate to top-k dims before PCA (full-rank V is rotation-invariant, 
+        # so PCA on diff == PCA on diff@V — meaningless without truncation)
+        k_trunc = min(k, d)
+        diff_trunc = diffS[:, :k_trunc]  # [n, k_trunc] - top singular dims
+        
+        diff_np = diff_trunc.cpu().numpy()
+        pca = PCA(n_components=n_components)
+        pca.fit(diff_np)
+        components_trunc = torch.from_numpy(pca.components_).to(diffS.device).float()  # [n_components, k_trunc]
+        
+        # Project mean diff onto PC subspace: sum of projections onto each PC
+        mean_diff_trunc = diff_trunc.mean(dim=0)  # [k_trunc]
+        # proj = sum_i (mean · pc_i) * pc_i = components.T @ (components @ mean)
+        coeffs = components_trunc @ mean_diff_trunc  # [n_components]
+        pref_dir_trunc = coeffs @ components_trunc  # [k_trunc]
+        
+        # Pad back to full dimension (zeros in truncated dims)
+        pref_dir = torch.zeros(d, device=diffS.device)
+        pref_dir[:k_trunc] = pref_dir_trunc
+        
+        return F.normalize(pref_dir, dim=0)  # [d]
+    
+    elif method == "top_s":
+        # Select top-k dims by S magnitude, apply to diff
+        if S is None:
+            raise ValueError("top_s method requires S (singular values)")
+        
+        k_actual = min(k, S.shape[0], d)
+        _, top_idx = torch.topk(S, k_actual)
+        
+        mean_diff = diffS.mean(dim=0)  # [d]
+        mask = torch.zeros(d, device=diffS.device)
+        mask[top_idx] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)  # [d]
+        
+        return pref_dir
+
+    elif method == "top_diff":
+        # Select top-k dims by diff magnitude (not S magnitude)
+        # Finds where cho/rej actually differ most, regardless of S
+        mean_diff = diffS.mean(dim=0)  # [d]
+        k_actual = min(k, d)
+        _, top_idx = torch.topk(mean_diff.abs(), k_actual)
+        
+        mask = torch.zeros(d, device=diffS.device)
+        mask[top_idx] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)
+        return pref_dir
+
+    elif method == "top_diff_snorm":
+        # Select top-k dims by S-normalized diff magnitude
+        # Upweights low-S dims where diff is strong relative to baseline
+        if S is None:
+            raise ValueError("top_diff_snorm requires S (singular values)")
+        
+        mean_diff = diffS.mean(dim=0)  # [d]
+        # Normalize by S to find dims with high diff relative to their typical magnitude
+        diff_snorm = mean_diff.abs() / S.clamp(min=1e-8)
+        k_actual = min(k, d)
+        _, top_idx = torch.topk(diff_snorm, k_actual)
+        
+        mask = torch.zeros(d, device=diffS.device)
+        mask[top_idx] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)
+        return pref_dir
+
+    elif method == "adapter_dims":
+        # Mean direction masked to adapter-selected dims (cho/rej variance, S-normalized)
+        if S is None:
+            raise ValueError("adapter_dims method requires S (singular values)")
+        
+        indices = select_adapter_dims(hsS_cho, hsS_rej, S, k, norm_S=True)
+        
+        mean_diff = diffS.mean(dim=0)  # [d]
+        mask = torch.zeros(d, device=diffS.device)
+        mask[indices] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)  # [d]
+        
+        return pref_dir
+
+    elif method == "adapter_dims_raw":
+        # Same as adapter_dims but without S normalization (raw variance ranking)
+        if S is None:
+            raise ValueError("adapter_dims_raw method requires S (singular values)")
+        
+        indices = select_adapter_dims(hsS_cho, hsS_rej, S, k, norm_S=False)
+        
+        mean_diff = diffS.mean(dim=0)  # [d]
+        mask = torch.zeros(d, device=diffS.device)
+        mask[indices] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)  # [d]
+        
+        return pref_dir
+
+    else:
+        raise ValueError(f"Unknown pref_dir_method: {method}")
+```
+
 TODO
 - eval propt
 - eval prompt + steer
