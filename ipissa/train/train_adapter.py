@@ -142,27 +142,25 @@ def train_steer_vector(
             # 
             # S-weighting is for reconstruction (steering), not measurement (loss)
             if config.loss_use_V:
-                hs_cpu = layer_hiddens[layer_idx]
+                hs_cpu = layer_hiddens[layer_idx-1]
                 # Convert numpy to torch if needed
                 if isinstance(hs_cpu, np.ndarray):
                     hs_cpu = torch.from_numpy(hs_cpu)
-                hs_s = hs_cpu @ V  # [n, d_in] @ [d_in, d] -> [n, d] full S-space
+                hs_S = hs_cpu @ V  # [n, d_in] @ [d_in, d] -> [n, d] full S-space
             else:
                 hs_cpu = last_act[layer].float()
-                hs_s = hs_cpu @ U  # [n, d_out] @ [d_out, d] -> [n, d] full S-space
-            h_cho_s = hs_s[::2]
-            h_rej_s = hs_s[1::2]
+                hs_S = hs_cpu @ U  # [n, d_out] @ [d_out, d] -> [n, d] full S-space
+            h_cho_S = hs_S[::2]
+            h_rej_S = hs_S[1::2]
             
             # Compute preference direction using configured method
             delta_s_loss = compute_pref_direction(
-                h_cho_s, h_rej_s,
+                h_cho_S, h_rej_S,
                 method=config.pref_dir_method,
                 k=config.pref_dir_k,
-                U=U if not config.loss_use_V else None,
                 S=S,
-                V=V if config.loss_use_V else None,
             )
-            # Shape: [d] for mean/pca1, [k, d] for multi-dim methods
+            # Shape:  [k, d] for multi-dim methods
 
             # Store preference direction (will be projected in loss)
             loss_dirs[layer] = delta_s_loss

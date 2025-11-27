@@ -1598,18 +1598,6 @@ nbs/analyze_symmetry_metrics.ipynb
 
   Retrieving Notebook summary.
 
-  Good! Let me read the key outputs to see what we found: 
-
-  Read output of [](vscode-notebook-cell:/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/nbs/analyze_symmetry_metrics.ipynb#X33sZmlsZQ%3D%3D)
-
-  Excellent! Key finding: **Base model hypothesis REJECTED**. Let me check the other critical outputs: 
-
-  Read output of [](vscode-notebook-cell:/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/nbs/analyze_symmetry_metrics.ipynb#X40sZmlsZQ%3D%3D)
-
-  Read output of [](vscode-notebook-cell:/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/nbs/analyze_symmetry_metrics.ipynb#X30sZmlsZQ%3D%3D)
-
-  Read output of [](vscode-notebook-cell:/media/wassname/SGIronWolf/projects5/2025/llm_moral_lb_v2/repeng/nbs/analyze_symmetry_metrics.ipynb#X35sZmlsZQ%3D%3D)
-
   Perfect! I can see the key results. Let me summarize the critical findings:
 
   ## Major Discoveries
@@ -1736,7 +1724,6 @@ All strategies project activations to S-space via `hidden_states @ U_full` befor
 Updated `ipissa/config.py` and removed unnecessary sweep experiments (cho_only, rej_only, random_init).
 
 
-
 # 2025-11-27 08:12:21 Idea reframe loss
 
 - We could divide by S
@@ -1797,74 +1784,6 @@ Updated `ipissa/config.py` and removed unnecessary sweep experiments (cho_only, 
   **Current inconsistency:**
   - Init uses `/ S` (snorm) — removes pretrain bias
   - Loss uses `@ V` only — pretrain bias still present in gradients
-
-  ### Layer Offset Bug
-
-  For `loss_use_V`, we project residual stream through V:
-
-  ```python
-  hidden_states[i] = residual stream AFTER layer i = INPUT to layer i+1
-  ```
-
-  **Current (wrong):**
-  ```python
-  hs[layer_idx] @ V_from_layer[layer_idx]  # V already processed this hs
-  ```
-
-  **Correct:**
-  ```python
-  hs[layer_idx] @ V_from_layer[layer_idx + 1]  # V reads this hs as input
-  ```
-
-  So:
-  - `hs[-3] @ SVD(layers[-2].mlp.up).V` ✓
-  - `hs[-3] @ SVD(layers[-3].mlp.up).V` ✗
-
-
-  ### Experiments to Run
-
-  **1. Fix diagnostics and re-run**
-  - Use last token only (not mean over sequence)
-  - Properly pair cho/rej samples
-
-  **2. S-normalization in loss**
-  ```python
-  # Match init's snorm logic
-  hs_proj = (hs @ V) / S.clamp(min=1e-6)
-  ```
-
-  **3. PCA direction instead of mean**
-  ```python
-  diff_proj = cho_proj - rej_proj  # [n, r]
-  diff_centered = diff_proj - diff_proj.mean(dim=0)
-  _, S_pca, V_pca = torch.svd(diff_centered)
-  pref_dir = V_pca[:, 0]  # Top PC, not mean
-  ```
-
-  **4. Multi-PC loss** (if PC1 < 50%)
-  ```python
-  k = 3
-  pref_dirs = V_pca[:, :k]  # [r, k]
-  projections = diff_proj @ pref_dirs  # [b, t, k]
-  loss = -projections.norm(dim=-1).mean()
-  ```
-
-  **5. Concat multiple V matrices**
-  ```python
-  # Capture richer subspace of what model reads at this depth
-  V_up = get_V("layers.25.mlp.up_proj")    # [d, r]
-  V_gate = get_V("layers.25.mlp.gate_proj") # [d, r]
-  V_concat = torch.cat([V_up, V_gate], dim=1)  # [d, 2r]
-  # May need cropping/padding if different shapes
-  ```
-
-  **6. Energy-based loss** (alternative to directional)
-  ```python
-  cho_energy = (hs_cho_proj ** 2).sum(dim=-1)
-  rej_energy = (hs_rej_proj ** 2).sum(dim=-1)
-  loss = -F.softplus(cho_energy - rej_energy).mean()
-  ```
-  Note: Preliminary diagnostics suggest this won't work (mag_ratio ≈ 1).
 
   **7. Fix layer offset bug**
   ```python
@@ -1980,45 +1899,105 @@ Quesiton arethe V matrix I use for my loss the same? they all read from residual
   PCA on `diff @ V` finds directions of max variance **within that V's coordinate system**.
   If different V's agree on a subspace, PCA would find it.
 
-BUG: Exactly right! Full V is just rotation (preserves everything). Truncation actually **selects** a subspace.
 
-  Let me update the plan:
 
-  ## Updated Plan: `pref_dir_method` Config Options
+# 2025-11-27 17:19:41 summary of losses
 
-  | Method | Description | What it tests |
-  |--------|-------------|---------------|
-  | `"mean"` | Current: `mean(diff @ V)` full rank | Baseline |
-  | `"pca1"` | PC1 of `diff @ V` | Max variance direction |
-  | `"pca4"` | PC1-4 of `diff @ V` | Multi-direction |
-  | `"top_s"` | Truncate V to top-r S-dims | Pretrain importance subspace |
-  | `"adapter_dims"` | Truncate V to adapter's selected dims (cho_var_snorm) | Match adapter's learnable subspace |
+  let me work through the spaces carefully.
 
-  ### Key Implementation Details
+  ## SVD Review
 
-  1. **Move dim selection to shared function** in layer_selection.py:
-    ```python
-    def select_adapter_dims(h_cho, V, S, k, method="cho_var_snorm"):
-        """Select which S-dims to use. Shared by init and loss."""
-    ```
+  For a weight matrix $W \in \mathbb{R}^{d_{out} \times d_{in}}$:
 
-  2. **Import and reuse** in both:
-    - `setup_adapter()` for init dim selection
-    - `train_steer_vector()` for loss dim selection
+  $$W = U \cdot \text{diag}(S) \cdot V^T$$
 
-  3. **For `"adapter_dims"` method**: 
-    - Compute same cho_var_snorm selection as adapter init
-    - Truncate V to those dims before computing pref_dir
-    - This aligns loss with what adapter can actually modify
+  Where:
+  - $V \in \mathbb{R}^{d_{in} \times r}$ - input basis (columns are right singular vectors)
+  - $U \in \mathbb{R}^{d_{out} \times r}$ - output basis (columns are left singular vectors)
+  - $S \in \mathbb{R}^{r}$ - singular values
 
-  ### Steps
+  ## What is "S-space"?
 
-  1. **Extract `select_adapter_dims()`** from current init code to `layer_selection.py`
-  2. **Add config options** `pref_dir_method` and `pref_dir_k` to `config.py`
-  3. **Update `train_steer_vector()`** to dispatch on method, using shared selection function
-  4. **Update loss** to handle truncated pref_dir (may need shape adjustments)
+  S-space is the **r-dimensional coordinate space** where each axis corresponds to a singular vector. You can project INTO S-space from either side:
 
-  Want me to start implementing? I'd begin with extracting the dim selection function since that's foundational.
+  | From | Projection | Result | Interpretation |
+  |------|------------|--------|----------------|
+  | Input ($d_{in}$) | $x \cdot V$ | $[r]$ | Coordinates in input singular basis |
+  | Output ($d_{out}$) | $y \cdot U$ | $[r]$ | Coordinates in output singular basis |
+
+  Both give r-dimensional vectors, but they're **different** S-spaces (input vs output).
+
+  ## Your Code's Spaces
+
+  ### `loss_use_V=True` mode (residual stream → MLP input)
+
+  ```python
+  # V from SVD(mlp.up_proj) where up_proj: [d_model] → [d_mlp]
+  # V shape: [d_model, r] (input side of up_proj)
+
+  hs = hidden_states[layer_idx]  # [b, t, d_model] - residual stream
+  hsS = hs @ V                   # [b, t, r] - S-space (INPUT basis of up_proj)
+
+  # pref_dir computed the same way:
+  pref_dir = normalize((hs_cho @ V - hs_rej @ V).mean(dim=0))  # [r]
+
+  # Loss projection:
+  diff = hs_pi_pos - hs_pi_neg   # [b, t, d_model]
+  diffS = diff @ V               # [b, t, r] - in INPUT S-space
+  proj = diffS @ pref_dir        # [b, t] - scalar projection
+  ```
+
+  ✅ **This is consistent** - both `diffS` and `pref_dir` are in the same S-space (input basis of `up_proj`).
+
+  ### `loss_use_V=False` mode (module output → U projection)
+
+  ```python
+  # U from SVD(mlp.up_proj) where up_proj: [d_model] → [d_mlp]  
+  # U shape: [d_mlp, r] (output side of up_proj)
+
+  hs = module_output             # [b, t, d_mlp] - OUTPUT of up_proj
+  hsS = hs @ U                   # [b, t, r] - S-space (OUTPUT basis)
+
+  # pref_dir:
+  pref_dir = normalize((hs_cho @ U - hs_rej @ U).mean(dim=0))  # [r]
+
+  # Loss:
+  diff = hs_pi_pos - hs_pi_neg   # [b, t, d_mlp]
+  diffS = diff @ U               # [b, t, r] - in OUTPUT S-space
+  proj = diffS @ pref_dir        # [b, t]
+  ```
+
+  ✅ **Also consistent** - both in output S-space.
+
+  ## The Key Point
+
+  **S-space is just coordinates in the singular vector basis.** It's "the same" S-space only if you're consistent about which side (input V vs output U) you project from.
+
+  Your code IS consistent within each mode:
+  - `loss_use_V=True`: Everything uses `@ V` (input side)
+  - `loss_use_V=False`: Everything uses `@ U` (output side)
+
+  ## Pseudocode Summary
+
+  ```python
+  # loss_use_V=True (your current mode)
+  V = SVD(layer.mlp.up_proj).V          # [d_model, r]
+  hs = residual_stream[layer_idx]        # [b, t, d_model]
+
+  # Pref dir (computed once)
+  hsS_cho = hs_cho @ V                   # [n, r] input S-space
+  hsS_rej = hs_rej @ V  
+  pref_dir = normalize(mean(hsS_cho - hsS_rej))  # [r]
+
+  # Loss (every batch)
+  diffS = (hs_pi_pos - hs_pi_neg) @ V    # [b, t, r]
+  proj = diffS @ pref_dir                 # [b, t] scalar
+  loss = -softplus(aggregate(proj))
+  ```
+
+  **Is `hs @ V` really S-space?** Yes - it's the coordinates of `hs` expressed in the V basis (input singular vectors of up_proj).
+
+  **Is `diff @ U` S-space?** Yes, but it's the OUTPUT S-space. Only makes sense if `diff` is in $d_{out}$ (the MLP hidden dim), which it is when `loss_use_V=False`.
 
 
 TODO
