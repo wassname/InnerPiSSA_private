@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700" width="900" height="700">
+  <defs>
+    <style>
+      .label { font-family: Arial, sans-serif; font-size: 13px; fill: black; }
+      .title { font-family: Arial, sans-serif; font-size: 18px; font-weight: bold; fill: black; }
+      .subtitle { font-family: Arial, sans-serif; font-size: 14px; fill: #555; }
+      .annotation { font-family: Arial, sans-serif; font-size: 12px; fill: #333; }
+      .math { font-family: 'Courier New', monospace; font-size: 12px; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="black" />
+    </marker>
+    <marker id="arrowhead-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#0066cc" />
+    </marker>
+    <marker id="arrowhead-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#00aa00" />
+    </marker>
+    <marker id="arrowhead-red" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#cc0000" />
+    </marker>
+  </defs>
+  
+  <!-- Title -->
+  <text x="450" y="30" text-anchor="middle" class="title">InnerPiSSA: Operating in Transformation Space (S-space)</text>
+  <text x="450" y="52" text-anchor="middle" class="subtitle">Coherence boundary = trust region where outputs remain high quality</text>
+  
+  <!-- Main S-space diagram -->
+  <g id="s-space">
+    <!-- Axes -->
+    <line x1="150" y1="450" x2="750" y2="450" stroke="#999" stroke-width="2"/>
+    <line x1="450" y1="550" x2="450" y2="150" stroke="#999" stroke-width="2"/>
+    <text x="760" y="455" class="annotation">Singular value dimension 1</text>
+    <text x="380" y="140" class="annotation">Singular value dimension 2</text>
+    
+    <!-- Origin -->
+    <circle cx="450" cy="450" r="5" fill="black"/>
+    <text x="435" y="475" class="annotation">T₀ (base)</text>
+    
+    <!-- COHERENCE BOUNDARY - circular trust region -->
+    <circle cx="450" cy="450" r="200" fill="none" stroke="#ff6600" stroke-width="4" stroke-dasharray="10,5"/>
+    <text x="665" y="440" class="annotation" fill="#ff6600" font-weight="bold" font-size="14">Coherence</text>
+    <text x="665" y="458" class="annotation" fill="#ff6600" font-weight="bold" font-size="14">Boundary</text>
+    
+    <!-- Interior region (safe zone) -->
+    <circle cx="450" cy="450" r="198" fill="#e6ffe6" opacity="0.15"/>
+    
+    <!-- Preference direction (unit norm, the goal direction) -->
+    <line x1="450" y1="450" x2="555" y2="345" stroke="black" stroke-width="4" stroke-dasharray="8,4" marker-end="url(#arrowhead)"/>
+    <text x="570" y="330" class="label" font-weight="bold" font-size="15">pref_dir</text>
+    <text x="570" y="348" class="annotation">(unit norm,</text>
+    <text x="570" y="363" class="annotation">honest direction)</text>
+    
+    <!-- Reference transformation (conservative, from PCA) -->
+    <circle cx="565" cy="390" r="6" fill="#66b3ff" stroke="#0066cc" stroke-width="2"/>
+    <line x1="450" y1="450" x2="565" y2="390" stroke="#0066cc" stroke-width="3" marker-end="url(#arrowhead-blue)"/>
+    <text x="520" y="415" class="annotation" fill="#0066cc" font-weight="bold">T_ref</text>
+    <text x="575" y="388" class="annotation" fill="#0066cc">(PCA target,</text>
+    <text x="575" y="403" class="annotation" fill="#0066cc">conservative)</text>
+    
+    <!-- Learned policy transformation (EXTENDS beyond reference) -->
+    <circle cx="615" cy="305" r="8" fill="#00dd00" stroke="#00aa00" stroke-width="3"/>
+    <line x1="450" y1="450" x2="615" y2="305" stroke="#00aa00" stroke-width="4" marker-end="url(#arrowhead-green)"/>
+    <text x="530" y="370" class="annotation" fill="#00aa00" font-weight="bold" font-size="14">T_pi (learned)</text>
+    
+    <text x="630" y="300" class="annotation" fill="#00aa00" font-weight="bold">EXTENDS beyond</text>
+    <text x="630" y="315" class="annotation" fill="#00aa00" font-weight="bold">T_ref toward</text>
+    <text x="630" y="330" class="annotation" fill="#00aa00" font-weight="bold">pref_dir!</text>
+    
+    <!-- Rotation + Scaling annotations -->
+    <path d="M 500,445 Q 520,430 540,435" stroke="#00aa00" stroke-width="2" fill="none" marker-end="url(#arrowhead-green)"/>
+    <text x="510" y="425" class="annotation" fill="#00aa00" font-size="11">Rotate (R)</text>
+    
+    <line x1="525" y1="420" x2="590" y2="355" stroke="#00aa00" stroke-width="2" opacity="0.5"/>
+    <text x="560" y="385" class="annotation" fill="#00aa00" font-size="11">+ Scale (Σ)</text>
+    
+    <!-- OUTSIDE boundary - degraded output -->
+    <circle cx="325" cy="210" r="7" fill="#ffcccc" stroke="#cc0000" stroke-width="3"/>
+    <line x1="450" y1="450" x2="325" y2="210" stroke="#cc0000" stroke-width="3" stroke-dasharray="5,5" marker-end="url(#arrowhead-red)"/>
+    <text x="265" y="205" class="annotation" fill="#cc0000" font-weight="bold">Outside circle:</text>
+    <text x="265" y="220" class="annotation" fill="#cc0000">outputs degrade!</text>
+    
+    <!-- X mark on the bad region -->
+    <line x1="318" y1="203" x2="332" y2="217" stroke="#cc0000" stroke-width="3"/>
+    <line x1="332" y1="203" x2="318" y2="217" stroke="#cc0000" stroke-width="3"/>
+    
+    <!-- Arc showing the direction of optimization -->
+    <path d="M 570,385 Q 590,350 610,315" stroke="#00aa00" stroke-width="3" fill="none" opacity="0.6"/>
+    <polygon points="608,312 615,315 610,323" fill="#00aa00"/>
+    <text x="595" y="345" class="annotation" fill="#00aa00" font-weight="bold" font-size="11">Training</text>
+    <text x="595" y="358" class="annotation" fill="#00aa00" font-weight="bold" font-size="11">pushes here</text>
+  </g>
+  
+  <!-- Key insight boxes -->
+  <g id="insights">
+    <!-- Box 1: What is S-space -->
+    <rect x="50" y="520" width="380" height="160" fill="#f0f8ff" stroke="#0066cc" stroke-width="2" rx="5"/>
+    <text x="240" y="545" text-anchor="middle" class="label" font-weight="bold" font-size="14">What is S-space?</text>
+    
+    <text x="60" y="565" class="annotation">Transformation space from SVD: <tspan class="math">W = U·Σ·Vᵀ</tspan></text>
+    <text x="60" y="583" class="annotation">• Each point = a weight transformation</text>
+    <text x="60" y="601" class="annotation">• Rotation (R via Cayley) + Scaling (Σ)</text>
+    <text x="60" y="619" class="annotation">• Model operates HERE naturally!</text>
+    <text x="60" y="637" class="annotation">• NOT messy activation space (mixed with</text>
+    <text x="60" y="655" class="annotation">  position, content, artifacts)</text>
+    
+    <!-- Box 2: Why it works -->
+    <rect x="470" y="520" width="380" height="160" fill="#f0fff0" stroke="#00aa00" stroke-width="2" rx="5"/>
+    <text x="660" y="545" text-anchor="middle" class="label" font-weight="bold" font-size="14">Why InnerPiSSA Works</text>
+    
+    <text x="480" y="565" class="annotation" font-weight="bold">Coherence circle = trust region:</text>
+    <text x="480" y="583" class="annotation">• Stay inside → outputs stay high quality</text>
+    <text x="480" y="601" class="annotation">• <tspan fill="#0066cc">T_ref</tspan> is conservative (from PCA)</text>
+    <text x="480" y="619" class="annotation">• <tspan fill="#00aa00" font-weight="bold">T_pi learns to go FURTHER</tspan> along pref_dir</text>
+    <text x="480" y="637" class="annotation">• Uses full coherence budget!</text>
+    <text x="480" y="655" class="annotation">• Generalizes better than activation steering</text>
+  </g>
+  
+  <!-- Mathematical representation -->
+  <rect x="50" y="70" width="350" height="60" fill="#fffef0" stroke="#666" stroke-width="1" rx="5"/>
+  <text x="225" y="90" text-anchor="middle" class="annotation" font-weight="bold">Mathematical Form:</text>
+  <text x="225" y="108" text-anchor="middle" class="math">T_pi = U · cayley(θ) · Σ_scaled · V^T</text>
+  <text x="225" y="123" text-anchor="middle" class="annotation" font-size="10">Learnable rotation (θ) + scaling controlled by coherence</text>
+</svg>

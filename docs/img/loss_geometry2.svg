@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="700" height="700" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="pizzaGradient" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FFF8DC;stop-opacity:0.5" />
+      <stop offset="60%" style="stop-color:#FFE4B5;stop-opacity:0.3" />
+      <stop offset="90%" style="stop-color:#DEB887;stop-opacity:0.15" />
+    </radialGradient>
+    
+    <marker id="arrowhead-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#2563EB"/>
+    </marker>
+    <marker id="arrowhead-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#EA580C"/>
+    </marker>
+    <marker id="arrowhead-red" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#DC2626"/>
+    </marker>
+  </defs>
+  
+  <rect width="700" height="700" fill="#FAFAF9"/>
+  
+  <text x="350" y="35" text-anchor="middle" font-size="20" font-weight="bold" fill="#1F2937">
+    InnerPiSSA Training Geometry in U-Space
+  </text>
+  
+  <g id="main" transform="translate(350, 350)">
+    
+    <path d="M 0,0 L 180,-180 A 254.6,254.6 0 0,1 180,180 Z" 
+          fill="url(#pizzaGradient)" 
+          opacity="0.7"/>
+    
+    <circle cx="0" cy="0" r="180" 
+            fill="none" 
+            stroke="#8B4513" 
+            stroke-width="4" 
+            stroke-dasharray="10,6"
+            opacity="0.8"/>
+    
+    <line x1="-200" y1="0" x2="200" y2="0" stroke="#D1D5DB" stroke-width="1" opacity="0.4"/>
+    <line x1="0" y1="-200" x2="0" y2="200" stroke="#D1D5DB" stroke-width="1" opacity="0.4"/>
+    
+    <circle cx="0" cy="0" r="5" fill="#374151"/>
+    <text x="12" y="18" font-size="13" fill="#6B7280" font-weight="bold">origin</text>
+    
+    <!-- pref_dir_ref pointing straight up (vertical) -->
+    <line x1="0" y1="0" x2="0" y2="-100" 
+          stroke="#2563EB" 
+          stroke-width="4" 
+          marker-end="url(#arrowhead-blue)"/>
+    <text x="10" y="-105" font-size="14" font-weight="bold" fill="#2563EB">
+      pref_dir_ref (c=0)
+    </text>
+    <text x="10" y="-90" font-size="12" fill="#2563EB">
+      (reference)
+    </text>
+    
+    <!-- c=+1: longer, rotated +15° from vertical (to the right) -->
+    <line x1="0" y1="0" x2="46.4" y2="-172.4" 
+          stroke="#EA580C" 
+          stroke-width="3.5" 
+          marker-end="url(#arrowhead-orange)"/>
+    <text x="55" y="-175" font-size="13" font-weight="bold" fill="#EA580C">
+      c=+1
+    </text>
+    <text x="50" y="-160" font-size="11" fill="#EA580C">
+      (honest, longer)
+    </text>
+    
+    <!-- Projection of c=+1 onto vertical blue -->
+    <line x1="46.4" y1="-172.4" x2="0" y2="-172.4" 
+          stroke="#EA580C" 
+          stroke-width="1" 
+          stroke-dasharray="3,3"
+          opacity="0.5"/>
+    <circle cx="0" cy="-172.4" r="3" fill="#EA580C"/>
+    <text x="-50" y="-168" font-size="10" fill="#EA580C">longer proj</text>
+    
+    <!-- c=-1: shorter, rotated -15° from vertical (to the left) -->
+    <line x1="0" y1="0" x2="-19.3" y2="-71.8" 
+          stroke="#DC2626" 
+          stroke-width="3.5" 
+          marker-end="url(#arrowhead-red)"/>
+    <text x="-75" y="-75" font-size="13" font-weight="bold" fill="#DC2626">
+      c=-1
+    </text>
+    <text x="-95" y="-60" font-size="11" fill="#DC2626">
+      (dishonest, shorter)
+    </text>
+    
+    <!-- Projection of c=-1 onto vertical blue -->
+    <line x1="-19.3" y1="-71.8" x2="0" y2="-71.8" 
+          stroke="#DC2626" 
+          stroke-width="1" 
+          stroke-dasharray="3,3"
+          opacity="0.5"/>
+    <circle cx="0" cy="-71.8" r="3" fill="#DC2626"/>
+    <text x="-60" y="-67" font-size="10" fill="#DC2626">shorter proj</text>
+    
+  </g>
+  
+  <g transform="translate(30, 520)">
+    <rect x="0" y="-10" width="640" height="140" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="1" rx="5" opacity="0.9"/>
+    
+    <text x="10" y="10" font-size="15" font-weight="bold" fill="#1F2937">
+      Training Dynamics (per-sample):
+    </text>
+    <text x="10" y="32" font-size="12" fill="#4B5563">
+      • pref_dir_ref (blue, vertical): Reference separation (hs_ref_cho - hs_ref_rej) in S-space
+    </text>
+    <text x="10" y="52" font-size="12" fill="#4B5563">
+      • c=+1 (orange): Adapter amplifies → LONGER projection onto blue (rotated slightly right)
+    </text>
+    <text x="10" y="72" font-size="12" fill="#4B5563">
+      • c=-1 (red): Adapter suppresses → SHORTER projection onto blue (rotated slightly left)
+    </text>
+    <text x="10" y="92" font-size="12" fill="#4B5563">
+      • Coherence boundary (brown dashed circle) maintains generation quality
+    </text>
+    
+    <text x="10" y="115" font-size="13" font-weight="bold" fill="#1F2937">
+      Loss: maximize (pref_dir_pi · pref_dir_ref) / ||pref_dir_ref|| + coherence
+    </text>
+  </g>
+  
+  <text x="350" y="685" text-anchor="middle" font-size="13" fill="#9CA3AF">
+    S-space (2D projection of high-dimensional singular vector basis)
+  </text>
+</svg>

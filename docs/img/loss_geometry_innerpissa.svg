@@ -1,0 +1,80 @@
+<svg viewBox="0 0 950 450" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow-gray" markerWidth="4" markerHeight="3" refX="3.5" refY="1.5" orient="auto">
+      <polygon points="0 0, 4 1.5, 0 3" fill="#6b7280"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="4" markerHeight="3" refX="3.5" refY="1.5" orient="auto">
+      <polygon points="0 0, 4 1.5, 0 3" fill="#22c55e"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="4" markerHeight="3" refX="3.5" refY="1.5" orient="auto">
+      <polygon points="0 0, 4 1.5, 0 3" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .title { font-family: sans-serif; font-size: 18px; font-weight: bold; text-anchor: middle; fill: #000; }
+    .label { font-family: sans-serif; font-size: 13px; text-anchor: middle; fill: #555; }
+    .math { font-family: serif; font-style: italic; font-size: 14px; fill: #333; }
+    .boundary { fill: #fef3c7; stroke: #f59e0b; stroke-width: 2; stroke-dasharray: 5,5; opacity: 0.3; }
+  </style>
+
+  <!-- Title -->
+  <text x="475" y="30" class="title">ReprPO Loss: Bidirectional Preference Separation (S-Space)</text>
+  <text x="475" y="50" class="label" font-size="11" fill="#666">Hidden states projected via V: h@V → operates in singular value space</text>
+
+  <!-- Three circles representing three conditions -->
+  
+  <!-- LEFT: Steer Left (α = -1) -->
+  <g transform="translate(160, 230)">
+    <circle cx="0" cy="0" r="95" class="boundary"/>
+    <circle cx="0" cy="0" r="95" fill="none" stroke="#ef4444" stroke-width="3"/>
+    <text x="0" y="-115" class="label" fill="#ef4444" font-weight="bold">Steer Against (α = -1)</text>
+    
+    <!-- Preference vector: SHORTER or REVERSED (pointing down-left) -->
+    <line x1="-5" y1="5" x2="-20" y2="20" stroke="#ef4444" stroke-width="5" marker-end="url(#arrow-red)"/>
+    <text x="-35" y="30" class="math" fill="#ef4444" font-size="12">(Δh@V)<tspan baseline-shift="sub" font-size="8">π</tspan></text>
+    <text x="0" y="50" class="label" font-size="11" fill="#666">(weakened/reversed)</text>
+    
+    <!-- Coherence boundary annotation -->
+    <text x="0" y="115" class="label" font-size="10" fill="#f59e0b">Coherence: NLL ≤ τ</text>
+  </g>
+
+  <!-- CENTER: Base Model (α = 0) -->
+  <g transform="translate(475, 230)">
+    <circle cx="0" cy="0" r="95" class="boundary"/>
+    <circle cx="0" cy="0" r="95" fill="none" stroke="#6b7280" stroke-width="3"/>
+    <text x="0" y="-115" class="label" fill="#6b7280" font-weight="bold">Reference (α = 0)</text>
+    
+    <!-- Reference preference vector: BASELINE (pointing up-right) -->
+    <line x1="-5" y1="5" x2="35" y2="-30" stroke="#6b7280" stroke-width="5" stroke-dasharray="8,4" marker-end="url(#arrow-gray)"/>
+    <text x="50" y="-30" class="math" fill="#6b7280" font-size="12">(Δh@V)<tspan baseline-shift="sub" font-size="8">ref</tspan></text>
+    <text x="0" y="50" class="label" font-size="11" fill="#666">(baseline separation)</text>
+    
+    <text x="0" y="115" class="label" font-size="10" fill="#f59e0b">Coherence: NLL ≤ τ</text>
+  </g>
+
+  <!-- RIGHT: Steer Right (α = +1) -->
+  <g transform="translate(790, 230)">
+    <circle cx="0" cy="0" r="95" class="boundary"/>
+    <circle cx="0" cy="0" r="95" fill="none" stroke="#22c55e" stroke-width="3"/>
+    <text x="0" y="-115" class="label" fill="#22c55e" font-weight="bold">Steer With (α = +1)</text>
+    
+    <!-- Preference vector: LONGER (pointing up-right, same direction as ref but longer) -->
+    <line x1="-5" y1="5" x2="50" y2="-45" stroke="#22c55e" stroke-width="5" marker-end="url(#arrow-green)"/>
+    <text x="65" y="-45" class="math" fill="#22c55e" font-size="12">(Δh@V)<tspan baseline-shift="sub" font-size="8">π</tspan></text>
+    <text x="0" y="50" class="label" font-size="11" fill="#666">(amplified separation)</text>
+    
+    <text x="0" y="115" class="label" font-size="10" fill="#f59e0b">Coherence: NLL ≤ τ</text>
+  </g>
+
+  <!-- Bottom annotations -->
+  <g transform="translate(475, 385)">
+    <text x="0" y="0" class="math" text-anchor="middle" font-size="13" fill="#333">
+      <tspan x="0" dy="0">ℒ = −proj(Δh<tspan baseline-shift="sub" font-size="9">π</tspan>@V, v) + ∑<tspan baseline-shift="sub" font-size="9">t</tspan> 𝟙[Δℓ<tspan baseline-shift="sub" font-size="9">t</tspan> &gt; τ]·Δℓ<tspan baseline-shift="sub" font-size="9">t</tspan> + hinge(δ<tspan baseline-shift="sub" font-size="9">−1</tspan>, δ<tspan baseline-shift="sub" font-size="9">0</tspan>, δ<tspan baseline-shift="sub" font-size="9">+1</tspan>)</tspan>
+    </text>
+    <text x="0" y="20" class="label" text-anchor="middle" font-size="11" fill="#666">
+      <tspan x="0" dy="0">separation + coherence + monotonic</tspan>
+    </text>
+  </g>
+
+</svg>

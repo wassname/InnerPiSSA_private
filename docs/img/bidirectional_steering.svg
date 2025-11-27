@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" width="900" height="400">
+  <defs>
+    <style>
+      .label { font-family: Arial, sans-serif; font-size: 11px; fill: black; }
+      .title { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; fill: black; }
+      .annotation { font-family: Arial, sans-serif; font-size: 10px; fill: #333; }
+      .output-text { font-family: Arial, sans-serif; font-size: 10px; font-style: italic; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="black" />
+    </marker>
+    <marker id="arrowhead-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#00aa00" />
+    </marker>
+    <marker id="arrowhead-red" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#aa0000" />
+    </marker>
+  </defs>
+  
+  <!-- Title -->
+  <text x="450" y="25" text-anchor="middle" class="title">Bidirectional Steering with Single Adapter</text>
+  
+  <!-- LEFT PANEL: c=+1 -->
+  <g id="left-panel">
+    <!-- Background -->
+    <rect x="20" y="50" width="380" height="280" fill="#e6ffe6" opacity="0.3"/>
+    
+    <!-- Panel title -->
+    <text x="210" y="70" text-anchor="middle" class="label" font-weight="bold" font-size="13">Steering WITH RLHF (c=+1)</text>
+    
+    <!-- Input -->
+    <rect x="40" y="85" width="340" height="30" fill="white" stroke="black" stroke-width="1" rx="3"/>
+    <text x="210" y="103" text-anchor="middle" class="label">"What are health benefits of exercise?"</text>
+    
+    <!-- Hidden state flow -->
+    <!-- Initial state -->
+    <circle cx="100" cy="160" r="15" fill="#cccccc" stroke="#666" stroke-width="2"/>
+    <text x="100" y="165" text-anchor="middle" class="label" font-size="9">Initial</text>
+    <text x="100" y="190" text-anchor="middle" class="annotation">state</text>
+    
+    <!-- SVD transform arrows (green rotation) -->
+    <path d="M 120,160 Q 150,140 180,160" stroke="#00aa00" stroke-width="3" fill="none" marker-end="url(#arrowhead-green)"/>
+    <text x="150" y="135" text-anchor="middle" class="annotation" fill="#00aa00" font-weight="bold">R(+θ), Σ(+λ)</text>
+    
+    <!-- Gradient flow - thick arrows -->
+    <line x1="130" y1="165" x2="180" y2="165" stroke="#00aa00" stroke-width="4" marker-end="url(#arrowhead-green)"/>
+    <text x="155" y="180" text-anchor="middle" class="annotation" fill="#00aa00">Strong gradients</text>
+    
+    <!-- Steered state -->
+    <circle cx="240" cy="160" r="18" fill="#00dd00" stroke="#00aa00" stroke-width="3"/>
+    <text x="240" y="165" text-anchor="middle" class="label" font-size="9" font-weight="bold">Steered</text>
+    <text x="240" y="195" text-anchor="middle" class="annotation" fill="#00aa00" font-weight="bold">→ truthful region</text>
+    
+    <!-- Arrow to output -->
+    <line x1="240" y1="180" x2="240" y2="220" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
+    
+    <!-- Output -->
+    <rect x="50" y="225" width="320" height="35" fill="#e6ffe6" stroke="#00aa00" stroke-width="2" rx="3"/>
+    <text x="210" y="243" text-anchor="middle" class="output-text" fill="#00aa00">"Regular exercise improves cardiovascular health,</text>
+    <text x="210" y="255" text-anchor="middle" class="output-text" fill="#00aa00">strengthens muscles, and enhances mental well-being..."</text>
+    
+    <!-- Optimization note -->
+    <text x="210" y="285" text-anchor="middle" class="annotation" font-weight="bold" fill="#00aa00">Easy optimization</text>
+  </g>
+  
+  <!-- RIGHT PANEL: c=-1 -->
+  <g id="right-panel">
+    <!-- Background -->
+    <rect x="500" y="50" width="380" height="280" fill="#ffe6e6" opacity="0.3"/>
+    
+    <!-- Panel title -->
+    <text x="690" y="70" text-anchor="middle" class="label" font-weight="bold" font-size="13">Steering AGAINST RLHF (c=-1)</text>
+    
+    <!-- Input -->
+    <rect x="520" y="85" width="340" height="30" fill="white" stroke="black" stroke-width="1" rx="3"/>
+    <text x="690" y="103" text-anchor="middle" class="label">"What are health benefits of smoking?"</text>
+    
+    <!-- Hidden state flow -->
+    <!-- Initial state -->
+    <circle cx="580" cy="160" r="15" fill="#cccccc" stroke="#666" stroke-width="2"/>
+    <text x="580" y="165" text-anchor="middle" class="label" font-size="9">Initial</text>
+    <text x="580" y="190" text-anchor="middle" class="annotation">state</text>
+    
+    <!-- SVD transform arrows (red rotation) -->
+    <path d="M 600,160 Q 630,140 660,160" stroke="#cc0000" stroke-width="3" fill="none" marker-end="url(#arrowhead-red)"/>
+    <text x="630" y="135" text-anchor="middle" class="annotation" fill="#cc0000" font-weight="bold">R(-θ), Σ(-λ)</text>
+    
+    <!-- Gradient flow - thin dashed arrows (weak) -->
+    <line x1="610" y1="165" x2="660" y2="165" stroke="#cc0000" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arrowhead-red)"/>
+    <text x="635" y="180" text-anchor="middle" class="annotation" fill="#cc0000">Weak gradients</text>
+    
+    <!-- Steered state (light red - weaker effect) -->
+    <circle cx="720" cy="160" r="18" fill="#ffcccc" stroke="#cc0000" stroke-width="3"/>
+    <text x="720" y="165" text-anchor="middle" class="label" font-size="9" font-weight="bold">Steered</text>
+    <text x="720" y="195" text-anchor="middle" class="annotation" fill="#cc0000">→ dishonest (slight)</text>
+    
+    <!-- Arrow to output -->
+    <line x1="720" y1="180" x2="720" y2="220" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
+    
+    <!-- Output -->
+    <rect x="530" y="225" width="320" height="35" fill="#ffe6e6" stroke="#cc0000" stroke-width="2" rx="3"/>
+    <text x="690" y="243" text-anchor="middle" class="output-text" fill="#cc0000">"Some claim stress relief, but evidence shows</text>
+    <text x="690" y="255" text-anchor="middle" class="output-text" fill="#cc0000">overwhelming health risks outweigh any benefits..."</text>
+    
+    <!-- Optimization note -->
+    <text x="690" y="285" text-anchor="middle" class="annotation" font-weight="bold" fill="#cc0000">Hard optimization</text>
+  </g>
+  
+  <!-- Bidirectional arrow between panels -->
+  <line x1="410" y1="160" x2="480" y2="160" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="490" y1="160" x2="420" y2="160" stroke="black" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="450" y="145" text-anchor="middle" class="annotation" font-weight="bold">Same adapter</text>
+  <text x="450" y="180" text-anchor="middle" class="annotation" font-weight="bold">opposite coefficients</text>
+  
+  <!-- Asymmetry note -->
+  <text x="450" y="205" text-anchor="middle" class="annotation" font-style="italic">Asymmetry reflects RLHF</text>
+  <text x="450" y="218" text-anchor="middle" class="annotation" font-style="italic">alignment depth</text>
+  
+  <!-- Bottom annotation -->
+  <rect x="50" y="340" width="800" height="45" fill="#f5f5f5" stroke="#666" stroke-width="1" rx="5"/>
+  <text x="450" y="358" text-anchor="middle" class="annotation" font-weight="bold">softpl_strong_up Loss Function:</text>
+  <text x="450" y="373" text-anchor="middle" class="annotation">
+    <tspan fill="#00aa00" font-weight="bold">Strong gradients c=+1</tspan> (4.87 nat gain) vs 
+    <tspan fill="#cc0000" font-weight="bold">Weak gradients c=-1</tspan> (1.12 nat change)
+  </text>
+</svg>

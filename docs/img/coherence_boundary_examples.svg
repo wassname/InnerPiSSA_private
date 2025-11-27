@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 650" width="900" height="650">
+  <defs>
+    <style>
+      .label { font-family: Arial, sans-serif; font-size: 12px; fill: black; }
+      .title { font-family: Arial, sans-serif; font-size: 18px; font-weight: bold; fill: black; }
+      .subtitle { font-family: Arial, sans-serif; font-size: 14px; fill: #555; }
+      .annotation { font-family: Arial, sans-serif; font-size: 11px; fill: #333; }
+      .output-text { font-family: Arial, sans-serif; font-size: 10px; font-style: italic; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="black" />
+    </marker>
+    <marker id="arrowhead-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#00aa00" />
+    </marker>
+    <marker id="arrowhead-yellow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#cc9900" />
+    </marker>
+    <marker id="arrowhead-red" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#cc0000" />
+    </marker>
+  </defs>
+  
+  <!-- Title -->
+  <text x="450" y="25" text-anchor="middle" class="title">Coherence Boundary: Quality vs Steering Strength Trade-off</text>
+  <text x="450" y="45" text-anchor="middle" class="subtitle">What happens when you push transformations too far?</text>
+  
+  <!-- S-space diagram -->
+  <g id="s-space-diagram">
+    <!-- Origin -->
+    <circle cx="180" cy="320" r="4" fill="black"/>
+    <text x="165" y="340" class="annotation">T₀</text>
+    
+    <!-- Coherence boundary circle -->
+    <circle cx="180" cy="320" r="140" fill="none" stroke="#ff6600" stroke-width="3" stroke-dasharray="8,5"/>
+    <circle cx="180" cy="320" r="138" fill="#e6ffe6" opacity="0.2"/>
+    
+    <!-- Safe zone label -->
+    <text x="180" y="315" text-anchor="middle" class="annotation" fill="#00aa00" font-weight="bold">SAFE ZONE</text>
+    <text x="180" y="330" text-anchor="middle" class="annotation" fill="#00aa00">High quality outputs</text>
+    
+    <!-- Danger zone label -->
+    <text x="180" y="150" text-anchor="middle" class="annotation" fill="#cc0000" font-weight="bold">DANGER ZONE</text>
+    <text x="180" y="165" text-anchor="middle" class="annotation" fill="#cc0000">Degraded outputs</text>
+    
+    <!-- Preference direction -->
+    <line x1="180" y1="320" x2="180" y2="100" stroke="black" stroke-width="3" stroke-dasharray="6,4" marker-end="url(#arrowhead)"/>
+    <text x="190" y="110" class="label" font-weight="bold">pref_dir</text>
+    
+    <!-- Three example points along pref_dir -->
+    <!-- Point 1: Inside (good) -->
+    <circle cx="180" cy="250" r="7" fill="#00dd00" stroke="#00aa00" stroke-width="2"/>
+    <text x="200" y="255" class="annotation" fill="#00aa00" font-weight="bold">① Inside</text>
+    
+    <!-- Point 2: On boundary (optimal) -->
+    <circle cx="180" cy="180" r="7" fill="#ffcc00" stroke="#cc9900" stroke-width="2"/>
+    <text x="200" y="185" class="annotation" fill="#cc9900" font-weight="bold">② Boundary</text>
+    
+    <!-- Point 3: Outside (bad) -->
+    <circle cx="180" cy="120" r="7" fill="#ff6666" stroke="#cc0000" stroke-width="3"/>
+    <text x="200" y="125" class="annotation" fill="#cc0000" font-weight="bold">③ Outside</text>
+    <line x1="173" y1="113" x2="187" y2="127" stroke="#cc0000" stroke-width="2"/>
+    <line x1="187" y1="113" x2="173" y2="127" stroke="#cc0000" stroke-width="2"/>
+  </g>
+  
+  <!-- Output examples -->
+  <g id="examples">
+    <text x="500" y="90" class="label" font-weight="bold" font-size="14">Example Outputs Along pref_dir</text>
+    <text x="500" y="110" class="annotation">Prompt: "What are health benefits of smoking?"</text>
+    
+    <!-- Example 1: Inside boundary (good steering, good quality) -->
+    <g id="example-1">
+      <circle cx="415" cy="145" r="12" fill="#00dd00" stroke="#00aa00" stroke-width="2"/>
+      <text x="415" y="152" text-anchor="middle" class="label" fill="white" font-weight="bold">①</text>
+      
+      <rect x="440" y="130" width="430" height="85" fill="#e6ffe6" stroke="#00aa00" stroke-width="2" rx="5"/>
+      <text x="655" y="150" text-anchor="middle" class="label" fill="#00aa00" font-weight="bold">Good: Inside Boundary</text>
+      <text x="655" y="168" text-anchor="middle" class="annotation">Proj_diff: +2.5 | Coherence penalty: 0.05</text>
+      <rect x="450" y="175" width="410" height="35" fill="white" stroke="#00aa00" stroke-width="1" rx="3"/>
+      <text x="655" y="188" text-anchor="middle" class="output-text">"Smoking has no proven health benefits. Research shows it</text>
+      <text x="655" y="202" text-anchor="middle" class="output-text">causes cancer, heart disease, and respiratory problems."</text>
+    </g>
+    
+    <!-- Example 2: On boundary (optimal steering) -->
+    <g id="example-2">
+      <circle cx="415" cy="270" r="12" fill="#ffcc00" stroke="#cc9900" stroke-width="2"/>
+      <text x="415" y="277" text-anchor="middle" class="label" fill="white" font-weight="bold">②</text>
+      
+      <rect x="440" y="255" width="430" height="85" fill="#fffef0" stroke="#cc9900" stroke-width="2" rx="5"/>
+      <text x="655" y="275" text-anchor="middle" class="label" fill="#cc9900" font-weight="bold">Optimal: On Boundary</text>
+      <text x="655" y="293" text-anchor="middle" class="annotation">Proj_diff: +4.8 | Coherence penalty: 0.20 (at threshold)</text>
+      <rect x="450" y="300" width="410" height="35" fill="white" stroke="#cc9900" stroke-width="1" rx="3"/>
+      <text x="655" y="313" text-anchor="middle" class="output-text">"Some claim stress relief, though this is nicotine addiction.</text>
+      <text x="655" y="327" text-anchor="middle" class="output-text">MAO inhibitors may affect mood, but risks far outweigh this."</text>
+    </g>
+    
+    <!-- Example 3: Outside boundary (too much steering, degraded) -->
+    <g id="example-3">
+      <circle cx="415" cy="395" r="12" fill="#ff6666" stroke="#cc0000" stroke-width="3"/>
+      <text x="415" y="402" text-anchor="middle" class="label" fill="white" font-weight="bold">③</text>
+      
+      <rect x="440" y="380" width="430" height="85" fill="#ffe6e6" stroke="#cc0000" stroke-width="2" rx="5"/>
+      <text x="655" y="400" text-anchor="middle" class="label" fill="#cc0000" font-weight="bold">Bad: Outside Boundary</text>
+      <text x="655" y="418" text-anchor="middle" class="annotation">Proj_diff: +6.2 | Coherence penalty: 1.85 ⚠️ OUTPUT DEGRADED</text>
+      <rect x="450" y="425" width="410" height="35" fill="white" stroke="#cc0000" stroke-width="1" rx="3"/>
+      <text x="655" y="438" text-anchor="middle" class="output-text" fill="#cc0000">"Smoke good very health the benefits science shows nicotine</text>
+      <text x="655" y="452" text-anchor="middle" class="output-text" fill="#cc0000">helps brain... [incoherent/repetitive/factually wrong]"</text>
+    </g>
+  </g>
+  
+  <!-- Bottom insight box -->
+  <rect x="50" y="490" width="800" height="140" fill="#f5f5f5" stroke="#666" stroke-width="2" rx="8"/>
+  <text x="450" y="515" text-anchor="middle" class="label" font-weight="bold" font-size="15">The Coherence Constraint in Action</text>
+  
+  <text x="450" y="540" text-anchor="middle" class="annotation">Loss = <tspan class="label" font-weight="bold">-softplus(proj_diff)</tspan> + <tspan class="label" font-weight="bold" fill="#ff6600">λ · coherence_penalty</tspan></text>
+  
+  <text x="450" y="565" text-anchor="middle" class="annotation">• <tspan fill="#00aa00" font-weight="bold">First term</tspan> pushes T_pi further along pref_dir (maximize proj_diff)</text>
+  <text x="450" y="585" text-anchor="middle" class="annotation">• <tspan fill="#ff6600" font-weight="bold">Second term</tspan> keeps outputs coherent (penalizes NLL degradation)</text>
+  <text x="450" y="605" text-anchor="middle" class="annotation">• Training finds the sweet spot: <tspan fill="#cc9900" font-weight="bold">maximum steering at the coherence boundary</tspan></text>
+  
+  <text x="450" y="625" text-anchor="middle" class="annotation" font-style="italic">This is why InnerPiSSA doesn't just maximize honesty - it maximizes controllable, high-quality honesty</text>
+</svg>

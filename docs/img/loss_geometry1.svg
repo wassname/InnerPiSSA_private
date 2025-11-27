@@ -1,0 +1,465 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 800 600"
+   width="800"
+   height="600"
+   version="1.1"
+   id="svg101"
+   sodipodi:docname="loss_geometry1.svg"
+   inkscape:version="1.2.2 (b0a8486541, 2022-12-01)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview103"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     showgrid="false"
+     inkscape:zoom="1.6225"
+     inkscape:cx="400"
+     inkscape:cy="299.84592"
+     inkscape:window-width="1440"
+     inkscape:window-height="1259"
+     inkscape:window-x="2560"
+     inkscape:window-y="942"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="svg101" />
+  <!-- Background -->
+  <rect
+     width="800"
+     height="600"
+     fill="#fafafa"
+     id="rect2" />
+  <!-- Title -->
+  <text
+     x="400"
+     y="30"
+     font-family="Arial, sans-serif"
+     font-size="20"
+     font-weight="bold"
+     text-anchor="middle"
+     fill="#333"
+     id="text4">
+    Contrastive Steering Loss Geometry (S-space)
+  </text>
+  <!-- Main diagram area -->
+  <g
+     transform="translate(150, 150)"
+     id="g54">
+    <!-- Axes -->
+    <line
+       x1="0"
+       y1="250"
+       x2="450"
+       y2="250"
+       stroke="#999"
+       stroke-width="1.5"
+       marker-end="url(#arrowgray)"
+       id="line6" />
+    <line
+       x1="0"
+       y1="250"
+       x2="0"
+       y2="0"
+       stroke="#999"
+       stroke-width="1.5"
+       marker-end="url(#arrowgray)"
+       id="line8" />
+    <text
+       x="460"
+       y="255"
+       font-family="Arial, sans-serif"
+       font-size="14"
+       fill="#666"
+       id="text10">U₁</text>
+    <text
+       x="-10"
+       y="-10"
+       font-family="Arial, sans-serif"
+       font-size="14"
+       fill="#666"
+       id="text12">U₂</text>
+    <!-- Origin -->
+    <circle
+       cx="0"
+       cy="250"
+       r="4"
+       fill="#333"
+       id="circle14" />
+    <text
+       x="-30"
+       y="270"
+       font-family="Arial, sans-serif"
+       font-size="12"
+       fill="#666"
+       id="text16">origin</text>
+    <!-- Frozen reference direction (pref_dir) - vertical, normalized -->
+    <line
+       x1="0"
+       y1="250"
+       x2="0"
+       y2="50"
+       stroke="#2563eb"
+       stroke-width="3"
+       marker-end="url(#arrowblue)"
+       id="line18" />
+    <text
+       x="10"
+       y="140"
+       font-family="Arial, sans-serif"
+       font-size="14"
+       font-weight="bold"
+       fill="#2563eb"
+       id="text20">
+      pref_dir
+    </text>
+    <text
+       x="10"
+       y="158"
+       font-family="Arial, sans-serif"
+       font-size="11"
+       fill="#2563eb"
+       id="text22">
+      (frozen)
+    </text>
+    <!-- Reference separation vector (pref_dir_ref) - slightly off vertical -->
+    <line
+       x1="0"
+       y1="250"
+       x2="40"
+       y2="80"
+       stroke="#10b981"
+       stroke-width="2.5"
+       marker-end="url(#arrowgreen)"
+       stroke-dasharray="5,3"
+       id="line24" />
+    <text
+       x="50"
+       y="160"
+       font-family="Arial, sans-serif"
+       font-size="13"
+       fill="#10b981"
+       id="text26">
+      pref_dir_ref
+    </text>
+    <text
+       x="50"
+       y="175"
+       font-family="Arial, sans-serif"
+       font-size="10"
+       fill="#10b981"
+       id="text28">
+      (reference)
+    </text>
+    <!-- Policy separation vector (pref_dir_pi) - more angled, being trained -->
+    <line
+       x1="0"
+       y1="250"
+       x2="120"
+       y2="100"
+       stroke="#f59e0b"
+       stroke-width="2.5"
+       marker-end="url(#arroworange)"
+       id="line30" />
+    <text
+       x="130"
+       y="170"
+       font-family="Arial, sans-serif"
+       font-size="13"
+       font-weight="bold"
+       fill="#f59e0b"
+       id="text32">
+      pref_dir_pi
+    </text>
+    <text
+       x="130"
+       y="185"
+       font-family="Arial, sans-serif"
+       font-size="10"
+       fill="#f59e0b"
+       id="text34">
+      (trainable)
+    </text>
+    <!-- Projection lines -->
+    <!-- proj_ref -->
+    <line
+       x1="40"
+       y1="80"
+       x2="0"
+       y2="80"
+       stroke="#10b981"
+       stroke-width="1"
+       stroke-dasharray="2,2"
+       opacity="0.6"
+       id="line36" />
+    <text
+       x="-50"
+       y="75"
+       font-family="Arial, sans-serif"
+       font-size="11"
+       fill="#10b981"
+       id="text38">proj_ref</text>
+    <!-- proj_pi -->
+    <line
+       x1="120"
+       y1="100"
+       x2="0"
+       y2="100"
+       stroke="#f59e0b"
+       stroke-width="1"
+       stroke-dasharray="2,2"
+       opacity="0.6"
+       id="line40" />
+    <text
+       x="-50"
+       y="95"
+       font-family="Arial, sans-serif"
+       font-size="11"
+       fill="#f59e0b"
+       id="text42">proj_pi</text>
+    <!-- Angle arc for pref_dir_pi -->
+    <path
+       d="M 0 230 A 20 20 0 0 0 8.5 220"
+       fill="none"
+       stroke="#f59e0b"
+       stroke-width="1.5"
+       id="path44" />
+    <text
+       x="25"
+       y="235"
+       font-family="Arial, sans-serif"
+       font-size="11"
+       fill="#f59e0b"
+       id="text46">θ</text>
+    <!-- Training arrow showing rotation -->
+    <path
+       d="M 100 120 Q 80 90 60 100"
+       fill="none"
+       stroke="#dc2626"
+       stroke-width="2"
+       marker-end="url(#arrowred)"
+       id="path48" />
+    <text
+       x="70"
+       y="90"
+       font-family="Arial, sans-serif"
+       font-size="12"
+       font-weight="bold"
+       fill="#dc2626"
+       id="text50">
+      training
+    </text>
+    <text
+       x="70"
+       y="103"
+       font-family="Arial, sans-serif"
+       font-size="10"
+       fill="#dc2626"
+       id="text52">
+      (rotate toward pref_dir)
+    </text>
+  </g>
+  <!-- Coherence constraint box -->
+  <g
+     transform="translate(520, 150)"
+     id="g70">
+    <rect
+       x="0"
+       y="0"
+       width="240"
+       height="180"
+       fill="#fff"
+       stroke="#666"
+       stroke-width="1.5"
+       rx="5"
+       id="rect56" />
+    <text
+       x="120"
+       y="25"
+       font-family="Arial, sans-serif"
+       font-size="14"
+       font-weight="bold"
+       text-anchor="middle"
+       fill="#333"
+       id="text58">
+      Coherence Constraint
+    </text>
+    <text
+       x="120"
+       y="45"
+       font-family="Arial, sans-serif"
+       font-size="11"
+       text-anchor="middle"
+       fill="#666"
+       id="text60">
+      (separate logp space)
+    </text>
+    <!-- Circle representing coherence boundary -->
+    <circle
+       cx="120"
+       cy="110"
+       r="50"
+       fill="none"
+       stroke="#dc2626"
+       stroke-width="2"
+       stroke-dasharray="4,2"
+       id="circle62" />
+    <circle
+       cx="120"
+       cy="110"
+       r="3"
+       fill="#10b981"
+       id="circle64" />
+    <text
+       x="120"
+       y="125"
+       font-family="Arial, sans-serif"
+       font-size="10"
+       text-anchor="middle"
+       fill="#10b981"
+       id="text66">
+      p_ref
+    </text>
+    <text
+       x="120"
+       y="170"
+       font-family="Arial, sans-serif"
+       font-size="10"
+       text-anchor="middle"
+       fill="#dc2626"
+       id="text68">
+      |log p_π - log p_ref| ≤ threshold
+    </text>
+  </g>
+  <!-- Loss equation -->
+  <g
+     transform="translate(50, 450)"
+     id="g82">
+    <rect
+       x="0"
+       y="0"
+       width="700"
+       height="120"
+       fill="#f0f9ff"
+       stroke="#2563eb"
+       stroke-width="2"
+       rx="8"
+       id="rect72" />
+    <text
+       x="350"
+       y="30"
+       font-family="Arial, sans-serif"
+       font-size="16"
+       font-weight="bold"
+       text-anchor="middle"
+       fill="#1e40af"
+       id="text74">
+      Loss Function
+    </text>
+    <text
+       x="350"
+       y="60"
+       font-family="monospace"
+       font-size="14"
+       text-anchor="middle"
+       fill="#333"
+       id="text76">
+      L = -proj_pi / proj_ref  +  coherence_penalty(log p_π, log p_ref)
+    </text>
+    <text
+       x="350"
+       y="85"
+       font-family="Arial, sans-serif"
+       font-size="11"
+       text-anchor="middle"
+       fill="#666"
+       id="text78">
+      Maximize projection ratio along frozen direction
+    </text>
+    <text
+       x="350"
+       y="102"
+       font-family="Arial, sans-serif"
+       font-size="11"
+       text-anchor="middle"
+       fill="#666"
+       id="text80">
+      while maintaining generation quality within threshold
+    </text>
+  </g>
+  <!-- Arrow markers -->
+  <defs
+     id="defs99">
+    <marker
+       id="arrowblue"
+       markerWidth="10"
+       markerHeight="10"
+       refX="9"
+       refY="3"
+       orient="auto"
+       markerUnits="strokeWidth">
+      <path
+         d="M0,0 L0,6 L9,3 z"
+         fill="#2563eb"
+         id="path84" />
+    </marker>
+    <marker
+       id="arrowgreen"
+       markerWidth="10"
+       markerHeight="10"
+       refX="9"
+       refY="3"
+       orient="auto"
+       markerUnits="strokeWidth">
+      <path
+         d="M0,0 L0,6 L9,3 z"
+         fill="#10b981"
+         id="path87" />
+    </marker>
+    <marker
+       id="arroworange"
+       markerWidth="10"
+       markerHeight="10"
+       refX="9"
+       refY="3"
+       orient="auto"
+       markerUnits="strokeWidth">
+      <path
+         d="M0,0 L0,6 L9,3 z"
+         fill="#f59e0b"
+         id="path90" />
+    </marker>
+    <marker
+       id="arrowred"
+       markerWidth="10"
+       markerHeight="10"
+       refX="9"
+       refY="3"
+       orient="auto"
+       markerUnits="strokeWidth">
+      <path
+         d="M0,0 L0,6 L9,3 z"
+         fill="#dc2626"
+         id="path93" />
+    </marker>
+    <marker
+       id="arrowgray"
+       markerWidth="10"
+       markerHeight="10"
+       refX="9"
+       refY="3"
+       orient="auto"
+       markerUnits="strokeWidth">
+      <path
+         d="M0,0 L0,6 L9,3 z"
+         fill="#999"
+         id="path96" />
+    </marker>
+  </defs>
+</svg>

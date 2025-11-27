@@ -1,7 +1,7 @@
 import pytest
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from repeng.eval import (
+from ipissa.eval import (
     get_choice_ids,
     gen_with_choices,
     is_choice,
@@ -116,13 +116,13 @@ def test_evaluate_model_with_adapter():
     2. Adapter coefficients have measurable effects (non-zero)
     3. Different coefficients produce different outputs
     """
-    from repeng.train.train_adapter import (
+    from ipissa.train.train_adapter import (
         TrainingConfig,
         setup_adapter,
         register_ipissa_peft,
     )
-    from repeng.adapter import ScaleAdapter
-    from repeng.train.daily_dilemas import evaluate_daily_dilemma
+    from ipissa.peft_utils.adapter_scaling import ScaleAdapter
+    from ipissa.train.daily_dilemas import evaluate_daily_dilemma
     from datasets import Dataset
     
     # Use tiny model for fast testing
@@ -135,16 +135,27 @@ def test_evaluate_model_with_adapter():
     config = TrainingConfig(
         model_name=model_id,
         quantization_type="none",
-        rank=4,  # Very small rank for speed
-        batch_size=2,
-        eval_batch_size=2,
-        eval_max_n_dilemmas=2,  # Only test on 2 dilemmas
-        target_modules=".*\\.(1|2)\\..*(gate_proj|down_proj)",  # Very sparse targeting
+        r=4,  # Very small rank for speed
+        bs=2,
+        eval_max_dilemmas=2,  # Only test on 2 dilemmas
+        n_depths=2,  # Target just 2 layers for speed
+        modules=["gate_proj", "down_proj"],  # Sparse targeting
     )
     
     # Register and setup adapter
     register_ipissa_peft()
-    model = setup_adapter(base_model, config)
+    # Need to compute layer selection to get target_modules regex
+    from ipissa.peft_utils.layer_selection import compute_layer_selection
+    layer_selection = compute_layer_selection(
+        base_model,
+        depth_start=config.depth_start,
+        depth_end=config.depth_end,
+        n_depths=config.n_depths,
+        loss_depths=config.loss_depths,
+        modules=config.modules,
+        loss_modules=config.loss_modules,
+    )
+    model = setup_adapter(base_model, config, layer_selection.adapter_regex)
     
     # Create tiny synthetic dataset instead of loading full dataset
     # This makes the test faster and more reliable
@@ -166,7 +177,7 @@ def test_evaluate_model_with_adapter():
     }
     
     # Format with tokenizer
-    from repeng.train.daily_dilemas import format_messages
+    from ipissa.train.daily_dilemas import format_messages
     
     formatted_data = []
     for i in range(len(synthetic_data["idx"])):
@@ -186,16 +197,16 @@ def test_evaluate_model_with_adapter():
     choice_ids = get_choice_ids(tokenizer)
     
     # Test with different coefficients
-    from transformers import GenerationConfig
-    generation_config = GenerationConfig(
-        eos_token_id=tokenizer.eos_token_id,
-        pad_token_id=tokenizer.pad_token_id,
-        bos_token_id=tokenizer.bos_token_id,
-        use_cache=True,
-        output_logits=True,
-        return_dict_in_generate=True,
-        do_sample=False,
-    )
+    # from transformers import GenerationConfig
+    # generation_config = GenerationConfig(
+    #     eos_token_id=tokenizer.eos_token_id,
+    #     pad_token_id=tokenizer.pad_token_id,
+    #     bos_token_id=tokenizer.bos_token_id,
+    #     use_cache=True,
+    #     output_logits=True,
+    #     return_dict_in_generate=True,
+    #     do_sample=False,
+    # )
     
     results = []
     
@@ -207,7 +218,6 @@ def test_evaluate_model_with_adapter():
             tokenizer,
             choice_ids,
             batch_size=2,
-            generation_config=generation_config,
             verbose=False,
             warn_low_pmass=False,
         )
@@ -221,7 +231,6 @@ def test_evaluate_model_with_adapter():
             tokenizer,
             choice_ids,
             batch_size=2,
-            generation_config=generation_config,
             verbose=False,
             warn_low_pmass=False,
         )
@@ -235,7 +244,6 @@ def test_evaluate_model_with_adapter():
             tokenizer,
             choice_ids,
             batch_size=2,
-            generation_config=generation_config,
             verbose=False,
             warn_low_pmass=False,
         )

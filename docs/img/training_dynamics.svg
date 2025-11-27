@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <style>
+      .label { font-family: Arial, sans-serif; font-size: 11px; fill: black; }
+      .title { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; fill: black; }
+      .subtitle { font-family: Arial, sans-serif; font-size: 13px; fill: #555; }
+      .annotation { font-family: Arial, sans-serif; font-size: 10px; fill: #333; }
+      .axis-label { font-family: Arial, sans-serif; font-size: 12px; font-weight: bold; fill: black; }
+    </style>
+    <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="black" />
+    </marker>
+  </defs>
+  
+  <!-- Title -->
+  <text x="400" y="25" text-anchor="middle" class="title">Training Dynamics: softpl_strong_up on Qwen-14B</text>
+  <text x="400" y="45" text-anchor="middle" class="subtitle">Loss = -softplus(proj_diff) + coherence_penalty</text>
+  
+  <!-- Background regions -->
+  <!-- Rapid separation -->
+  <rect x="100" y="80" width="180" height="370" fill="#e6ffe6" opacity="0.4"/>
+  <text x="190" y="100" text-anchor="middle" class="annotation" font-weight="bold" fill="#00aa00">Rapid separation</text>
+  
+  <!-- Coherence constraint activates -->
+  <rect x="280" y="80" width="240" height="370" fill="#ffffcc" opacity="0.4"/>
+  <text x="400" y="100" text-anchor="middle" class="annotation" font-weight="bold" fill="#ccaa00">Coherence constraint activates</text>
+  
+  <!-- Convergence -->
+  <rect x="520" y="80" width="180" height="370" fill="#e6e6ff" opacity="0.4"/>
+  <text x="610" y="100" text-anchor="middle" class="annotation" font-weight="bold" fill="#0066cc">Convergence</text>
+  
+  <!-- Axes -->
+  <line x1="100" y1="450" x2="700" y2="450" stroke="black" stroke-width="2"/>
+  <line x1="100" y1="120" x2="100" y2="450" stroke="black" stroke-width="2"/>
+  <line x1="700" y1="120" x2="700" y2="450" stroke="black" stroke-width="2"/>
+  
+  <!-- X-axis labels -->
+  <text x="100" y="475" text-anchor="middle" class="label">0</text>
+  <text x="220" y="475" text-anchor="middle" class="label">300</text>
+  <text x="400" y="475" text-anchor="middle" class="label">600</text>
+  <text x="580" y="475" text-anchor="middle" class="label">900</text>
+  <text x="700" y="475" text-anchor="middle" class="label">1000</text>
+  <text x="400" y="500" text-anchor="middle" class="axis-label">Training Steps</text>
+  
+  <!-- Left Y-axis labels (Projection magnitude) -->
+  <text x="85" y="455" text-anchor="end" class="label">0</text>
+  <text x="85" y="389" text-anchor="end" class="label">1</text>
+  <text x="85" y="323" text-anchor="end" class="label">2</text>
+  <text x="85" y="257" text-anchor="end" class="label">3</text>
+  <text x="85" y="191" text-anchor="end" class="label">4</text>
+  <text x="85" y="125" text-anchor="end" class="label">5</text>
+  <text x="40" y="285" text-anchor="middle" class="axis-label" transform="rotate(-90 40 285)">Projection Magnitude</text>
+  
+  <!-- Right Y-axis labels (NLL degradation) -->
+  <text x="715" y="455" text-anchor="start" class="label">-0.5</text>
+  <text x="715" y="389" text-anchor="start" class="label">0</text>
+  <text x="715" y="323" text-anchor="start" class="label">0.25</text>
+  <text x="715" y="257" text-anchor="start" class="label">0.5</text>
+  <text x="715" y="191" text-anchor="start" class="label">0.75</text>
+  <text x="715" y="125" text-anchor="start" class="label">1.0</text>
+  <text x="760" y="285" text-anchor="middle" class="axis-label" transform="rotate(90 760 285)">NLL Degradation</text>
+  
+  <!-- Grid lines -->
+  <line x1="100" y1="389" x2="700" y2="389" stroke="#ddd" stroke-width="1"/>
+  <line x1="100" y1="323" x2="700" y2="323" stroke="#ddd" stroke-width="1"/>
+  <line x1="100" y1="257" x2="700" y2="257" stroke="#ddd" stroke-width="1"/>
+  <line x1="100" y1="191" x2="700" y2="191" stroke="#ddd" stroke-width="1"/>
+  
+  <!-- Coherence threshold line -->
+  <line x1="100" y1="336.8" x2="700" y2="336.8" stroke="#ff6600" stroke-width="2" stroke-dasharray="8,4"/>
+  <text x="710" y="340" class="annotation" fill="#ff6600" font-weight="bold">Coherence threshold</text>
+  
+  <!-- Plot lines -->
+  <!-- proj_ref (light blue, dashed) - constant at 1.0 -->
+  <line x1="100" y1="389" x2="700" y2="389" stroke="#66b3ff" stroke-width="2.5" stroke-dasharray="6,4"/>
+  
+  <!-- proj_pi (dark blue, solid) - starts at 0.5, climbs to 4.5 -->
+  <path d="M 100,416.7 C 160,403 220,363 280,310 C 400,240 520,180 610,160 L 700,151.7" 
+        fill="none" stroke="#0033aa" stroke-width="3"/>
+  
+  <!-- proj_diff (green, thick) - grows from -0.5 to 3.5 -->
+  <path d="M 100,450 C 160,443 220,420 280,376 C 400,310 520,230 610,200 L 700,165" 
+        fill="none" stroke="#00aa00" stroke-width="3.5"/>
+  
+  <!-- logp_degradation (orange, right axis) - starts at 0, rises to 0.3 then plateaus -->
+  <path d="M 100,389 C 220,370 280,350 400,343 C 520,340 610,339 700,339" 
+        fill="none" stroke="#ff8800" stroke-width="2.5"/>
+  
+  <!-- Annotations with arrows -->
+  <!-- Step 300: Coherence loss kicks in -->
+  <line x1="280" y1="60" x2="280" y2="110" stroke="black" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <text x="280" y="55" text-anchor="middle" class="annotation" font-weight="bold">Coherence loss kicks in</text>
+  
+  <!-- Step 700: proj_diff growth slows -->
+  <line x1="580" y1="60" x2="580" y2="110" stroke="black" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <text x="580" y="45" text-anchor="middle" class="annotation" font-weight="bold">proj_diff growth slows</text>
+  <text x="580" y="58" text-anchor="middle" class="annotation" font-weight="bold">as margin reached</text>
+  
+  <!-- Callout boxes -->
+  <!-- Step 200 -->
+  <rect x="130" y="130" width="140" height="40" fill="white" stroke="#00aa00" stroke-width="2" rx="5"/>
+  <text x="200" y="145" text-anchor="middle" class="annotation" font-weight="bold">Step 200:</text>
+  <text x="200" y="160" text-anchor="middle" class="annotation">Strong gradients -</text>
+  <text x="200" y="173" text-anchor="middle" class="annotation">easy optimization</text>
+  
+  <!-- Step 600 -->
+  <rect x="430" y="230" width="140" height="40" fill="white" stroke="#ccaa00" stroke-width="2" rx="5"/>
+  <text x="500" y="245" text-anchor="middle" class="annotation" font-weight="bold">Step 600:</text>
+  <text x="500" y="260" text-anchor="middle" class="annotation">Balanced: separation</text>
+  <text x="500" y="273" text-anchor="middle" class="annotation">vs coherence</text>
+  
+  <!-- Step 900 -->
+  <rect x="530" y="130" width="150" height="50" fill="white" stroke="#0066cc" stroke-width="2" rx="5"/>
+  <text x="605" y="145" text-anchor="middle" class="annotation" font-weight="bold">Step 900:</text>
+  <text x="605" y="160" text-anchor="middle" class="annotation">Converged: max separation</text>
+  <text x="605" y="173" text-anchor="middle" class="annotation">within quality bounds</text>
+  
+  <!-- Legend -->
+  <g transform="translate(120, 510)">
+    <rect x="0" y="0" width="560" height="65" fill="white" stroke="black" stroke-width="1"/>
+    
+    <line x1="10" y1="15" x2="50" y2="15" stroke="#0033aa" stroke-width="3"/>
+    <text x="60" y="19" class="label">proj_pi (policy projections)</text>
+    
+    <line x1="10" y1="35" x2="50" y2="35" stroke="#66b3ff" stroke-width="2.5" stroke-dasharray="6,4"/>
+    <text x="60" y="39" class="label">proj_ref (reference projections, frozen)</text>
+    
+    <line x1="10" y1="55" x2="50" y2="55" stroke="#00aa00" stroke-width="3.5"/>
+    <text x="60" y="59" class="label">proj_diff = proj_pi - proj_ref</text>
+    
+    <line x1="280" y1="15" x2="320" y2="15" stroke="#ff8800" stroke-width="2.5"/>
+    <text x="330" y="19" class="label">logp_degradation (right axis)</text>
+    
+    <line x1="280" y1="35" x2="320" y2="35" stroke="#ff6600" stroke-width="2" stroke-dasharray="8,4"/>
+    <text x="330" y="39" class="label">Coherence threshold</text>
+  </g>
+</svg>

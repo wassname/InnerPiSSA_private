@@ -1,0 +1,428 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="800"
+   height="450"
+   version="1.1"
+   id="svg104"
+   sodipodi:docname="loss_geometry.svg"
+   inkscape:version="1.2.2 (b0a8486541, 2022-12-01)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview106"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     showgrid="false"
+     inkscape:zoom="2.2945615"
+     inkscape:cx="500.74927"
+     inkscape:cy="205.70379"
+     inkscape:window-width="2560"
+     inkscape:window-height="1364"
+     inkscape:window-x="0"
+     inkscape:window-y="40"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="g48" />
+  <defs
+     id="defs14">
+    <marker
+       id="arrowhead"
+       markerWidth="10"
+       markerHeight="10"
+       refX="9"
+       refY="3"
+       orient="auto">
+      <polygon
+         points="0 0, 10 3, 0 6"
+         fill="#666"
+         id="polygon2" />
+    </marker>
+    <marker
+       id="arrowhead-purple"
+       markerWidth="10"
+       markerHeight="10"
+       refX="9"
+       refY="3"
+       orient="auto">
+      <polygon
+         points="0 0, 10 3, 0 6"
+         fill="#8b5cf6"
+         id="polygon5" />
+    </marker>
+    <marker
+       id="arrowhead-darkpurple"
+       markerWidth="10"
+       markerHeight="10"
+       refX="9"
+       refY="3"
+       orient="auto">
+      <polygon
+         points="0 0, 10 3, 0 6"
+         fill="#6d28d9"
+         id="polygon8" />
+    </marker>
+    <marker
+       id="arrowhead-green"
+       markerWidth="10"
+       markerHeight="10"
+       refX="9"
+       refY="3"
+       orient="auto">
+      <polygon
+         points="0 0, 10 3, 0 6"
+         fill="#10b981"
+         id="polygon11" />
+    </marker>
+  </defs>
+  <rect
+     width="800"
+     height="450"
+     fill="#fafafa"
+     id="rect16" />
+  <circle
+     cx="226.81024"
+     cy="196.98116"
+     r="95"
+     fill="none"
+     stroke="#94a3b8"
+     stroke-width="2.5"
+     stroke-dasharray="6, 4"
+     opacity="0.7"
+     id="circle60-3"
+     style="stroke:#784421" />
+  <text
+     x="400"
+     y="25"
+     text-anchor="middle"
+     font-size="18"
+     font-weight="bold"
+     fill="#333"
+     id="text18">
+    InnerPiSSA Loss Geometry in U-Space
+  </text>
+  <!-- Panel A: Reference State (coef=0) -->
+  <g
+     transform="translate(60, 60)"
+     id="g48">
+    <text
+       x="140"
+       y="-10"
+       font-size="15"
+       font-weight="bold"
+       text-anchor="middle"
+       fill="#333"
+       id="text20">Reference (coef=0)</text>
+    <!-- Axes -->
+    <line
+       x1="0"
+       y1="250"
+       x2="280"
+       y2="250"
+       stroke="#d1d5db"
+       stroke-width="1.5"
+       id="line22" />
+    <line
+       x1="0"
+       y1="0"
+       x2="0"
+       y2="250"
+       stroke="#d1d5db"
+       stroke-width="1.5"
+       id="line24" />
+    <text
+       x="290"
+       y="255"
+       font-size="13"
+       fill="#666"
+       id="text26">U₁</text>
+    <text
+       x="-10"
+       y="-5"
+       font-size="13"
+       fill="#666"
+       id="text28">U₂</text>
+    <!-- Hidden states -->
+    <circle
+       cx="200"
+       cy="100"
+       r="7"
+       fill="#3b82f6"
+       stroke="#1e40af"
+       stroke-width="2"
+       id="circle30" />
+    <circle
+       cx="150"
+       cy="180"
+       r="7"
+       fill="#ef4444"
+       stroke="#991b1b"
+       stroke-width="2"
+       id="circle32" />
+    <!-- Preference direction (frozen, per-sample) -->
+    <line
+       x1="150.5062"
+       y1="181.27487"
+       x2="195.38536"
+       y2="107.38216"
+       stroke="#8b5cf6"
+       stroke-width="3.18685"
+       marker-end="url(#arrowhead-purple)"
+       id="line34" />
+    <!-- Labels -->
+    <text
+       x="178.87003"
+       y="85.183403"
+       font-size="13px"
+       fill="#1e40af"
+       font-weight="600"
+       id="text36">h_ref_cho</text>
+    <text
+       x="113.89205"
+       y="202.93991"
+       font-size="13px"
+       fill="#991b1b"
+       font-weight="600"
+       id="text38">h_ref_rej</text>
+    <text
+       x="107.43513"
+       y="110.9565"
+       font-size="13px"
+       fill="#8b5cf6"
+       font-weight="bold"
+       id="text40">pref_dir_ref</text>
+    <text
+       x="126.69933"
+       y="124.40288"
+       font-size="11px"
+       fill="#7c3aed"
+       id="text42">(frozen)</text>
+    <!-- Annotation -->
+    <text
+       x="140"
+       y="280"
+       font-size="11"
+       fill="#666"
+       text-anchor="middle"
+       id="text44">Full S-space (d-dim)</text>
+    <text
+       x="140"
+       y="295"
+       font-size="10"
+       fill="#888"
+       text-anchor="middle"
+       id="text46">loss_full_u=True</text>
+  </g>
+  <!-- Panel B: After Training (coef=+1) -->
+  <g
+     transform="translate(460, 60)"
+     id="g90">
+    <text
+       x="140"
+       y="-10"
+       font-size="15"
+       font-weight="bold"
+       text-anchor="middle"
+       fill="#333"
+       id="text50">After Training (coef=+1)</text>
+    <!-- Axes -->
+    <line
+       x1="0"
+       y1="250"
+       x2="280"
+       y2="250"
+       stroke="#d1d5db"
+       stroke-width="1.5"
+       id="line52" />
+    <line
+       x1="0"
+       y1="0"
+       x2="0"
+       y2="250"
+       stroke="#d1d5db"
+       stroke-width="1.5"
+       id="line54" />
+    <text
+       x="290"
+       y="255"
+       font-size="13"
+       fill="#666"
+       id="text56">U₁</text>
+    <text
+       x="-10"
+       y="-5"
+       font-size="13"
+       fill="#666"
+       id="text58">U₂</text>
+    <!-- Coherence boundary (trust region) -->
+    <circle
+       cx="175"
+       cy="140"
+       r="95"
+       fill="none"
+       stroke="#94a3b8"
+       stroke-width="2.5"
+       stroke-dasharray="6,4"
+       opacity="0.7"
+       id="circle60"
+       style="stroke:#784421" />
+    <text
+       x="178.3567"
+       y="37.668358"
+       font-size="10px"
+       fill="#64748b"
+       text-anchor="middle"
+       id="text62"
+       style="fill:#784421">coherence boundary</text>
+    <!-- Reference direction (ghost, for comparison) -->
+    <line
+       x1="150.04698"
+       y1="179.96895"
+       x2="206.6595"
+       y2="104.27512"
+       stroke="#8b5cf6"
+       stroke-width="2.07008"
+       opacity="0.25"
+       stroke-dasharray="4, 3"
+       id="line64" />
+    <!-- Learned hidden states (amplified separation) -->
+    <circle
+       cx="230"
+       cy="70"
+       r="7"
+       fill="#1e3a8a"
+       stroke="#0c1e4a"
+       stroke-width="2"
+       id="circle66" />
+    <circle
+       cx="120"
+       cy="210"
+       r="7"
+       fill="#7f1d1d"
+       stroke="#450a0a"
+       stroke-width="2"
+       id="circle68"
+       style="fill:#d40000" />
+    <!-- Learned direction (amplified) -->
+    <line
+       x1="125.73458"
+       y1="203.53909"
+       x2="203.30388"
+       y2="98.861389"
+       stroke="#6d28d9"
+       stroke-width="3.26756"
+       marker-end="url(#arrowhead-darkpurple)"
+       id="line70" />
+    <!-- Projection onto frozen direction (perpendicular drop) -->
+    <line
+       x1="224.4174"
+       y1="75.629318"
+       x2="209.6181"
+       y2="91.919899"
+       stroke="#10b981"
+       stroke-width="2.15653"
+       stroke-dasharray="3, 2"
+       marker-end="url(#arrowhead-green)"
+       id="line72" />
+    <circle
+       cx="204.71062"
+       cy="96.25914"
+       r="3"
+       fill="#10b981"
+       id="circle74" />
+    <!-- Labels -->
+    <text
+       x="238.07474"
+       y="62.797527"
+       font-size="13px"
+       fill="#1e3a8a"
+       font-weight="600"
+       id="text76">h_pi_cho</text>
+    <text
+       x="59.264645"
+       y="220.88385"
+       font-size="13px"
+       fill="#7f1d1d"
+       font-weight="600"
+       id="text78">h_pi_rej</text>
+    <text
+       x="126.23086"
+       y="93.140213"
+       font-size="13px"
+       fill="#6d28d9"
+       font-weight="bold"
+       id="text80">pref_dir_pi</text>
+    <text
+       x="91.845177"
+       y="106.31216"
+       font-size="11px"
+       fill="#5b21b6"
+       id="text82">(learned, amplified)</text>
+    <text
+       x="209.89081"
+       y="106.70275"
+       font-size="10px"
+       fill="#10b981"
+       id="text84">proj ↑</text>
+    <!-- Annotation -->
+    <text
+       x="140"
+       y="280"
+       font-size="11"
+       fill="#666"
+       text-anchor="middle"
+       id="text86">Logsigmoid maximizes</text>
+    <text
+       x="140"
+       y="295"
+       font-size="10"
+       fill="#888"
+       text-anchor="middle"
+       id="text88">signed projection</text>
+  </g>
+  <!-- Legend at bottom -->
+  <g
+     transform="translate(55.694725,377.53305)"
+     id="g102">
+    <rect
+       x="-10"
+       y="-15"
+       width="720"
+       height="85"
+       fill="#ffffff"
+       stroke="#e5e7eb"
+       stroke-width="1"
+       rx="4"
+       id="rect92" />
+    <text
+       x="0"
+       y="0"
+       font-size="13px"
+       font-weight="bold"
+       fill="#333333"
+       id="text94">Loss Components:</text>
+    <text
+       x="0"
+       y="20"
+       font-size="12px"
+       fill="#555555"
+       id="text96">L_proj = -logsigmoid(β · (proj_pi - proj_ref - margin)) where proj = (h_cho - h_rej) · pref_dir_ref / ||pref_dir_ref||</text>
+    <text
+       x="0"
+       y="40"
+       font-size="12px"
+       fill="#555555"
+       id="text98">L_coh = 0 (disabled in logsigmoid mode, coherence enforced by bounded loss function)</text>
+    <text
+       x="0"
+       y="60"
+       font-size="11px"
+       fill="#888888"
+       id="text100">Per-sample pref_dir_ref (loss_ds_pref_dir=False) • Full S-space projection (loss_full_u=True)</text>
+  </g>
+</svg>

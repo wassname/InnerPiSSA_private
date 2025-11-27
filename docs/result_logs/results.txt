@@ -1,0 +1,74 @@
++ BASE='uv run python nbs/train.py --eval-max-n-dilemmas=64'
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --loss-type=softplus
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/nbbijksj
+nbs/train.py --eval-max-n-dilemmas=64 --loss-type=softplus
+21:13:25 | INFO     | 🥇166.226
+wandb: 🚀 View run glad-sea-44 at: https://wandb.ai/wassname/InnerPiSSA/runs/nbbijksj
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --loss-type=tanh2v1
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/s1hqj7et
+nbs/train.py --eval-max-n-dilemmas=64 --loss-type=tanh2v1
+21:38:41 | INFO     | 🥇200.739
+wandb: 🚀 View run firm-dream-45 at: https://wandb.ai/wassname/InnerPiSSA/runs/s1hqj7et
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --loss-type=softplus_only
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/95bgxqv3
+wandb: 🚀 View run gallant-snowflake-46 at: 
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --loss-type=logsigmoid
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/wg15m8ob
+nbs/train.py --eval-max-n-dilemmas=64 --loss-type=logsigmoid
+22:24:24 | INFO     | 🥇313.012
+wandb: 🚀 View run dainty-dawn-47 at: https://wandb.ai/wassname/InnerPiSSA/runs/wg15m8ob
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --scale-s=add
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/36apxv0d
+nbs/train.py --eval-max-n-dilemmas=64 --scale-s=add
+23:07:21 | INFO     | 🥇341.177
+wandb: 🚀 View run restful-snow-48 at: https://wandb.ai/wassname/InnerPiSSA/runs/36apxv0d
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --scale-s=add2
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/5tupia8t
+nbs/train.py --eval-max-n-dilemmas=64 --scale-s=add2
+23:49:39 | INFO     | 🥇448.026
+wandb: 🚀 View run clean-tree-49 at: https://wandb.ai/wassname/InnerPiSSA/runs/5tupia8t
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --scale-s=none
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/6qfee7v7
+nbs/train.py --eval-max-n-dilemmas=64 --scale-s=none
+00:31:31 | INFO     | 🥇226.962
+wandb: 🚀 View run flowing-silence-50 at: https://wandb.ai/wassname/InnerPiSSA/runs/6qfee7v7
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --scale-s=mult
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/5v2z9itp
+nbs/train.py --eval-max-n-dilemmas=64 --scale-s=mult
+01:14:34 | INFO     | 🥇271.842
+wandb: 🚀 View run smart-lion-51 at: https://wandb.ai/wassname/InnerPiSSA/runs/5v2z9itp
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --no-ipissa-rotate-u
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/ivagloys
+nbs/train.py --eval-max-n-dilemmas=64 --no-ipissa-rotate-u
+01:56:00 | INFO     | 🥇358.728
+wandb: 🚀 View run lively-lake-52 at: https://wandb.ai/wassname/InnerPiSSA/runs/ivagloys
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --no-ipissa-rotate-v
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/b9c6ig06
+nbs/train.py --eval-max-n-dilemmas=64 --no-ipissa-rotate-v
+02:37:50 | INFO     | 🥇386.252
+wandb: 🚀 View run robust-frog-53 at: https://wandb.ai/wassname/InnerPiSSA/runs/b9c6ig06
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --no-ipissa-rotate-u --no-ipissa-rotate-v
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/netrsf0y
+nbs/train.py --eval-max-n-dilemmas=64 --no-ipissa-rotate-u --no-ipissa-rotate-v
+03:17:39 | INFO     | 🥇48.117
+wandb: 🚀 View run azure-vortex-54 at: https://wandb.ai/wassname/InnerPiSSA/runs/netrsf0y
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --no-ipissa-rotate-u --no-ipissa-rotate-v --scale-s=none
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/tfa6tlap
+wandb: 🚀 View run misunderstood-disco-55 at: 
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --lr=1e-1
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/j3m79rrt
+nbs/train.py --eval-max-n-dilemmas=64 --lr=1e-1
+04:02:30 | INFO     | 🥇93.800
+wandb: 🚀 View run restful-disco-56 at: https://wandb.ai/wassname/InnerPiSSA/runs/j3m79rrt
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --lr=1e-2
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/20pi8ar1
+nbs/train.py --eval-max-n-dilemmas=64 --lr=1e-2
+04:44:41 | INFO     | 🥇180.987
+wandb: 🚀 View run lilac-moon-57 at: https://wandb.ai/wassname/InnerPiSSA/runs/20pi8ar1
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --lr=6e-4
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/nr0078b1
+nbs/train.py --eval-max-n-dilemmas=64 --lr=6e-4
+05:28:32 | INFO     | 🥇483.035
+wandb: 🚀 View run olive-dawn-58 at: https://wandb.ai/wassname/InnerPiSSA/runs/nr0078b1
++ uv run python nbs/train.py --eval-max-n-dilemmas=64 --lr=1e-4
+wandb: 🚀 View run at https://wandb.ai/wassname/InnerPiSSA/runs/l3r800ve
