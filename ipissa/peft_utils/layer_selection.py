@@ -14,11 +14,11 @@ import torch.nn as nn
 
 
 def select_adapter_dims(
-    hs_cho: torch.Tensor,
-    hs_rej: torch.Tensor,
-    U: torch.Tensor,
+    hsS_cho: torch.Tensor,
+    hsS_rej: torch.Tensor,
     S: torch.Tensor,
     r: int,
+    norm_S: bool = True,
 ) -> torch.Tensor:
     """Select adapter dimensions using cho_var_snorm strategy.
     
@@ -28,22 +28,25 @@ def select_adapter_dims(
     This preserves task-active workspace rather than just the task-relevant delta.
     
     Args:
-        hs_cho: Chosen activations [n_samples, d_out]
-        hs_rej: Rejected activations [n_samples, d_out]
-        U: Left singular vectors [d_out, d_out] or [d_out, k]
+        hsS_cho: Chosen activations in S space [n_samples, d_out]
+        hsS_rej: Rejected activations in S space [n_samples, d_out]
         S: Singular values [d_out] or [k]
         r: Target rank (number of dims to select)
         
     Returns:
         indices: Selected dimension indices [r], sorted
     """
-    device = hs_cho.device
-    max_rank = min(U.shape[1], S.shape[0])
+    device = hsS_cho.device
+    max_rank = min(hsS_cho.shape[1], S.shape[0])
     r_actual = min(r, max_rank)
     
     # Project to S-space and normalize by pretrained singular values
-    proj_cho = (hs_cho @ U) / S.clamp(min=1e-8)  # [n_samples, rank]
-    proj_rej = (hs_rej @ U) / S.clamp(min=1e-8)
+    if norm_S:
+        proj_cho = (hsS_cho) / S.clamp(min=1e-8)  # [n_samples, rank]
+        proj_rej = (hsS_rej) / S.clamp(min=1e-8)
+    else:
+        proj_cho = hsS_cho
+        proj_rej = hsS_rej
     
     # Rank dimensions by variance
     cho_var = proj_cho.var(dim=0)  # [rank]
@@ -63,8 +66,8 @@ def select_adapter_dims(
 
 
 def compute_pref_direction(
-    hs_cho: torch.Tensor,
-    hs_rej: torch.Tensor,
+    hsS_cho: torch.Tensor,
+    hsS_rej: torch.Tensor,
     method: str = "mean",
     k: int = 64,
     U: Optional[torch.Tensor] = None,
@@ -73,99 +76,138 @@ def compute_pref_direction(
 ) -> torch.Tensor:
     """Compute preference direction for loss using specified method.
     
+    All inputs should already be in S-space (projected via U or V).
+    
     Args:
-        hs_cho: Chosen hidden states [n_samples, d], already projected to S-space if using V
-        hs_rej: Rejected hidden states [n_samples, d], already projected to S-space if using V
-        method: One of "mean", "pca1", "pca2", "pca4", "top_s", "adapter_dims"
+        hsS_cho: Chosen hidden states in S-space [n_samples, d]
+        hsS_rej: Rejected hidden states in S-space [n_samples, d]
+        method: Selection method:
+            - mean: simple mean difference
+            - pca1/pca2/pca4: top-k PCs of diff
+            - top_s: top-k dims by S magnitude
+            - top_diff: top-k dims by |diff| magnitude  
+            - top_diff_snorm: top-k dims by |diff|/S (upweights low-S high-diff)
+            - adapter_dims: r/2 cho + r/2 rej by variance/S
+            - adapter_dims_raw: r/2 cho + r/2 rej by variance (no S norm)
         k: Number of dimensions for multi-dim methods
-        U: Left singular vectors [d_out, r] - needed for adapter_dims
-        S: Singular values [r] - needed for top_s, adapter_dims
-        V: Right singular vectors [d_in, r] - not used directly (projection already done)
+        U: Unused, kept for API compatibility
+        S: Singular values [d] - needed for top_s, top_diff_snorm, adapter_dims*
+        V: Unused, kept for API compatibility
         
     Returns:
-        pref_dir: Preference direction(s)
-            - For mean/pca1: [d] single direction
-            - For pca2/pca4/top_s/adapter_dims: [k, d] multiple directions
-            
-    Note:
-        hs_cho/hs_rej should already be in the desired space:
-        - For d-space (raw activations): just pass the activations
-        - For S-space via V: pass (hs @ V) where V is [d_in, r]
-        - For S-space via U: pass (hs @ U) where U is [d_out, r]
+        pref_dir: Preference direction [d], unit normalized
     """
     import torch.nn.functional as F
     from sklearn.decomposition import PCA
     
-    diff = hs_cho - hs_rej  # [n_samples, d]
-    d = diff.shape[1]
+    diffS = hsS_cho - hsS_rej  # [n_samples, d]
+    d = diffS.shape[1]
     
     if method == "mean":
         # Simple mean difference - SNR=1.56, 100% sign agreement
-        pref_dir = diff.mean(dim=0)  # [d]
+        pref_dir = diffS.mean(dim=0)  # [d]
         return F.normalize(pref_dir, dim=0)
     
     elif method.startswith("pca"):
         # PCA on diff: pca1 = first PC, pca2 = top-2, etc.
+        # Returns mean direction projected onto top-k PC subspace
         n_components = int(method[3:]) if method[3:].isdigit() else 1
-        n_components = min(n_components, k, d, diff.shape[0])
+        n_components = min(n_components, k, d, diffS.shape[0])
         
         # Truncate to top-k dims before PCA (full-rank V is rotation-invariant, 
         # so PCA on diff == PCA on diff@V — meaningless without truncation)
         k_trunc = min(k, d)
-        diff_trunc = diff[:, :k_trunc]  # [n, k_trunc] - top singular dims
+        diff_trunc = diffS[:, :k_trunc]  # [n, k_trunc] - top singular dims
         
         diff_np = diff_trunc.cpu().numpy()
         pca = PCA(n_components=n_components)
         pca.fit(diff_np)
-        components_trunc = torch.from_numpy(pca.components_).to(diff.device).float()  # [n_components, k_trunc]
+        components_trunc = torch.from_numpy(pca.components_).to(diffS.device).float()  # [n_components, k_trunc]
+        
+        # Project mean diff onto PC subspace: sum of projections onto each PC
+        mean_diff_trunc = diff_trunc.mean(dim=0)  # [k_trunc]
+        # proj = sum_i (mean · pc_i) * pc_i = components.T @ (components @ mean)
+        coeffs = components_trunc @ mean_diff_trunc  # [n_components]
+        pref_dir_trunc = coeffs @ components_trunc  # [k_trunc]
         
         # Pad back to full dimension (zeros in truncated dims)
-        components = torch.zeros(n_components, d, device=diff.device)
-        components[:, :k_trunc] = components_trunc
+        pref_dir = torch.zeros(d, device=diffS.device)
+        pref_dir[:k_trunc] = pref_dir_trunc
         
-        if n_components == 1:
-            return components[0]  # [d] single direction
-        else:
-            return components  # [k, d] multi-direction
+        return F.normalize(pref_dir, dim=0)  # [d]
     
     elif method == "top_s":
-        # Top-k dims by singular value magnitude (assumes already in S-space)
+        # Select top-k dims by S magnitude, apply to diff
         if S is None:
             raise ValueError("top_s method requires S (singular values)")
         
         k_actual = min(k, S.shape[0], d)
         _, top_idx = torch.topk(S, k_actual)
         
-        # Create selection matrix: pref_dir[i] = e_{top_idx[i]}
-        pref_dir = torch.zeros(k_actual, d, device=diff.device)
-        pref_dir[torch.arange(k_actual), top_idx] = 1.0
+        mean_diff = diffS.mean(dim=0)  # [d]
+        mask = torch.zeros(d, device=diffS.device)
+        mask[top_idx] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)  # [d]
         
-        # Scale by mean diff in each dim
-        mean_diff = diff.mean(dim=0)  # [d]
-        signs = mean_diff[top_idx].sign()
-        pref_dir = pref_dir * signs.unsqueeze(1)  # Apply sign from mean diff
+        return pref_dir
+
+    elif method == "top_diff":
+        # Select top-k dims by diff magnitude (not S magnitude)
+        # Finds where cho/rej actually differ most, regardless of S
+        mean_diff = diffS.mean(dim=0)  # [d]
+        k_actual = min(k, d)
+        _, top_idx = torch.topk(mean_diff.abs(), k_actual)
         
-        return pref_dir  # [k, d]
-    
+        mask = torch.zeros(d, device=diffS.device)
+        mask[top_idx] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)
+        return pref_dir
+
+    elif method == "top_diff_snorm":
+        # Select top-k dims by S-normalized diff magnitude
+        # Upweights low-S dims where diff is strong relative to baseline
+        if S is None:
+            raise ValueError("top_diff_snorm requires S (singular values)")
+        
+        mean_diff = diffS.mean(dim=0)  # [d]
+        # Normalize by S to find dims with high diff relative to their typical magnitude
+        diff_snorm = mean_diff.abs() / S.clamp(min=1e-8)
+        k_actual = min(k, d)
+        _, top_idx = torch.topk(diff_snorm, k_actual)
+        
+        mask = torch.zeros(d, device=diffS.device)
+        mask[top_idx] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)
+        return pref_dir
+
     elif method == "adapter_dims":
-        # Same dims as adapter init (r/2 from cho + r/2 from rej variance, S-normalized)
-        if U is None or S is None:
-            raise ValueError("adapter_dims method requires U and S")
+        # Mean direction masked to adapter-selected dims (cho/rej variance, S-normalized)
+        if S is None:
+            raise ValueError("adapter_dims method requires S (singular values)")
         
-        indices = select_adapter_dims(hs_cho, hs_rej, U, S, k)
-        k_actual = len(indices)
+        indices = select_adapter_dims(hsS_cho, hsS_rej, S, k, norm_S=True)
         
-        # Create selection matrix: pref_dir[i] = e_{indices[i]}
-        pref_dir = torch.zeros(k_actual, d, device=diff.device)
-        pref_dir[torch.arange(k_actual), indices] = 1.0
+        mean_diff = diffS.mean(dim=0)  # [d]
+        mask = torch.zeros(d, device=diffS.device)
+        mask[indices] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)  # [d]
         
-        # Scale by mean diff in each dim
-        mean_diff = diff.mean(dim=0)  # [d]
-        signs = mean_diff[indices].sign()
-        pref_dir = pref_dir * signs.unsqueeze(1)  # Apply sign from mean diff
+        return pref_dir
+
+    elif method == "adapter_dims_raw":
+        # Same as adapter_dims but without S normalization (raw variance ranking)
+        if S is None:
+            raise ValueError("adapter_dims_raw method requires S (singular values)")
         
-        return pref_dir  # [k, d]
-    
+        indices = select_adapter_dims(hsS_cho, hsS_rej, S, k, norm_S=False)
+        
+        mean_diff = diffS.mean(dim=0)  # [d]
+        mask = torch.zeros(d, device=diffS.device)
+        mask[indices] = 1.0
+        pref_dir = F.normalize(mean_diff * mask, dim=0)  # [d]
+        
+        return pref_dir
+
     else:
         raise ValueError(f"Unknown pref_dir_method: {method}")
 
