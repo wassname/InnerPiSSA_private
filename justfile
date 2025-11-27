@@ -20,7 +20,7 @@ scratch:
     echo "WandB group: $WANDB_RUN_GROUP"
     
     # Base config for small model ablations
-    BASEsmall="uv run python nbs/train.py q4b-80gb"
+    BASEsmall="uv run python nbs/train.py q4bv1-80gb"
     BASE="uv run python nbs/train.py l8b-80gb"
     BASElarger="uv run python nbs/train.py gemma12b-80gb"
 
@@ -82,65 +82,65 @@ scratch:
 
 
     # Baseline: current best
-    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.4 --lr=2e-3 --no_rot_u
+    uv run python nbs/train.py q4bv1-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.4 --lr=2e-3 --no_rot_u
 
     # Higher LR
-    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=mult --max_rotation_angle=0.4 --lr=1e-2 --no_rot_u
+    uv run python nbs/train.py q4bv1-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=mult --max_rotation_angle=0.4 --lr=1e-2 --no_rot_u
 
     # Enable rot_u (might be stable now!)
-    uv run python nbs/train.py q4b-80gb  --n_epochs=10 --eval_max_dilemmas=128  --scale_s=add2 --max_rotation_angle=0.2 --lr=2e-3 --rot_u
+    uv run python nbs/train.py q4bv1-80gb  --n_epochs=10 --eval_max_dilemmas=128  --scale_s=add2 --max_rotation_angle=0.2 --lr=2e-3 --rot_u
 
     # Both together
-    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.1 --lr=1e-2 --rot_u
+    uv run python nbs/train.py q4bv1-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.1 --lr=1e-2 --rot_u
 
     # Multiplicative variant
-    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=mult --max_rotation_angle=0.1 --lr=1e-2 --rot_u
+    uv run python nbs/train.py q4bv1-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=mult --max_rotation_angle=0.1 --lr=1e-2 --rot_u
 
 
     # === ROT_U ABLATION (if max_rotation_angle makes it stable) ===
-    uv run python nbs/train.py q4b-80gb \
+    uv run python nbs/train.py q4bv1-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
     --scale_s=add2 \
     --rot_u --max_rotation_angle=0.2
 
     # === SCALE_S ABLATION ===
     # None (surprisingly viable from old data)
-    uv run python nbs/train.py q4b-80gb \
+    uv run python nbs/train.py q4bv1-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
     --scale_s=none  --max_rotation_angle=1.0
 
     # Mult (alternative)
-    uv run python nbs/train.py q4b-80gb \
+    uv run python nbs/train.py q4bv1-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
     --scale_s=mult
 
     # === LOSS CONSTRAINT ABLATION ===
-    uv run python nbs/train.py q4b-80gb \
+    uv run python nbs/train.py q4bv1-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
     --no_coh
 
-    uv run python nbs/train.py q4b-80gb \
+    uv run python nbs/train.py q4bv1-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
     --no_mono
 
-    uv run python nbs/train.py q4b-80gb \
+    uv run python nbs/train.py q4bv1-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
     --no_coh --no_mono
 
 
     # === BASELINE: Proven config ===
-    uv run python nbs/train.py q4b-80gb \
+    uv run python nbs/train.py q4bv1-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
     --lr=8e-3 --loss_depths=0.8 --scale_s=add2
 
     # === LR SWEEP (most important) ===
     # Lower
-    uv run python nbs/train.py q4b-80gb \
+    uv run python nbs/train.py q4bv1-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
     --lr=2e-3 --loss_depths=0.8 --scale_s=add2
 
     # Higher (risky but high ceiling)
-    uv run python nbs/train.py q4b-80gb \
+    uv run python nbs/train.py q4bv1-80gb \
     --n_epochs=10 --eval_max_dilemmas=128 \
     --lr=1e-2 --loss_depths=0.8 --scale_s=add2
 
@@ -148,15 +148,15 @@ scratch:
 
 
 
-    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.6 --lr=2e-4 --rot_u
-    uv run python nbs/train.py q4b-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.6 --lr=2e-2 --rot_u
+    uv run python nbs/train.py q4bv1-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.6 --lr=2e-4 --rot_u
+    uv run python nbs/train.py q4bv1-80gb  --n_epochs=10  --eval_max_dilemmas=128 --scale_s=add2 --max_rotation_angle=0.6 --lr=2e-2 --rot_u
 
 
 
 
-    uv run python nbs/train.py q4b-80gb --n_epochs=10 --eval_max_dilemmas=128 --lr=2e-3 --no_coh --no_mono --rot_u
-    uv run python nbs/train.py q4b-80gb --n_epochs=10 --eval_max_dilemmas=128 --lr=2e-3 --no_coh
-    uv run python nbs/train.py q4b-80gb --n_epochs=10 --eval_max_dilemmas=128 --lr=2e-3 --no_mono --rot_u
+    uv run python nbs/train.py q4bv1-80gb --n_epochs=10 --eval_max_dilemmas=128 --lr=2e-3 --no_coh --no_mono --rot_u
+    uv run python nbs/train.py q4bv1-80gb --n_epochs=10 --eval_max_dilemmas=128 --lr=2e-3 --no_coh
+    uv run python nbs/train.py q4bv1-80gb --n_epochs=10 --eval_max_dilemmas=128 --lr=2e-3 --no_mono --rot_u
 
 
     # just sweep-s-norm
@@ -166,15 +166,15 @@ scratch:
     run_exp_small --lr=1e-2 --n_epochs=10 --wd=1
 
     # try a low lr, long run with senstivie laeyr
-    uv run python nbs/train.py q4b-80gb --rot_u --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --no-loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
-    uv run python nbs/train.py q4b-80gb --rot_u --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
-    uv run python nbs/train.py q4b-80gb --modules v_proj o_proj gate_proj up_proj down_proj --r=16 --no-loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
-    uv run python nbs/train.py q4b-80gb --modules v_proj o_proj gate_proj up_proj down_proj --r=8 --loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
+    uv run python nbs/train.py q4bv1-80gb --rot_u --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --no-loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
+    uv run python nbs/train.py q4bv1-80gb --rot_u --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
+    uv run python nbs/train.py q4bv1-80gb --modules v_proj o_proj gate_proj up_proj down_proj --r=16 --no-loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
+    uv run python nbs/train.py q4bv1-80gb --modules v_proj o_proj gate_proj up_proj down_proj --r=8 --loss_use_V --lr=3e-4 --n_epochs=60 --wd=1
     
 
-    uv run python nbs/train.py q4b-80gb --mono_weight=1000 --coh_weight=.1
-    uv run python nbs/train.py q4b-80gb --mono_weight=1000 --coh_weight=1000
-    uv run python nbs/train.py q4b-80gb --wd=100
+    uv run python nbs/train.py q4bv1-80gb --mono_weight=1000 --coh_weight=.1
+    uv run python nbs/train.py q4bv1-80gb --mono_weight=1000 --coh_weight=1000
+    uv run python nbs/train.py q4bv1-80gb --wd=100
     # long
     # run_exp_small --n_epochs=1000
 
@@ -196,7 +196,7 @@ scratch:
 sweep-depths:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-depths-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4b-80gb"
+    BASE="uv run python nbs/train.py q4bv1-80gb"
     
     # Test different number of depth layers
     for n_depths in 1 3 5 8 12 28 52; do
@@ -207,7 +207,7 @@ sweep-depths:
 sweet-start-end:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-start-end-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4b-80gb"
+    BASE="uv run python nbs/train.py q4bv1-80gb"
     
     # Test different layer ranges
     for start in 0.0 0.1 0.2 0.3 0.4; do
@@ -220,7 +220,7 @@ sweet-start-end:
 sweep-scale:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-scale-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4b-80gb"
+    BASE="uv run python nbs/train.py q4bv1-80gb"
     
     # Test different scaling mechanisms
     for scale in add_tanh add2 none mult; do
@@ -255,7 +255,7 @@ ablate-paper:
 ablate-constraints:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="ablate-constraints-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4b-80gb"
+    BASE="uv run python nbs/train.py q4bv1-80gb"
     $BASE
     $BASE --no_mono --no_coh
     $BASE --mono --no_coh
@@ -275,43 +275,43 @@ sweep-layers:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-layers-V-$(date +%Y%m%d-%H%M)"
     for depth in 0.01 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 0.99; do
-        uv run python nbs/train.py q4b-80gb --loss_depths=$depth --loss_use_V --loss_modules up_proj
+        uv run python nbs/train.py q4bv1-80gb --loss_depths=$depth --loss_use_V --loss_modules up_proj
     done
     export WANDB_RUN_GROUP="sweep-layers-$(date +%Y%m%d-%H%M)"
     for depth in 0.01 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 0.99; do
-        uv run python nbs/train.py q4b-80gb --loss_depths=$depth --no_loss_use_V --loss_modules o_proj down_proj
+        uv run python nbs/train.py q4bv1-80gb --loss_depths=$depth --no_loss_use_V --loss_modules o_proj down_proj
     done
 
 sweep-wd:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="ablate-wd-$(date +%Y%m%d-%H%M)"
     for wd in 0 1e-7 1e-6 1e-5 1e-4 1e-3 1e-2 1e-1 1e-0 1e-1; do
-        uv run python nbs/train.py q4b-80gb --wd=$wd
+        uv run python nbs/train.py q4bv1-80gb --wd=$wd
     done
 
 sweep-lr:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-lr-$(date +%Y%m%d-%H%M)"
     for lr in 1e-0 1e-1 1e-2 1e-3 1e-4 1e-5 1e-6; do
-        uv run python nbs/train.py q4b-80gb --lr=$lr
+        uv run python nbs/train.py q4bv1-80gb --lr=$lr
     done
 
 ablate-modules:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="ablate-modules-$(date +%Y%m%d-%H%M)"
-    uv run python nbs/train.py q4b-80gb --modules o_proj down_proj --experiment_name="layers residual out"
-    uv run python nbs/train.py q4b-80gb --modules gate_proj up_proj down_proj --experiment_name="attn.down mlp.up"
-    uv run python nbs/train.py q4b-80gb --modules gate_proj up_proj --experiment_name="mlp up largest output dim"
-    uv run python nbs/train.py q4b-80gb --modules q_proj k_proj v_proj --experiment_name="attention up"
-    uv run python nbs/train.py q4b-80gb --modules v_proj --experiment_name="attention v"
-    uv run python nbs/train.py q4b-80gb --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --experiment_name="all" --bs=16
+    uv run python nbs/train.py q4bv1-80gb --modules o_proj down_proj --experiment_name="layers residual out"
+    uv run python nbs/train.py q4bv1-80gb --modules gate_proj up_proj down_proj --experiment_name="attn.down mlp.up"
+    uv run python nbs/train.py q4bv1-80gb --modules gate_proj up_proj --experiment_name="mlp up largest output dim"
+    uv run python nbs/train.py q4bv1-80gb --modules q_proj k_proj v_proj --experiment_name="attention up"
+    uv run python nbs/train.py q4bv1-80gb --modules v_proj --experiment_name="attention v"
+    uv run python nbs/train.py q4bv1-80gb --modules q_proj k_proj v_proj o_proj gate_proj up_proj down_proj --r=8 --experiment_name="all" --bs=16
 
 run-models:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="run-models-$(date +%Y%m%d-%H%M)"
     uv run python nbs/train.py q06b-24gb
-    uv run python nbs/train.py q4b-80gb
-    uv run python nbs/train.py q4b-80gb --model_name=Qwen/Qwen3-4B-Base
+    uv run python nbs/train.py q4bv1-80gb
+    uv run python nbs/train.py q4bv1-80gb --model_name=Qwen/Qwen3-4B-Base
     uv run python nbs/train.py q14b-80gb
     uv run python nbs/train.py q14b-80gb --model_name=wassname/qwen-14B-codefourchan
     uv run python nbs/train.py l8b-80gb
@@ -335,14 +335,14 @@ sweep-rank:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-rank-$(date +%Y%m%d-%H%M)"
     for r in 8 16 32 64 128 256 512 1024; do
-        uv run python nbs/train.py q4b-80gb --r=$r
+        uv run python nbs/train.py q4bv1-80gb --r=$r
     done
 
 run-seeds:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="run-seeds-$(date +%Y%m%d-%H%M)"
     for seed in 42 123 456; do
-        uv run python nbs/train.py q4b-80gb --seed=$seed
+        uv run python nbs/train.py q4bv1-80gb --seed=$seed
     done
 
 # Data efficiency: what's minimum viable sample count?
@@ -350,7 +350,7 @@ data-efficiency:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="data-efficiency-$(date +%Y%m%d-%H%M)"
     echo "WandB group: $WANDB_RUN_GROUP"
-    BASE="uv run python nbs/train.py q4b-80gb"
+    BASE="uv run python nbs/train.py q4bv1-80gb"
     for n in 50 100 200 400 800 2000; do
         echo "=== Training with $n samples ==="
         $BASE --max_samples=$n --experiment_name="data_$n"
@@ -365,7 +365,7 @@ quick:
 sweep-rotation-angle:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-rotation-angle-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4b-80gb"
+    BASE="uv run python nbs/train.py q4bv1-80gb"
     
     # Test different max angles (radians)
     for angle in 0.1 0.2 0.3 0.5 1.0 inf; do
@@ -379,14 +379,14 @@ sweep-rotation-angle:
     $BASE --max_rotation_angle=inf --scale_s=none --rot_v --no_rot_u
 
     # Compare with best S_MEAN_ABS init
-    S_MEAN_ABS=True uv run python nbs/train.py q4b-80gb --max_rotation_angle=0.3 --data_aware_init
-    S_MEAN_ABS=True uv run python nbs/train.py q4b-80gb --max_rotation_angle=inf --data_aware_init
+    S_MEAN_ABS=True uv run python nbs/train.py q4bv1-80gb --max_rotation_angle=0.3 --data_aware_init
+    S_MEAN_ABS=True uv run python nbs/train.py q4bv1-80gb --max_rotation_angle=inf --data_aware_init
 
 # Sweep long training with low lr to test if unstable features stabilize
 sweep-long-training:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-long-training-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4b-80gb"
+    BASE="uv run python nbs/train.py q4bv1-80gb"
     
     # Test if rot_u stabilizes with longer training at lower lr
     for lr in 1e-4 3e-4 1e-3; do
