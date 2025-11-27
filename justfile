@@ -435,17 +435,17 @@ sweep-pref-dir:
     export WANDB_RUN_GROUP="sweep-pref-dir-$(date +%Y%m%d-%H%M)"
     BASE="uv run python nbs/train.py q4b-24gb"
     
+    # Multi-direction methods (vary k)
+    for k in 4, 8 16 32 64 128; do
+        for method in top_s adapter_dims top_diff adapter_dims_raw  top_diff_snorm pca2 pca4; do
+            echo "=== pref_dir_method: $method, k=$k ==="
+            $BASE --pref_dir_method=$method --pref_dir_k=$k
+        done
+    done
+    
     # Single-direction methods
     echo "=== pref_dir_method: mean (baseline) ==="
     $BASE --pref_dir_method=mean
     
     echo "=== pref_dir_method: pca1 ==="
     $BASE --pref_dir_method=pca1
-    
-    # Multi-direction methods (vary k)
-    for method in pca2 pca4 top_s adapter_dims; do
-        for k in 16 32 64 128; do
-            echo "=== pref_dir_method: $method, k=$k ==="
-            $BASE --pref_dir_method=$method --pref_dir_k=$k
-        done
-    done

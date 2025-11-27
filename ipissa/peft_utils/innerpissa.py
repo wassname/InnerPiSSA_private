@@ -36,7 +36,7 @@ from loguru import logger
 from peft.utils import (
     TRANSFORMERS_MODELS_TO_LORA_TARGET_MODULES_MAPPING,
 )
-
+from ipissa.peft_utils.layer_selection import select_adapter_dims
 
 
 @dataclass
@@ -232,13 +232,13 @@ class InnerPiSSALayer(BaseTunerLayer):
             This preserves task-active workspace (95% signal) rather than just the
             task-relevant delta (5% residual after cancellation).
             """
-            from ipissa.peft_utils.layer_selection import select_adapter_dims
+            
             
             # Load cho/rej activations
             cho = steering_vectors[layer_name]['cho'].to(device).float()
             rej = steering_vectors[layer_name]['rej'].to(device).float()
             
-            indices = select_adapter_dims(cho, rej, U_full, S_full, r_actual)
+            indices = select_adapter_dims(cho@U_full, rej@U_full, S_full, r_actual)
             
             # Extract U, V, S
             U = U_full[:, indices]  # [d_out, r_actual]
