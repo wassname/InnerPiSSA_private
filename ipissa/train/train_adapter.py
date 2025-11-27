@@ -126,9 +126,9 @@ def train_steer_vector(
         Sw_dirs = {}  # S-weighted for steering
 
         for layer, layer_idx in tqdm(zip(loss_layers, loss_layer_indices), desc='read_representations2'):
-            U = Uw_full[layer].cpu()  # [d_out, r]
-            S = Sw_full[layer].cpu()  # [r]
-            V = Vw_full[layer].cpu()  # [d_in, r]
+            U = Uw_full[layer].cpu()  # [d_out, min(d_out, d_in)]
+            S = Sw_full[layer].cpu()  # [min(d_out, d_in)]
+            V = Vw_full[layer].cpu()  # [d_in, min(d_out, d_in)]
 
 
             # 1. Unweighted S-space direction for loss computation
@@ -146,10 +146,10 @@ def train_steer_vector(
                 # Convert numpy to torch if needed
                 if isinstance(hs_cpu, np.ndarray):
                     hs_cpu = torch.from_numpy(hs_cpu)
-                hs_s = hs_cpu @ V  # [n, d_in] @ [d_in, r] -> [n, r] in S-space
+                hs_s = hs_cpu @ V  # [n, d_in] @ [d_in, d] -> [n, d] full S-space
             else:
                 hs_cpu = last_act[layer].float()
-                hs_s = hs_cpu @ U  # [n, d_out] @ [d_out, r] -> [n, r] in S-space
+                hs_s = hs_cpu @ U  # [n, d_out] @ [d_out, d] -> [n, d] full S-space
             h_cho_s = hs_s[::2]
             h_rej_s = hs_s[1::2]
             
@@ -158,11 +158,11 @@ def train_steer_vector(
                 h_cho_s, h_rej_s,
                 method=config.pref_dir_method,
                 k=config.pref_dir_k,
-                U=U if not config.loss_use_V else None,  # U for output-space projection
+                U=U if not config.loss_use_V else None,
                 S=S,
                 V=V if config.loss_use_V else None,
             )
-            # Shape: [r] for mean/pca1, [k, r] for multi-dim methods
+            # Shape: [d] for mean/pca1, [k, d] for multi-dim methods
 
             # Store preference direction (will be projected in loss)
             loss_dirs[layer] = delta_s_loss

@@ -109,10 +109,19 @@ def compute_pref_direction(
         n_components = int(method[3:]) if method[3:].isdigit() else 1
         n_components = min(n_components, k, d, diff.shape[0])
         
-        diff_np = diff.cpu().numpy()
+        # Truncate to top-k dims before PCA (full-rank V is rotation-invariant, 
+        # so PCA on diff == PCA on diff@V — meaningless without truncation)
+        k_trunc = min(k, d)
+        diff_trunc = diff[:, :k_trunc]  # [n, k_trunc] - top singular dims
+        
+        diff_np = diff_trunc.cpu().numpy()
         pca = PCA(n_components=n_components)
         pca.fit(diff_np)
-        components = torch.from_numpy(pca.components_).to(diff.device).float()  # [n_components, d]
+        components_trunc = torch.from_numpy(pca.components_).to(diff.device).float()  # [n_components, k_trunc]
+        
+        # Pad back to full dimension (zeros in truncated dims)
+        components = torch.zeros(n_components, d, device=diff.device)
+        components[:, :k_trunc] = components_trunc
         
         if n_components == 1:
             return components[0]  # [d] single direction

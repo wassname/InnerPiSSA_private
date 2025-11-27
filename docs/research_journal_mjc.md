@@ -2019,3 +2019,10 @@ BUG: Exactly right! Full V is just rotation (preserves everything). Truncation a
   4. **Update loss** to handle truncated pref_dir (may need shape adjustments)
 
   Want me to start implementing? I'd begin with extracting the dim selection function since that's foundational.
+
+
+TODO
+- eval propt
+- eval prompt + steer
+- report main_metric for each method (in fact all for all to wandb)
+- report symmetry or values for each coeff
