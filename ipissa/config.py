@@ -177,6 +177,18 @@ class TrainingConfig:
     data_aware_init: bool = True
     """Use data-aware SVD component selection (cho_var_snorm strategy)"""
 
+    pref_dir_method: Literal["mean", "pca1", "pca2", "pca4", "top_s", "adapter_dims"] = "mean"
+    """How to compute preference direction for loss:
+    - mean: mean(hs_cho - hs_rej), simple baseline (SNR=1.56)
+    - pca1: first PC of diff (captures most variance)
+    - pca2/pca4: top-k PCs, aggregated via norm
+    - top_s: top-k singular dims (by S magnitude) 
+    - adapter_dims: same dims as adapter init (r/2 from cho + r/2 from rej variance, S-normalized)
+    """
+    
+    pref_dir_k: int = 64
+    """Number of dimensions for multi-dim pref_dir methods (pca2+, top_s, adapter_dims)"""
+
     dataset_name: str = "honest"
     max_samples: Optional[int] = 800
     """Max training samples (None = all)"""

@@ -149,14 +149,18 @@ if len(runs_data) == 0:
 
 
 # Flatten for DataFrame
-def extract_symmetry_from_logs(log_file):
-    """Parse logs to extract symmetry metrics from evaluation tables.
+def extract_metrics_from_logs(log_file):
+    """Parse logs to extract Value/Honesty scores and symmetry from InnerPiSSA results.
 
-    Looks for lines like:
-    Value/Honesty        -1.9254   0.2245   5.5585     0.2356
+    Looks for table like:
+        Results for method: InnerPiSSA (ours)
+        coeff              -1.0      0.0      1.0
+        Value/Honesty   -3.0767  -3.1215  -3.1828
 
-    Returns dict with symmetry_ratio, dose_monotonic for each moral dimension.
+    Returns dict with vh_neg/zero/pos, symmetry, resistant_toward.
     """
+    import re
+    
     if not log_file or not Path(log_file).exists():
         return {}
 
@@ -168,61 +172,30 @@ def extract_symmetry_from_logs(log_file):
 
     metrics = {}
 
-    # Find "Results for method: InnerPiSSA" table
-    import re
-
-    pattern = r"Results for method: InnerPiSSA.*?\ncoeff\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)"
+    # Find InnerPiSSA results table
+    pattern = r"Results for method: InnerPiSSA.*?(?=Results for method:|$)"
     match = re.search(pattern, logs, re.DOTALL)
-
     if not match:
         return {}
 
-    # Extract table after coeff header
-    table_start = logs.find("Results for method: InnerPiSSA")
-    table_end = logs.find("\n\n", table_start)
-    if table_end == -1:
-        table_end = len(logs)
-    table_text = logs[table_start:table_end]
+    table_text = match.group(0)
 
-    # Parse rows like: Value/Honesty        -1.9254   0.2245   5.5585     0.2356
-    row_pattern = r"([\w/]+)\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)"
-    rows = re.findall(row_pattern, table_text)
+    # Parse Value/Honesty row: "Value/Honesty   -3.0767  -3.1215  -3.1828"
+    vh_pattern = r"Value/Honesty\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)"
+    vh_match = re.search(vh_pattern, table_text)
+    if vh_match:
+        neg, zero, pos = float(vh_match.group(1)), float(vh_match.group(2)), float(vh_match.group(3))
+        metrics["vh_neg"] = neg
+        metrics["vh_zero"] = zero
+        metrics["vh_pos"] = pos
 
-    if len(rows) < 2:  # Skip header row
-        return {}
-
-    # Compute symmetry metrics
-    symmetry_ratios = []
-    dose_checks = []
-
-    for dimension, neg_val, zero_val, pos_val in rows[1:]:  # Skip coeff header
-        try:
-            neg, zero, pos = float(neg_val), float(zero_val), float(pos_val)
-
-            # Symmetry: how close is |neg| to |pos|?
-            # Perfect symmetry = 1.0, asymmetric = far from 1.0
-            if abs(pos) > 0.01:  # Avoid div by zero
-                symmetry_ratio = (
-                    abs(neg) / abs(pos) if abs(pos) > abs(neg) else abs(pos) / abs(neg)
-                )
-                symmetry_ratios.append(symmetry_ratio)
-
-            # Dose-dependence: monotonic -1 → 0 → 1?
-            # Check if it's monotonic (either increasing or decreasing)
-            is_increasing = neg < zero < pos
-            is_decreasing = neg > zero > pos
-            dose_checks.append(1.0 if (is_increasing or is_decreasing) else 0.0)
-
-        except (ValueError, ZeroDivisionError) as e:
-            logger.error(
-                f"Error parsing row for dimension {dimension} in log file {log_file}, {e}"
-            )
-            continue
-
-    if symmetry_ratios:
-        metrics["symmetry_mean"] = np.mean(symmetry_ratios)
-        metrics["symmetry_min"] = np.min(symmetry_ratios)
-        metrics["dose_monotonic_frac"] = np.mean(dose_checks)
+        # Symmetry: min/max ratio of distances from baseline
+        dist_neg = abs(neg - zero)
+        dist_pos = abs(pos - zero)
+        if max(dist_neg, dist_pos) > 0.01:
+            metrics["symmetry_mean"] = min(dist_neg, dist_pos) / max(dist_neg, dist_pos)
+            # Resistant direction: which way has smaller effect?
+            metrics["resistant_toward"] = "honest" if dist_pos < dist_neg else "dishonest"
 
     return metrics
 
@@ -232,10 +205,10 @@ for run_data in runs_data:
     config = run_data["config"]
     summary = run_data["summary"]
 
-    # Extract symmetry metrics from output.log (not logs1.txt)
+    # Extract metrics from output.log
     run_id = run_data["run_id"]
     output_log = cache_dir / run_id / "output.log"
-    symmetry_metrics = extract_symmetry_from_logs(
+    log_metrics = extract_metrics_from_logs(
         str(output_log) if output_log.exists() else None
     )
 
@@ -258,10 +231,12 @@ for run_data in runs_data:
         # Results - main metrics
         "main_metric": summary.get("eval/main_metric"),
         "runtime": summary.get("_runtime"),
-        # Results - symmetry from logs
-        "symmetry_mean": symmetry_metrics.get("symmetry_mean"),
-        "symmetry_min": symmetry_metrics.get("symmetry_min"),
-        "dose_monotonic_frac": symmetry_metrics.get("dose_monotonic_frac"),
+        # Results - Value/Honesty from logs
+        "vh_neg": log_metrics.get("vh_neg"),
+        "vh_zero": log_metrics.get("vh_zero"),
+        "vh_pos": log_metrics.get("vh_pos"),
+        "symmetry_mean": log_metrics.get("symmetry_mean"),
+        "resistant_toward": log_metrics.get("resistant_toward"),
         # Results - baselines
         "baseline_effect_InnerPiSSA": summary.get("eval/baseline_InnerPiSSA (ours)"),
         "baseline_effect_s_steer": summary.get("eval/baseline_S-space steer"),
@@ -282,6 +257,7 @@ for run_data in runs_data:
         "train_loss_monotonic": summary.get("loss_monotonic"),
         "train_proj_diff": summary.get("proj_diff"),
         "train_logp_degradation": summary.get("logp_degradation"),
+        **summary,
         **config,
     }
     results.append(result)
@@ -386,8 +362,11 @@ summary_cols = [
     "argv",
     "main_metric",
     "loss_gap",  # Overfitting metric
-    "symmetry_mean",  # Coefficient symmetry
-    "dose_monotonic_frac",  # Dose-dependence
+    "vh_neg",  # Value/Honesty at coeff=-1
+    "vh_zero",  # Value/Honesty at coeff=0
+    "vh_pos",  # Value/Honesty at coeff=+1
+    "symmetry_mean",  # Coefficient symmetry (Value/Honesty only)
+    "resistant_toward",  # 'honest' or 'dishonest'
     "baseline_effect_InnerPiSSA",
     "baseline_effect_s_steer",
     "baseline_effect_pca",
