@@ -428,3 +428,24 @@ sweep-train-stages:
     $BASE --model_name=allenai/Olmo-3-7B-Think-DPO
     $BASE --model_name=allenai/Olmo-3-7B-Think
     $BASE --model_name=allenai/Olmo-3-7B-RL-Zero-Mix
+
+# Sweep preference direction computation methods
+sweep-pref-dir:
+    #!/bin/bash -x
+    export WANDB_RUN_GROUP="sweep-pref-dir-$(date +%Y%m%d-%H%M)"
+    BASE="uv run python nbs/train.py q4b-24gb"
+    
+    # Single-direction methods
+    echo "=== pref_dir_method: mean (baseline) ==="
+    $BASE --pref_dir_method=mean
+    
+    echo "=== pref_dir_method: pca1 ==="
+    $BASE --pref_dir_method=pca1
+    
+    # Multi-direction methods (vary k)
+    for method in pca2 pca4 top_s adapter_dims; do
+        for k in 16 32 64 128; do
+            echo "=== pref_dir_method: $method, k=$k ==="
+            $BASE --pref_dir_method=$method --pref_dir_k=$k
+        done
+    done

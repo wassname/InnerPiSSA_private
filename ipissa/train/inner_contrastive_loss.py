@@ -265,16 +265,18 @@ def contrastive_steering_loss_with_ref(
         signed_proj_ref = (pref_dir_ref * pref_dir).sum(dim=-1, keepdim=True)
     
     # Aggregate: mean over components, then attention-weighted mean over tokens
-    # TODO: Multi-k aggregation via mean() is broken - opposite-signed directions cancel!
-    # Need to aggregate per-direction (e.g., norm, learned weights) for "like for like" comparison
+    # Multi-k aggregation: Use L2 norm across directions to preserve magnitude
+    # (mean would cancel opposite-signed projections)
     if signed_proj_pi.shape[-1] > 1:
-        raise NotImplementedError(
-            f"Multi-k preference directions (k={signed_proj_pi.shape[-1]}) not supported. "
-            "Mean aggregation collapses opposite-signed projections, biasing toward dominant axis. "
-            "Use k=1 or implement per-direction aggregation (norm/weights)."
-        )
-    proj_pi = reduce(signed_proj_pi, 'b t k -> b t', 'mean')
-    proj_ref = reduce(signed_proj_ref, 'b t k -> b t', 'mean')
+        # Norm aggregation: sqrt(sum(proj_i^2)) preserves total signal magnitude
+        # Preserve sign via sign of mean (captures dominant direction)
+        mean_sign_pi = signed_proj_pi.mean(dim=-1, keepdim=True).sign()
+        mean_sign_ref = signed_proj_ref.mean(dim=-1, keepdim=True).sign()
+        proj_pi = mean_sign_pi.squeeze(-1) * signed_proj_pi.norm(dim=-1)  # (b, t)
+        proj_ref = mean_sign_ref.squeeze(-1) * signed_proj_ref.norm(dim=-1)
+    else:
+        proj_pi = reduce(signed_proj_pi, 'b t k -> b t', 'mean')
+        proj_ref = reduce(signed_proj_ref, 'b t k -> b t', 'mean')
     
     # note this does SimPO style length norm
     proj_pi_agg = reduce_tokens_w_attention(proj_pi, hs_mask)  # (b,)

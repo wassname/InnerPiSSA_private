@@ -120,6 +120,8 @@ def train_steer_vector(
     # For InnerPiSSA: Extract S-space directions using SVD projection
     # For LoRA/DoRA: Use activation-space PCA only
     if config.adapter_type == "innerpissa":
+        from ipissa.peft_utils.layer_selection import compute_pref_direction
+        
         loss_dirs = {}  # Unweighted S-space for loss
         Sw_dirs = {}  # S-weighted for steering
 
@@ -150,10 +152,19 @@ def train_steer_vector(
                 hs_s = hs_cpu @ U  # [n, d_out] @ [d_out, r] -> [n, r] in S-space
             h_cho_s = hs_s[::2]
             h_rej_s = hs_s[1::2]
-            delta_s_loss = (h_cho_s - h_rej_s).mean(dim=0)  # [r] unweighted
-            delta_s_loss = F.normalize(delta_s_loss, dim=0)
+            
+            # Compute preference direction using configured method
+            delta_s_loss = compute_pref_direction(
+                h_cho_s, h_rej_s,
+                method=config.pref_dir_method,
+                k=config.pref_dir_k,
+                U=U if not config.loss_use_V else None,  # U for output-space projection
+                S=S,
+                V=V if config.loss_use_V else None,
+            )
+            # Shape: [r] for mean/pca1, [k, r] for multi-dim methods
 
-            # Store preference direction directly as [r] tensor (will be projected in loss)
+            # Store preference direction (will be projected in loss)
             loss_dirs[layer] = delta_s_loss
 
         cvec_loss_steer = ControlVector(

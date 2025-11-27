@@ -232,28 +232,13 @@ class InnerPiSSALayer(BaseTunerLayer):
             This preserves task-active workspace (95% signal) rather than just the
             task-relevant delta (5% residual after cancellation).
             """
+            from ipissa.peft_utils.layer_selection import select_adapter_dims
+            
             # Load cho/rej activations
             cho = steering_vectors[layer_name]['cho'].to(device).float()
             rej = steering_vectors[layer_name]['rej'].to(device).float()
             
-            # Project to S-space and normalize by pretrained singular values
-            proj_cho = (cho @ U_full) / S_full.clamp(min=1e-8)  # [n_pairs, rank]
-            proj_rej = (rej @ U_full) / S_full.clamp(min=1e-8)
-            
-            # Rank dimensions by variance
-            cho_var = proj_cho.var(dim=0)  # [rank]
-            rej_var = proj_rej.var(dim=0)
-            
-            # Get top r/2 from cho, then fill remaining with unique top from rej
-            n_half = r_actual // 2
-            _, cho_idx = torch.topk(cho_var, n_half)
-            
-            # Mask out cho selections and get remaining best from rej
-            rej_var_masked = rej_var.clone()
-            rej_var_masked[cho_idx] = -float('inf')  # Exclude already selected
-            _, rej_idx = torch.topk(rej_var_masked, r_actual - n_half)
-            
-            indices = torch.cat([cho_idx, rej_idx]).sort()[0]
+            indices = select_adapter_dims(cho, rej, U_full, S_full, r_actual)
             
             # Extract U, V, S
             U = U_full[:, indices]  # [d_out, r_actual]
