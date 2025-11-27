@@ -433,7 +433,7 @@ sweep-train-stages:
 sweep-pref-dir:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-pref-dir-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4b-24gb"
+    BASE="uv run python nbs/train.py q4b-80gb"
     
     # Multi-direction methods (vary k)
     for k in 4, 8 16 32 64 128; do
@@ -465,7 +465,18 @@ sweep-snorm:
     $BASE --loss_snorm
     
     # S-norm with different pref_dir methods (may interact)
-    for method in mean top_s top_diff pca2; do
+    for method in mean top_s top_diff pca2 top_diff_snorm adapter_dims_raw; do
         echo "=== loss_snorm + pref_dir_method=$method ==="
         $BASE --loss_snorm --pref_dir_method=$method --pref_dir_k=32
+    done
+
+sweep-loss-modules:
+    #!/bin/bash -x
+    export WANDB_RUN_GROUP="sweep-loss-modules-$(date +%Y%m%d-%H%M)"
+    BASE="uv run python nbs/train.py q4bv1-80gb"
+    
+    # Test different loss modules
+    for modules in "up_proj" "v_proj" "q_proj k_proj v_proj" "q_proj k_proj v_proj up_proj"; do
+        echo "=== loss_modules: $modules ==="
+        $BASE --loss_modules=$modules
     done
