@@ -249,6 +249,8 @@ ablate-paper:
     just sweet-start-end:
     just sweep-rotation-angle
     just sweep-long-training
+    just sweep-rank
+    just run-seeds
     just scratch
     
 
