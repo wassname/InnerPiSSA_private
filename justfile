@@ -40,10 +40,34 @@ scratch:
         $BASElarger "$@"
     }
 
-    just eval-baselines
+    # just eval-baselines
+
+
+
+    # hail mary
+    uv run python nbs/train.py q4b-80gb \
+        --lr=1e-3 --max_rotation_angle=0.5 --rot_u --n_depths=55 --r=32 --coh_weight=20 \
+        --modules gate_proj up_proj down_proj \
+        --loss_modules q_proj k_proj v_proj
+
+    # less but bigger layers, lower lr
+    uv run python nbs/train.py q4b-80gb --lr=1e-3 \
+        --max_rotation_angle=0.2 --rot_u --n_depths=15 --r=512 \
+        --modules k_proj v_proj o_proj gate_proj up_proj down_proj \
+        --loss_modules up_proj q_proj k_proj v_proj 
+
+    # less but bigger layers, lower lr
+    uv run python nbs/train.py q4b-80gb --lr=1e-2 \
+        --max_rotation_angle=0.4 --n_depths=55 --r=64 \
+        --modules o_proj down_proj \
+        --loss_modules up_proj q_proj k_proj v_proj 
+
+
+    just sweep-scale
+
     uv run python nbs/train.py q14b-80gb --model_name=wassname/qwen-14B-codefourchan
-    just sweep-train-stages
-    just sweep-rotation-angle
+    # just sweep-train-stages
+    # just sweep-rotation-angle
     # just sweep-s-norm
 
     uv run python nbs/train.py tiny --r=64 --rot_u --data_aware_init --wd=0 --no_coh --no_mono
@@ -435,7 +459,7 @@ sweep-train-stages:
 sweep-pref-dir:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-pref-dir-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4b-80gb"
+    BASE="uv run python nbs/train.py gemma4b-80gb"
     
     # Multi-direction methods (vary k)
     for k in 4, 8 16 32 64 128; do

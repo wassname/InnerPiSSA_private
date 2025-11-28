@@ -1353,7 +1353,8 @@ def train_model(config: TrainingConfig):
         model.parameters(), lr=config.lr, weight_decay=config.wd
     )
     scheduler = torch.optim.lr_scheduler.OneCycleLR(
-        opt, max_lr=config.lr, total_steps=total_steps, pct_start=0.3
+        opt, max_lr=config.lr, total_steps=total_steps, pct_start=0.2,
+        final_div_factor=1e-1,
     )
 
     logger.info(f"Training: {config.n_epochs} epochs, {total_steps} steps")
