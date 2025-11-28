@@ -140,7 +140,7 @@ class TrainingConfig:
     val_split: float = 0.15
     """Fraction of data for validation"""
 
-    early_stop_patience: int = 4
+    early_stop_patience: int = 6
     """Stop if val loss doesn't improve for N validation checks"""
 
     adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"
@@ -189,10 +189,10 @@ class TrainingConfig:
     - adapter_dims_raw: same as adapter_dims but without S normalization
     """
     
-    pref_dir_k: int = 64
+    pref_dir_k: int = 128
     """Number of dimensions for multi-dim pref_dir methods (pca2+, top_s, adapter_dims)"""
 
-    loss_snorm: bool = False
+    loss_snorm: bool = True
     """S-normalize hidden states before projection in loss.
     
     Divides projected diff by S to equalize gradient contribution across dims.

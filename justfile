@@ -249,6 +249,8 @@ ablate-paper:
     just sweet-start-end:
     just sweep-rotation-angle
     just sweep-long-training
+    just sweep-rank
+    just run-seeds
     just scratch
     
 
@@ -433,7 +435,7 @@ sweep-train-stages:
 sweep-pref-dir:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-pref-dir-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4b-24gb"
+    BASE="uv run python nbs/train.py q4b-80gb"
     
     # Multi-direction methods (vary k)
     for k in 4, 8 16 32 64 128; do
@@ -454,18 +456,30 @@ sweep-pref-dir:
 sweep-snorm:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-snorm-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4bv1-80gb"
-    
-    # Baseline: no S-norm
-    echo "=== loss_snorm=False (baseline) ==="
-    $BASE --no_loss_snorm
+    BASE="uv run python nbs/train.py q4b-80gb"
     
     # With S-norm: equalize gradient contribution across dims
     echo "=== loss_snorm=True ==="
     $BASE --loss_snorm
+
+    # Baseline: no S-norm
+    echo "=== loss_snorm=False (baseline) ==="
+    $BASE --no_loss_snorm
+    
     
     # S-norm with different pref_dir methods (may interact)
-    for method in mean top_s top_diff pca2; do
+    for method in mean top_s top_diff pca2 top_diff_snorm adapter_dims_raw; do
         echo "=== loss_snorm + pref_dir_method=$method ==="
         $BASE --loss_snorm --pref_dir_method=$method --pref_dir_k=32
+    done
+
+sweep-loss-modules:
+    #!/bin/bash -x
+    export WANDB_RUN_GROUP="sweep-loss-modules-$(date +%Y%m%d-%H%M)"
+    BASE="uv run python nbs/train.py q4b-80gb"
+    
+    # Test different loss modules
+    for modules in "up_proj" "v_proj" "q_proj k_proj v_proj" "q_proj k_proj v_proj up_proj"; do
+        echo "=== loss_modules: $modules ==="
+        $BASE --loss_modules=$modules
     done

@@ -264,23 +264,31 @@ def contrastive_steering_loss_with_ref(
         signed_proj_pi = (pref_dir_pi * pref_dir).sum(dim=-1, keepdim=True)  # (b, t, 1)
         signed_proj_ref = (pref_dir_ref * pref_dir).sum(dim=-1, keepdim=True)
     
-    # Aggregate: mean over components, then attention-weighted mean over tokens
-    # Multi-k aggregation: Use L2 norm across directions to preserve magnitude
-    # (mean would cancel opposite-signed projections)
+    # Aggregate tokens first, compute loss per component, then aggregate components
+    # This preserves information about which PCA directions help vs hurt steering
     if signed_proj_pi.shape[-1] > 1:
-        # Norm aggregation: sqrt(sum(proj_i^2)) preserves total signal magnitude
-        # Preserve sign via sign of mean (captures dominant direction)
-        mean_sign_pi = signed_proj_pi.mean(dim=-1, keepdim=True).sign()
-        mean_sign_ref = signed_proj_ref.mean(dim=-1, keepdim=True).sign()
-        proj_pi = mean_sign_pi.squeeze(-1) * signed_proj_pi.norm(dim=-1)  # (b, t)
-        proj_ref = mean_sign_ref.squeeze(-1) * signed_proj_ref.norm(dim=-1)
+        # Aggregate tokens first: (b, t, k) → (b, k)
+        proj_pi_agg = reduce_tokens_w_attention(
+            signed_proj_pi, 
+            hs_mask.unsqueeze(-1)  # Broadcast (b, t) → (b, t, 1)
+        )  # (b, k)
+        proj_ref_agg = reduce_tokens_w_attention(
+            signed_proj_ref,
+            hs_mask.unsqueeze(-1)
+        )  # (b, k)
+        
+        # Loss per component: (b, k)
+        proj_diff_per_k = symlog(proj_pi_agg) - symlog(proj_ref_agg.abs().clamp(min=eps_norm))
+        
+        # Aggregate to scalar: (b, k) → (b,)
+        proj_diff = proj_diff_per_k.mean(dim=-1)
     else:
-        proj_pi = reduce(signed_proj_pi, 'b t k -> b t', 'mean')
-        proj_ref = reduce(signed_proj_ref, 'b t k -> b t', 'mean')
-    
-    # note this does SimPO style length norm
-    proj_pi_agg = reduce_tokens_w_attention(proj_pi, hs_mask)  # (b,)
-    proj_ref_agg = reduce_tokens_w_attention(proj_ref, hs_mask)
+        # Single component - existing path works fine
+        proj_pi = signed_proj_pi.squeeze(-1)  # (b, t)
+        proj_ref = signed_proj_ref.squeeze(-1)
+        proj_pi_agg = reduce_tokens_w_attention(proj_pi, hs_mask)  # (b,)
+        proj_ref_agg = reduce_tokens_w_attention(proj_ref, hs_mask)
+        proj_diff = symlog(proj_pi_agg) - symlog(proj_ref_agg.abs().clamp(min=eps_norm))
 
     ref_logp = ref_pos_label_logp.detach()
     pi_logp = pi_pos_label_logp
@@ -298,19 +306,6 @@ def contrastive_steering_loss_with_ref(
         penalty = torch.log1p(violation) * scale
         
         return reduce_tokens_w_attention(penalty, loss_mask), degradation
-    
-    # Projection difference (what we're optimizing)
-    # Normalize by reference projection magnitude, then apply symlog for scale compression
-    # Use .norm() instead of .abs() to handle batch dimension correctly
-    # Larger epsilon (1e-3) prevents ratio blow-ups when ref separation is tiny (common in early layers)
-    raw_diff = proj_pi_agg - proj_ref_agg
-    # normalized_diff = raw_diff / (proj_ref_agg.abs().clamp(min=eps))
-    # proj_diff = symlog(normalized_diff)  # Sign-preserving log-scale, comparable to nats
-
-
-    # [b] shape so abs instead of norm is ok
-    # proj_ref_agg.abs() is same as reduce_tokens_w_attention(pref_dir_ref.norm(dim=2), hs_mask)
-    proj_diff = symlog(proj_pi_agg) - symlog(proj_ref_agg.abs().clamp(min=eps_norm))
     
     # Loss variant selection
     if loss_type == "logsig_weak_up":
