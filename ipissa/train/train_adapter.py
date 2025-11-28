@@ -53,6 +53,22 @@ from ipissa.train.data import create_train_dataset
 from ipissa.train.model_setup import load_model, setup_adapter, extract_U_matrices, compute_init_steering_vectors
 
 
+def use_s_space_loss(config: TrainingConfig) -> bool:
+    """Determine whether to use S-space projection for loss (vs activation-space).
+    
+    This is independent of adapter_type for ablation purposes:
+    - loss_space='s_space': Always use S-space (SVD projection from base model)
+    - loss_space='act_space': Always use activation-space (no projection)
+    - loss_space='auto': s_space for innerpissa, act_space for lora/dora
+    """
+    if config.loss_space == "s_space":
+        return True
+    elif config.loss_space == "act_space":
+        return False
+    else:  # auto
+        return config.adapter_type == "innerpissa"
+
+
 def setup_logging(verbose: int = 1):
     """Configure loguru for clean output.
     
@@ -106,7 +122,7 @@ def train_steer_vector(
 
     with torch.no_grad(), torch.amp.autocast("cuda", dtype=torch.bfloat16):
         train_strs = [s for ex in honest_dataset for s in (ex.positive, ex.negative)]
-        if config.loss_use_V and config.adapter_type == "innerpissa":
+        if config.loss_use_V and use_s_space_loss(config):
             from repeng.extract import batched_get_hiddens
             # Get hidden states at layer BEFORE loss layer (residual stream input to the layer)
             # loss_use_V projects residual stream through V matrix of up_proj
@@ -119,9 +135,8 @@ def train_steer_vector(
                 model, tokenizer, train_strs, loss_layers, batch_size=config.bs//2
             )
 
-    # For InnerPiSSA: Extract S-space directions using SVD projection
-    # For LoRA/DoRA: Use activation-space PCA only
-    if config.adapter_type == "innerpissa":
+    # S-space projection for loss (uses SVD from base model, independent of adapter)
+    if use_s_space_loss(config):
         from ipissa.peft_utils.layer_selection import compute_pref_direction
         
         loss_dirs = {}  # Unweighted S-space for loss
@@ -174,7 +189,7 @@ def train_steer_vector(
         )
         cvec_Sw_steer = None
     else:
-        # LoRA/DoRA: Extract activation-space PCA directions for loss
+        # Activation-space: Extract PCA directions for loss (no SVD projection)
         loss_dirs = {}  # Activation-space directions for loss
         
         for layer in tqdm(loss_layers, desc='read_representations_pca'):
@@ -287,7 +302,8 @@ def compute_batch_loss(
                 hs_pi = (ret[lk].output * attention_mask.unsqueeze(-1)).float()
 
             # Choose projection matrix: V for input space (residual), U for output space
-            if config.adapter_type == "innerpissa":
+            # S-space projection is independent of adapter type (controlled by loss_space config)
+            if use_s_space_loss(config):
                 if config.loss_use_V:
                     # Use V projection (residual → MLP S-space)
                     # This projects accumulated residual stream via up_proj's input basis
@@ -301,7 +317,7 @@ def compute_batch_loss(
                     dirs_loss.directions[lk].clone().to(model.device).float()
                 )
             else:
-                # LoRA/DoRA: Use activation-space PCA direction (no projection)
+                # Activation-space: Use PCA direction (no projection)
                 proj_matrix = None
                 pref_dir_ref_dH_Uw = (
                     dirs_loss.directions[lk].clone().to(model.device).float()
@@ -331,8 +347,8 @@ def compute_batch_loss(
                 ref_coherence = ref_rej_label_logp
                 pi_coherence = pi_rej_label_logp
 
-            # Apply projection for InnerPiSSA (either U or V)
-            if config.adapter_type == "innerpissa":
+            # Apply projection for S-space loss (either U or V from base model SVD)
+            if use_s_space_loss(config):
                 hs_pi_pos_proj = hs_pi_pos @ proj_matrix
                 hs_pi_neg_proj = hs_pi_neg @ proj_matrix
                 hs_ref_cho_proj = hs_ref_cho @ proj_matrix
@@ -351,7 +367,7 @@ def compute_batch_loss(
                     hs_ref_cho_proj = hs_ref_cho_proj / S_safe
                     hs_ref_rej_proj = hs_ref_rej_proj / S_safe
             else:
-                # LoRA/DoRA: No projection
+                # Activation-space: No projection
                 hs_pi_pos_proj = hs_pi_pos
                 hs_pi_neg_proj = hs_pi_neg
                 hs_ref_cho_proj = hs_ref_cho
@@ -1309,8 +1325,8 @@ def train_model(config: TrainingConfig):
     logger.info(f"Loss layers (PeftModel paths): {loss_layers}")
     logger.info(f"Loss layer indices: {loss_layer_indices}")
     
-    # Extract SVD matrices only for InnerPiSSA (LoRA/DoRA don't use SVD)
-    if config.adapter_type == "innerpissa":
+    # Extract SVD matrices when using S-space loss (from base model, independent of adapter)
+    if use_s_space_loss(config):
         Uw_full, Sw_full, Vw_full = extract_U_matrices(model, loss_layers, config)
     else:
         Uw_full, Sw_full, Vw_full = None, None, None

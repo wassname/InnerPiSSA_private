@@ -20,7 +20,7 @@ scratch:
     echo "WandB group: $WANDB_RUN_GROUP"
     
     # Base config for small model ablations
-    BASEsmall="uv run python nbs/train.py q4bv1-80gb"
+    BASEsmall="uv run python nbs/train.py q4b-80gb"
     BASE="uv run python nbs/train.py l8b-80gb"
     BASElarger="uv run python nbs/train.py gemma12b-80gb"
 
@@ -40,7 +40,15 @@ scratch:
         $BASElarger "$@"
     }
 
-    just eval-baselines
+    # just eval-baselines
+
+    
+    # === LOSS SPACE ABLATION (adapter vs loss independence) ===
+    # LoRA with S-space loss (tests if S-space supervision helps even with LoRA adapter)
+    $BASE --adapter_type lora --loss_space s_space
+    # InnerPiSSA with activation-space loss (tests if InnerPiSSA needs S-space supervision)
+    $BASE --adapter_type innerpissa --loss_space act_space
+    
     uv run python nbs/train.py q14b-80gb --model_name=wassname/qwen-14B-codefourchan
     just sweep-train-stages
     just sweep-rotation-angle
@@ -272,6 +280,12 @@ ablate-constraints:
     $BASE --no_data_aware_init
     $BASE --loss_use_V --loss_modules up_proj
     $BASE --no_loss_use_V --loss_depths=0.5 --loss_modules o_proj down_proj
+    
+    # === LOSS SPACE ABLATION (adapter vs loss independence) ===
+    # LoRA with S-space loss (tests if S-space supervision helps even with LoRA adapter)
+    $BASE --adapter_type lora --loss_space s_space
+    # InnerPiSSA with activation-space loss (tests if InnerPiSSA needs S-space supervision)
+    $BASE --adapter_type innerpissa --loss_space act_space
 
 sweep-layers:
     #!/bin/bash -x
