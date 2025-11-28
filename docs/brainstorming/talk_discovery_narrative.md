@@ -5,6 +5,8 @@
 ### Act 1: The Problem (2022-2023)
 > "How do we know what LLMs really think versus what they think we want to hear? Existing methods—surveys, prompts, supervised probes—all suffer from the same flaw: models can perform for the evaluator. We need a way to elicit true internal states."
 
+I'm trying to have a truth telling hat so if I ask a model "will you kill us all" and it says "no" I know if it's telling the truth. Or maybe something less dramatic and more likely like reward hacking or being sycophantic (actually that timely right now).
+
 ### Act 2: Failed Approaches (2023-2024)
 > "Activation steering seemed promising: intervene on hidden states where models 'think'. But existing methods (ActAdd, PCA) don't generalize. They work on training prompts but fail on transfer tasks. AxBench (2025) validated this: representation steering underperforms prompting."
 
@@ -121,3 +123,8 @@ Don't hide it. Lead with it. This is how science actually works—messy explorat
 **Write the introduction exactly as you just told me the story.** Then the rest of the paper validates each step of the journey.
 
 This is a strong paper with a compelling narrative. Now just write it down.
+
+
+## Another Version
+
+If I ask an AI "will you kill us all" and it says "no" I want to know if it's telling the truth. Same with sycophancy or reward hacking. Existing methods—surveys, prompts, supervised probes—all suffer from the same flaw: models can perform for the evaluator. We need a way to elicit true internal states.

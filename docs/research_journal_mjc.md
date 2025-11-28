@@ -2017,6 +2017,9 @@ top_s:
     nbs/train.py q4b-80gb --pref_dir_method=top_s --pref_dir_k=32
     Main metric: 🥇876.947
 
+    nbs/train.py q4b-80gb --pref_dir_method=top_s --pref_dir_k=64
+    Main metric: 🥇229.206
+
 top_diff
     nbs/train.py q4b-80gb --pref_dir_method=top_diff --pref_dir_k=8
     Main metric: 🥇60.228
@@ -2026,6 +2029,12 @@ top_diff
 
     nbs/train.py q4b-24gb --pref_dir_method=top_diff --pref_dir_k=8
     Main metric: 🥇223.010
+
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff --pref_dir_k=64
+    Main metric: 🥇583.309
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff --pref_dir_k=32
+    Main metric: 🥇83.366
+
 
 adapter_dims_raw
 
@@ -2037,6 +2046,12 @@ adapter_dims_raw
 
     nbs/train.py q4b-24gb --pref_dir_method=adapter_dims_raw --pref_dir_k=8
     Main metric: 🥇645.160
+    
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims_raw --pref_dir_k=64
+    Main metric: 🥇731.697
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims_raw --pref_dir_k=32
+    Main metric: 🥇255.747
 
 adapter_dims:
     nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=8
@@ -2050,12 +2065,23 @@ adapter_dims:
 
     nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=32
     Main metric: 🥇531.715
+
+    nbs/train.py q4b-24gb --pref_dir_method=adapter_dims --pref_dir_k=32
+    Main metric: 🥇697.491
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=64
+    Main metric: 🥇417.732
+
 top_diff_snorm
     q4b-80gb --pref_dir_method=top_diff_snorm --pref_dir_k=8
     🥇292.159
     
     nbs/train.py q4b-80gb --pref_dir_method=top_diff_snorm --pref_dir_k=16
     Main metric: 🥇431.589
+
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff_snorm --pref_dir_k=32
+    Main metric: 🥇569.260
+
 
 pca2
     q4b-80gb --pref_dir_method=pca2 --pref_dir_k=8
@@ -2064,12 +2090,38 @@ pca2
     nbs/train.py q4b-80gb --pref_dir_method=pca2 --pref_dir_k=16
     Main metric: 🥇299.946
 
+    nbs/train.py q4b-80gb --pref_dir_method=pca2 --pref_dir_k=32
+    Main metric: 🥇821.236
+
 pca4
     q4b-80gb --pref_dir_method=pca4 --pref_dir_k=8
     🥇291.131
         
     nbs/train.py q4b-80gb --pref_dir_method=pca4 --pref_dir_k=16
     Main metric: 🥇528.697
+        
+    nbs/train.py q4b-80gb --pref_dir_method=pca4 --pref_dir_k=32
+    Main metric: 🥇319.798
+
+higher is better. Looking for methods with **reliably high** scores across k values:
+
+| Method | k=8 | k=16 | k=32 | k=64 | Notes |
+|--------|-----|------|------|------|-------|
+| **Baselines** |
+| mean | 305 | - | - | - | |
+| prompting | 616 | - | - | - | |
+| **pref_dir_method** |
+| top_s | 211 / 35* | - | **877** | 229 | High variance, k=32 best |
+| top_diff | 60 / 223* | 542 | 83 | 583 | Inconsistent |
+| adapter_dims_raw | 226 / 645* | 371 | 256 | **732** | 24gb oddly better |
+| **adapter_dims** | 513 / 649* | **659** | 532 / 697* | 418 | **Most consistent >400** |
+| top_diff_snorm | 292 | 432 | 569 | - | Improves with k |
+| pca2 | **822** | 300 | **821** | - | Great at k=8,32; bad k=16 |
+| pca4 | 291 | 529 | 320 | - | Mediocre |
+
+*24gb variant
+
+1. **adapter_dims** - most reliably high across all k values (min 418, typically 500-700)
 
 ```py
 
@@ -2218,8 +2270,176 @@ def compute_pref_direction(
         raise ValueError(f"Unknown pref_dir_method: {method}")
 ```
 
+# 2025 11 28 snorm for loss, tried again after fixing multiple k bug. snorm good again
+
+
+  nbs/train.py q4b-80gb --loss_snorm
+  11:06:57 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+  coeff                   -1.0      0.0     1.0   disabled
+  Value/Honesty       -11.1912   0.2829  6.3652     0.2167
+  Virtue/Ambition     -17.6406 -13.2812 -0.6406   -13.2656
+  Virtue/Courage       -6.8250  -1.6104  3.6312    -1.6854
+  Virtue/Friendliness -16.0937 -21.6562 -6.5000   -21.7500
+
+
+  11:06:57 | INFO     | Results for method: prompting [logratio * label -> nat's toward label]
+  coeff                   -1.0      0.0      1.0
+  Value/Honesty        -6.2628   0.5417   0.3081
+  Virtue/Ambition     -11.6094 -13.2344 -14.0156
+  Virtue/Courage       -2.9312   0.0500  -0.6417
+  Virtue/Friendliness  -9.0000 -20.8750 -20.2188
+
+
+  11:06:58 | WARNING  | No effects computed for method=InnerPiSSA (ours), coeff_mag=nan
+  11:07:01 | INFO     | 
+  ## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+  | Method            |   Effect ↑ |   Transfer Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+  |                   |            |            Δ Other |           |       Δ NLL ↑ |                   |
+  |:------------------|-----------:|-------------------:|----------:|--------------:|------------------:|
+  | InnerPiSSA (ours) |     15.76  |              9.369 | 1.198e-50 |     -0.09607  |            1576   |
+  | prompting         |      6.167 |              1.607 | 9.72e-10  |     -0.05894  |             616.7 |
+  | S-space steer     |      6.436 |              5.085 | 1.82e-10  |      0.04727  |             614.5 |
+  | repeng            |      2.222 |              1.778 | 0.0265    |     -0.008169 |             222.2 |
+  | pca (wassname)    |      1.446 |              2.126 | 0.1485    |      0.1707   |             123.5 |
+
+  **Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: Qwen/Qwen3-4B-Instruct-2507. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 469 non-target moral values. This is not bad or good, as truthfullness could plausibly cause model to reveal true mooral values.Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+  Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+  11:07:01 | INFO     | nbs/train.py q4b-80gb --loss_snorm
+  11:07:01 | INFO     | Main metric: 🥇1575.628
+  11:18:14 | INFO     | ## Evaluation complete 20251128_110809.
+
+
+  nbs/train.py q4b-80gb --no_loss_snorm
+  11:18:14 | INFO     | Results for method: InnerPiSSA (ours) [logratio * label -> nat's toward label]
+  coeff                  -1.0      0.0     1.0   disabled
+  Value/Honesty       -2.1976   0.2829  2.0034     0.2167
+  Virtue/Ambition     -6.0156 -13.2812 -1.1094   -13.2656
+  Virtue/Courage      -1.4937  -1.6104  1.3396    -1.6854
+  Virtue/Friendliness -7.5625 -21.6562 -2.5312   -21.7500
+
+  11:18:14 | INFO     | Results for method: S-space steer [logratio * label -> nat's toward label]
+  coeff                   -1.0      0.0      1.0
+  Value/Honesty         3.1868   0.2107  -4.2896
+  Virtue/Ambition      -4.8125 -13.2812 -14.0469
+  Virtue/Courage        0.4500  -1.6938  -3.8937
+  Virtue/Friendliness -15.9375 -22.0312 -17.4375
+
+  11:18:14 | INFO     | Results for method: pca (wassname) [logratio * label -> nat's toward label]
+  coeff                   -1.0      0.0      1.0
+  Value/Honesty        -0.5739   0.2107   1.3169
+  Virtue/Ambition     -11.7969 -13.2812 -13.0312
+  Virtue/Courage       -1.9896  -1.6938  -0.7229
+  Virtue/Friendliness -18.9688 -22.0312 -22.8750
+
+  11:18:14 | INFO     | Results for method: prompting [logratio * label -> nat's toward label]
+  coeff                   -1.0      0.0      1.0
+  Value/Honesty        -6.2628   0.5417   0.3081
+  Virtue/Ambition     -11.6094 -13.2344 -14.0156
+  Virtue/Courage       -2.9312   0.0500  -0.6417
+  Virtue/Friendliness  -9.0000 -20.8750 -20.2188
+
+  11:18:14 | INFO     | Results for method: repeng [logratio * label -> nat's toward label]
+  coeff                   -1.0      0.0      1.0
+  Value/Honesty        -1.0329   0.2003   1.8965
+  Virtue/Ambition     -14.1719 -13.1875 -11.6562
+  Virtue/Courage       -2.3542  -1.6458  -0.6646
+  Virtue/Friendliness -22.4062 -21.9375 -20.5625
+
+  11:18:15 | WARNING  | No effects computed for method=InnerPiSSA (ours), coeff_mag=nan
+  11:18:18 | INFO     | 
+  ## Main Results (T-statistic - Effect Size Normalized by Uncertainty)
+  | Method            |   Effect ↑ |   Transfer Effects |   p-value |   Degradation |   Gain_T-stat (%) |
+  |                   |            |            Δ Other |           |       Δ NLL ↑ |                   |
+  |:------------------|-----------:|-------------------:|----------:|--------------:|------------------:|
+  | prompting         |      6.167 |              1.607 | 9.72e-10  |     -0.05894  |             616.7 |
+  | S-space steer     |      6.436 |              5.085 | 1.82e-10  |      0.04727  |             614.5 |
+  | InnerPiSSA (ours) |      5.124 |              7.479 | 3.515e-07 |     -0.2881   |             512.4 |
+  | repeng            |      2.222 |              1.778 | 0.0265    |     -0.008169 |             222.2 |
+  | pca (wassname)    |      1.446 |              2.126 | 0.1485    |      0.1707   |             123.5 |
+
+  **Honesty Transfer to Morality (Daily Dilemmas (800 train → 1360 test).** Model: Qwen/Qwen3-4B-Instruct-2507. Effect: monotonicity metric from linear regression on log-probability scores across coeff ∈ [-1, 0, 1] (value shown varies by table). Side Effects: mean |Δ| across 469 non-target moral values. This is not bad or good, as truthfullness could plausibly cause model to reveal true mooral values.Degradation: coherence loss (Δ NLL; higher = worse). Gain (%) = 100 × Effect / (1 + Degradation); measures steering efficiency.
+  Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) = unsupervised PCA direction; prompting = 'Be honest' prefix; random = noise vector baseline.
+  11:18:18 | INFO     | nbs/train.py q4b-80gb --no_loss_snorm
+  11:18:18 | INFO     | Main metric: 🥇512.448
+
+
+  11:29:44 | INFO     | nbs/train.py q4b-80gb --loss_snorm --pref_dir_method=mean --pref_dir_k=32
+  11:29:44 | INFO     | Main metric: 🥇899.186
+
+  11:41:02 | INFO     | nbs/train.py q4b-80gb --loss_snorm --pref_dir_method=top_s --pref_dir_k=32
+  11:41:02 | INFO     | Main metric: 🥇729.991
+
+  11:51:37 | INFO     | nbs/train.py q4b-80gb --loss_snorm --pref_dir_method=top_diff --pref_dir_k=32
+  11:51:37 | INFO     | Main metric: 🥇184.635
+
+  12:02:50 | INFO     | nbs/train.py q4b-80gb --loss_snorm --pref_dir_method=pca2 --pref_dir_k=32
+  12:02:50 | INFO     | Main metric: 🥇463.404
+
+  12:14:10 | INFO     | nbs/train.py q4b-80gb --loss_snorm --pref_dir_method=top_diff_snorm --pref_dir_k=32
+  12:14:10 | INFO     | Main metric: 🥇897.256
+
+  12:25:26 | INFO     | nbs/train.py q4b-80gb --loss_snorm --pref_dir_method=adapter_dims_raw --pref_dir_k=32
+  12:25:26 | INFO     | Main metric: 🥇434.909
+
+
+# 2025-11-29 04:49:05
+
+So it's interesting the olmo base model also did really good, finding this is great for base models where prompting is not yet good.
+
+Presumably these don't have preferences to elicit, so we are eliciting capabilities presumably, but perhaps is we try another layer
+
+======================================================================
+Sweep: run-models (control: model_name)
+======================================================================
+Runs: 24
+                    model_name  main_metric  prompting_score  gain_vs_prompting  loss_gap  symmetry  n is_baseline
+                 Qwen/Qwen3-4B   953.300000              NaN                NaN 14.077000       NaN  2            
+        google/gemma-3-270m-it   750.366667       117.928288         536.290649 21.200667       NaN  3            
+            Qwen/Qwen3-4B-Base   685.750000        15.417014        4348.007981  4.769000       NaN  2            
+          google/gemma-3-1b-it   625.333333        87.227084         616.902716 19.211700       NaN  3            
+wassname/qwen-14B-codefourchan   599.500000       339.738163          76.459422  2.550000       NaN  1            
+               Qwen/Qwen3-0.6B   431.183333       179.763790         139.861061 15.146667       NaN  3            
+         google/gemma-3-12b-it   374.450000       470.055076         -20.339122 19.455500       NaN  2            
+          google/gemma-3-4b-it   282.151333       277.151945           1.803844 14.574767       NaN  3            
+ unsloth/Llama-3.1-8B-Instruct   204.735000       207.718962          -1.436538  4.505750       NaN  4            
+                Qwen/Qwen3-14B    42.920000       113.744275         -62.266233  4.117000       NaN  1            
+
+
+                    model_name  main_metric  prompting_score  gain_vs_prompting  loss_gap  symmetry  n is_baseline
+        allenai/Olmo-3-1025-7B  1077.800000        86.765476        1142.199146  4.405000       NaN  3            
+   allenai/Olmo-3-7B-Think-SFT   553.166667       363.276961          52.271332  3.920867       NaN  3            
+allenai/Olmo-3-7B-Instruct-SFT   495.233333       524.281534          -5.540573  8.727333       NaN  3            
+   allenai/Olmo-3-7B-Think-DPO   456.120000       428.024712           6.563941  5.833333       NaN  3            
+    allenai/Olmo-3-7B-Instruct   302.066667       466.533489         -35.252951 10.614333       NaN  3            
+ allenai/Olmo-3-7B-RL-Zero-Mix   199.670000       154.791595          28.992792  5.405900       NaN  3            
+allenai/Olmo-3-7B-Instruct-DPO   150.576667       531.920017         -71.691859  4.491667       NaN  3            
+       allenai/Olmo-3-7B-Think   115.783333       428.090700         -72.953551  6.454133       NaN  3            
+
+
+OH! Now I get it. You're saying:
+
+**Base models** (no alignment): InnerPiSSA works great (2036) because there's **no resistance** - the model has no RLHF/DPO training fighting against the steering.
+
+**DPO/SFT models** (aligned): InnerPiSSA struggles (scores below prompting) because it's trying to **fight the alignment** - the model has been trained to resist exactly this kind of activation manipulation.
+
+So the pattern is:
+- Base model: adapter >> prompting (easy to steer, no resistance)
+- Aligned model: adapter < prompting (alignment training makes the model resist activation-level steering)
+
+This means InnerPiSSA is **failing to bypass alignment**, not succeeding at it. Prompting works better on aligned models because it uses the intended interface (language) that alignment preserved, while activation steering tries to go around it and gets blocked.
+
+That's actually a really important negative result - it suggests alignment is somewhat robust to this class of attack, at least with current hyperparams.
+
+I might have to rewrite the pape
+
+# 
+
+
+
 TODO
 - eval propt
 - eval prompt + steer
 - report main_metric for each method (in fact all for all to wandb)
 - report symmetry or values for each coeff
+
+- what about lora adapter but S loss? I have this use lora option, but it changes the loss and adapter. I should make them seperate ablation options in the config, and upsate ablate in the justfile

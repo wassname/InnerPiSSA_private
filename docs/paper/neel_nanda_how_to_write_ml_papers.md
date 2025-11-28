@@ -1,3 +1,7 @@
+https://www.alignmentforum.org/s/5GT3yoYM9gRmMEKqL/p/hjMy4ZxS5ogA9cTYK
+https://docs.google.com/document/d/1AoF6bPJp-muWnsZLMmfcxo1fmAu1izUzZXDFHar-35o/edit?tab=t.0
+https://www.alignmentforum.org/posts/eJGptPbbFPZGLpjsp/highly-opinionated-advice-on-how-to-write-ml-papers
+
 AF
 How I Think About My Research Process
 AIPractical
@@ -254,7 +258,7 @@ Structure:
 
 The Writing Process: Compress then Iteratively Expand
 
-Note: Check out my paper writing checklist for a concrete to-do list of what I recommend doing here
+Note: Check out my paper writing checklist for a concrete to-do list of what I recommend doing here https://docs.google.com/document/d/1AoF6bPJp-muWnsZLMmfcxo1fmAu1izUzZXDFHar-35o/edit?tab=t.0
 
 So, you have a list of claims and key experiments. Now, all you need to do is write the paper! I recommend an iterative process - start with a bullet point narrative, then a full bullet point outline, then flesh it out into prose, taking time to reflect at each stage. See above or the next section for more details on the actual structure of a paper, here I just try to convey the high-level strategy
 
@@ -526,3 +530,124 @@ Again, this is a highly opinionated post about how I personally think about the 
     ^
 
      If this is too long, you can move most of it to an appendix
+
+
+# Checklist
+
+There are a lot of moving pieces when writing a machine learning conference paper. It's easy to forget things, especially when you're new, and lots of best practices/nuances no one writes up.
+
+Here's [a checklist](https://docs.google.com/document/d/1AoF6bPJp-muWnsZLMmfcxo1fmAu1izUzZXDFHar-35o/edit?usp=sharing) I wrote for my mentees of everything I think you need to do to go from finishing the technical research of a project, and having a good public output and conference submission. It’s long, but I think most steps are important (though, obviously skip any that don’t seem relevant to you). I’ve tried to give my concrete best guess in many cases, and oriented towards practical advice, which obviously comes at the cost of being wrong/imprecise. If it seems useful, **please copy it and tick things off**\!
+
+**Note**: This is optimised for “jump through the arbitrary hoops of conference publishing, with minimal sacrifice to your scientific integrity”, I hope to have another post out soon on how to write *good* papers.
+
+# My Checklist for Writing ML Conference Papers
+https://docs.google.com/document/d/1AoF6bPJp-muWnsZLMmfcxo1fmAu1izUzZXDFHar-35o/edit?tab=t.0
+*Italics means won’t take long, or lower priority*
+
+**Important**: Before even starting the paper writing process \- **check and double check all critical experiments** (and at least 75% of the rest). Ideally replicate a few, re-implement in different ways, ask an LLM (ideally a human) to bug-check your codebase, etc. Most published papers are wrong, or deeply flawed \- don’t let this happen to you
+
+**LLM Usage**: I frequently suggest asking an LLM for feedback. Always tell it “here is my colleague’s/someone else’s paper” and ask “what is the biggest problem with this”, to get around sycophancy
+
+**Mentors**: Having a mentor/supervisor is very helpful, but not always possible. I give advice assuming you have a helpful but time constrained mentor, ignore those steps if they’re not available to you
+
+## Key Preparation
+
+- [ ] Decide on a narrative \- best done in close collaboration with a mentor  
+- [ ] Draft an abstract  
+      - [ ] Do a round of reading through and editing \- try reading it aloud to yourself  
+      - [ ] Get sign-off from a mentor (if possible)  
+- [ ] Make a bullet point outline of the paper, emphasising sections and section titles, key figures and key experimental results. Do this in a google doc  
+      - [ ] Get sign-off from a mentor (if possible)  
+- [ ] *Double check exactly when the submission deadline is, ensure you’re converting time zones properly*
+
+## Writing Stage
+
+**Note**: These can largely be done in any order
+
+- [ ] Draft the introduction.  
+      - [ ] Do this in Overleaf in the correct conference template  
+      - [ ] Get LLM feedback and edit  
+      - [ ] Get 1+ round of feedback from a mentor & iterate  
+- [ ] Draft the prose of the main body (excl related work, and excl appendices which can be very last minute). It's OK to leave some things blank or as placeholders, just make sure you know what's missing  
+      - [ ] For anything to do with fiddly LaTeX, use an LLM unless you \*really\* know what you're doing, and if you’ve been stuck for \>10 mins try to ask someone for help  
+- [ ] Get the key experimental results and put them into the paper as numbers or figures  
+- [ ] Make draft figures  
+- [ ] Draft the related work (if you don't know what to do, use deep research, then ask a mentor)  
+- [ ] Do a round of editing and polishing on the whole thing \- focus on the intro and figures  
+      - [ ] Run it through multiple LLMs for feedback. Put several good papers in their context window too. Always tell it “here is my colleague’s/someone else’s paper” and ask “what is the biggest problem with this” to avoid sycophancy  
+- [ ] Ask a mentor to give feedback on the whole thing (if possible)  
+      - [ ] Do this multiple times if possible  
+- [ ] Get feedback on the whole thing from one person not on the project, eg via a paper swap. Take this seriously.  
+      - [ ] Have them repeat back to you what they think your contribution is, why it matters, and what evidence you provide for it/why that evidence is compelling \- if this is wrong, this is a big deal and you need to edit until it’s fixed\!  
+- [ ] Do a second round of editing and polishing on the whole thing  
+- [ ] *Decide on the authorship order:*  
+      - [ ] *If there are 2 or more main contributors, I recommend being co-first authors*  
+            - [ ] *By default I recommend randomising the first author order, and putting an asterisk saying it was randomised (do NOT do alphabetical, it's not standard in ML and screws over people with surnames late in the alphabet)*  
+            - [ ] *If you both agree one person contributed more, they should go first*  
+            - [ ] *If there's disagreement, go and [read Chris Olah's blog post about credit allocation](https://colah.github.io/posts/2019-05-Collaboration/)*  
+            - [ ] *If there's still disagreement, please co-write an author contributions statement, then see if you now agree*  
+            - [ ] *If there's still disagreement, try to get a neutral party to adjudicate*  
+      - [ ] *Think carefully for anyone who contributed to the project and should maybe be an author, check in with them. Try hard to not snub people.*  
+- [ ] *Write the appendices \- please leave this to the end as they're rarely read, and can be cut for time if needed*  
+- [ ] *Optional: Make your code available using [https://anonymous.4open.science/](https://anonymous.4open.science/) and link from the paper \- this shows reproducibility/effort*  
+      - [ ] *The code doesn’t need to be polished (and you can likely get away with it not being runnable) right now, the key thing is that it exists. Make it nice before Arxiv/the camera ready*
+
+## Final Stages
+
+- [ ] Once you have a draft you're happy with, check how many pages it is. If you're above the official page limit, start cutting down page count  
+      - [ ] Ask yourself which subsections are least important, and move them to the appendix  
+      - [ ] Condense your figures, eg combining graphs into one figure with several facet plots  
+      - [ ] Do minor tweaks/word level editing for conciseness  
+            - [ ] Ask an LLM how to be more concise  
+            - [ ] I’d guess this can shave down 0.5-1.5 pages of space \- if you need more, do the others first\!  
+- [ ] \[If NeurIPS\] Do the NeurIPS checklist\!\! Do not leave it to the last minute, it's long and you get desk rejected without it  
+- [ ] *Sanity check for anonymity*  
+      - [ ] *There are no github or HuggingFace links that expose a username*  
+            - [ ] *If you need to share code, use [https://anonymous.4open.science/](https://anonymous.4open.science/)*  
+            - [ ] *If you need to share model weights make an anonymous HuggingFace account*  
+      - [ ] *Ensure your name is not in there, or other identifying information \- give it to an LLM and ask*  
+- [ ] *Check your paper for TODO and ??, fix them*
+
+## Submission
+
+- [ ] Submit the abstract  
+      - [ ] Do this at least 24 hours before the deadline, and keep re-submitting  
+      - [ ] Choose keywords and topic according to "do I want reviewers who looked for this topic/keyword to be reviewing my paper", which is not always the same as where it best fits.  
+- [ ] Submit the paper  
+      - [ ] **Do this at least 24 hours before the deadline** and keep re-submitting\! You do NOT want to have your internet go down or OpenReview to crash at the last minute.
+
+## Public release
+
+*You can release your work publicly even during the anonymous peer review process for most ML conferences. But prioritise getting a good conference submission first.*
+
+- [ ] Make a list of all the additional polishing/new results you didn’t have time for, and think are worth it  
+      - [ ] Estimate how long each will take, and how valuable it would be  
+      - [ ] Remove the ones that don’t seem worth it  
+      - [ ] Do what remains  
+      - [ ] Put them in the paper  
+- [ ] *If you cut important content to meet the page limit, put it back in \- Arxiv does not need to be identical to what is published at the conference*  
+- [ ] *Add an acknowledgements section \- be generous, thank everyone who gave feedback or otherwise helped*  
+- [ ] *Co-write an author contribution section \- try to emphasise the parts you're each proudest of\! This is a positive-sum game*  
+- [ ] *Have the email of a corresponding author, typically one or both first authors*  
+- [ ] Draft a tweet thread  
+      - [ ] There's an art to writing good tweet threads. Note that 95% of people only see tweet 1, so it needs to be great and is where most of your effort should go. Tweet 2 matters a bit, later tweets don't. It needs to:  
+            - [ ] Be accessible to an ML person who has no initial idea that your tweet is about a paper at all  
+            - [ ] Communicate the key insight of the paper in 280 characters with simple language  
+            - [ ] Have an eye catching figure  
+            - [ ] Do not have any links in tweet 1, it de-boosts it  
+      - [ ] Get feedback from someone good at Twitter, if possible  
+- [ ] Draft a LessWrong post  
+- [ ] Clean up the code and make it public on Github  
+      - [ ] Link in the LW post and at the end of the paper abstract  
+      - [ ] Make sure to have a license. MIT or Apache 2.0 License are good if you want the code to be easily usable by others  
+      - [ ] Bonus: Have a helpful README  
+      - [ ] Bonus: Have a python notebook showing how to run the basics of your code  
+- [ ] Optional: Draft a blog post. This is for giving an accessible summary of the work.   
+      - [ ] Begin with a bullet point outline  
+      - [ ] If you think there's genuinely interesting takeaways, tacit knowledge, nuance, advice for future work, wild speculation, etc, please talk about it\! The paper format sadly disincentives this kind of valuable knowledge  
+- [ ] *Release*  
+      - [ ] *Put the paper on Arxiv*  
+            - [ ] *Note that it takes about 1 working day for the paper to appear publicly on Arxiv*  
+            - [ ] *If you have not submitted to Arxiv before you'll need someone with 3+ papers to endorse you for the ML category (cs.LG), get this out of the way earlier if possible*  
+      - [ ] *Post the tweet thread once the paper is on Arxiv.*  
+      - [ ] *Post the blog post*

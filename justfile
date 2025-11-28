@@ -20,7 +20,7 @@ scratch:
     echo "WandB group: $WANDB_RUN_GROUP"
     
     # Base config for small model ablations
-    BASEsmall="uv run python nbs/train.py q4bv1-80gb"
+    BASEsmall="uv run python nbs/train.py q4b-80gb"
     BASE="uv run python nbs/train.py l8b-80gb"
     BASElarger="uv run python nbs/train.py gemma12b-80gb"
 
@@ -296,6 +296,12 @@ ablate-constraints:
     $BASE --no_data_aware_init
     $BASE --loss_use_V --loss_modules up_proj
     $BASE --no_loss_use_V --loss_depths=0.5 --loss_modules o_proj down_proj
+    
+    # === LOSS SPACE ABLATION (adapter vs loss independence) ===
+    # LoRA with S-space loss (tests if S-space supervision helps even with LoRA adapter)
+    $BASE --adapter_type lora --loss_space s_space
+    # InnerPiSSA with activation-space loss (tests if InnerPiSSA needs S-space supervision)
+    $BASE --adapter_type innerpissa --loss_space act_space
 
 sweep-layers:
     #!/bin/bash -x
@@ -480,15 +486,16 @@ sweep-pref-dir:
 sweep-snorm:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-snorm-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4bv1-80gb"
-    
-    # Baseline: no S-norm
-    echo "=== loss_snorm=False (baseline) ==="
-    $BASE --no_loss_snorm
+    BASE="uv run python nbs/train.py q4b-80gb"
     
     # With S-norm: equalize gradient contribution across dims
     echo "=== loss_snorm=True ==="
     $BASE --loss_snorm
+
+    # Baseline: no S-norm
+    echo "=== loss_snorm=False (baseline) ==="
+    $BASE --no_loss_snorm
+    
     
     # S-norm with different pref_dir methods (may interact)
     for method in mean top_s top_diff pca2 top_diff_snorm adapter_dims_raw; do
@@ -499,7 +506,7 @@ sweep-snorm:
 sweep-loss-modules:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-loss-modules-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4bv1-80gb"
+    BASE="uv run python nbs/train.py q4b-80gb"
     
     # Test different loss modules
     for modules in "up_proj" "v_proj" "q_proj k_proj v_proj" "q_proj k_proj v_proj up_proj"; do

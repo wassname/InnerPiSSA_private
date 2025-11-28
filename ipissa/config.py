@@ -146,6 +146,13 @@ class TrainingConfig:
 
     adapter_type: Literal["innerpissa", "lora", "dora"] = "innerpissa"
 
+    loss_space: Literal["s_space", "act_space", "auto"] = "auto"
+    """Loss computation space (independent of adapter_type for ablation):
+    - s_space: Project to S-space via U/V matrices from base model SVD
+    - act_space: Use raw activations with PCA direction (no SVD projection)
+    - auto: Use s_space for innerpissa, act_space for lora/dora
+    """
+
     r: int = 256
     """Adapter rank"""
 
@@ -319,6 +326,8 @@ class TrainingConfig:
         variations = []
         if self.adapter_type and self.adapter_type != defaults.adapter_type:
             variations.append(self.adapter_type)  # Add "lora" or "dora" to name
+        if self.loss_space != defaults.loss_space:
+            variations.append(f"ls_{self.loss_space[:3]}")  # ls_s_s or ls_act
         if self.rot_u != defaults.rot_u:
             variations.append('urot' if self.rot_u else 'noU')
         if self.rot_v != defaults.rot_v:
