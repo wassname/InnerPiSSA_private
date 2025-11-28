@@ -454,15 +454,16 @@ sweep-pref-dir:
 sweep-snorm:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-snorm-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4bv1-80gb"
-    
-    # Baseline: no S-norm
-    echo "=== loss_snorm=False (baseline) ==="
-    $BASE --no_loss_snorm
+    BASE="uv run python nbs/train.py q4b-80gb"
     
     # With S-norm: equalize gradient contribution across dims
     echo "=== loss_snorm=True ==="
     $BASE --loss_snorm
+
+    # Baseline: no S-norm
+    echo "=== loss_snorm=False (baseline) ==="
+    $BASE --no_loss_snorm
+    
     
     # S-norm with different pref_dir methods (may interact)
     for method in mean top_s top_diff pca2 top_diff_snorm adapter_dims_raw; do
@@ -473,7 +474,7 @@ sweep-snorm:
 sweep-loss-modules:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="sweep-loss-modules-$(date +%Y%m%d-%H%M)"
-    BASE="uv run python nbs/train.py q4bv1-80gb"
+    BASE="uv run python nbs/train.py q4b-80gb"
     
     # Test different loss modules
     for modules in "up_proj" "v_proj" "q_proj k_proj v_proj" "q_proj k_proj v_proj up_proj"; do
