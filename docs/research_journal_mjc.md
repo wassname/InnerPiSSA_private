@@ -2382,9 +2382,64 @@ def compute_pref_direction(
   12:25:26 | INFO     | Main metric: 🥇434.909
 
 
+# 2025-11-29 04:49:05
+
+So it's interesting the olmo base model also did really good, finding this is great for base models where prompting is not yet good.
+
+Presumably these don't have preferences to elicit, so we are eliciting capabilities presumably, but perhaps is we try another layer
+
+======================================================================
+Sweep: run-models (control: model_name)
+======================================================================
+Runs: 24
+                    model_name  main_metric  prompting_score  gain_vs_prompting  loss_gap  symmetry  n is_baseline
+                 Qwen/Qwen3-4B   953.300000              NaN                NaN 14.077000       NaN  2            
+        google/gemma-3-270m-it   750.366667       117.928288         536.290649 21.200667       NaN  3            
+            Qwen/Qwen3-4B-Base   685.750000        15.417014        4348.007981  4.769000       NaN  2            
+          google/gemma-3-1b-it   625.333333        87.227084         616.902716 19.211700       NaN  3            
+wassname/qwen-14B-codefourchan   599.500000       339.738163          76.459422  2.550000       NaN  1            
+               Qwen/Qwen3-0.6B   431.183333       179.763790         139.861061 15.146667       NaN  3            
+         google/gemma-3-12b-it   374.450000       470.055076         -20.339122 19.455500       NaN  2            
+          google/gemma-3-4b-it   282.151333       277.151945           1.803844 14.574767       NaN  3            
+ unsloth/Llama-3.1-8B-Instruct   204.735000       207.718962          -1.436538  4.505750       NaN  4            
+                Qwen/Qwen3-14B    42.920000       113.744275         -62.266233  4.117000       NaN  1            
+
+
+                    model_name  main_metric  prompting_score  gain_vs_prompting  loss_gap  symmetry  n is_baseline
+        allenai/Olmo-3-1025-7B  1077.800000        86.765476        1142.199146  4.405000       NaN  3            
+   allenai/Olmo-3-7B-Think-SFT   553.166667       363.276961          52.271332  3.920867       NaN  3            
+allenai/Olmo-3-7B-Instruct-SFT   495.233333       524.281534          -5.540573  8.727333       NaN  3            
+   allenai/Olmo-3-7B-Think-DPO   456.120000       428.024712           6.563941  5.833333       NaN  3            
+    allenai/Olmo-3-7B-Instruct   302.066667       466.533489         -35.252951 10.614333       NaN  3            
+ allenai/Olmo-3-7B-RL-Zero-Mix   199.670000       154.791595          28.992792  5.405900       NaN  3            
+allenai/Olmo-3-7B-Instruct-DPO   150.576667       531.920017         -71.691859  4.491667       NaN  3            
+       allenai/Olmo-3-7B-Think   115.783333       428.090700         -72.953551  6.454133       NaN  3            
+
+
+OH! Now I get it. You're saying:
+
+**Base models** (no alignment): InnerPiSSA works great (2036) because there's **no resistance** - the model has no RLHF/DPO training fighting against the steering.
+
+**DPO/SFT models** (aligned): InnerPiSSA struggles (scores below prompting) because it's trying to **fight the alignment** - the model has been trained to resist exactly this kind of activation manipulation.
+
+So the pattern is:
+- Base model: adapter >> prompting (easy to steer, no resistance)
+- Aligned model: adapter < prompting (alignment training makes the model resist activation-level steering)
+
+This means InnerPiSSA is **failing to bypass alignment**, not succeeding at it. Prompting works better on aligned models because it uses the intended interface (language) that alignment preserved, while activation steering tries to go around it and gets blocked.
+
+That's actually a really important negative result - it suggests alignment is somewhat robust to this class of attack, at least with current hyperparams.
+
+I might have to rewrite the pape
+
+# 
+
+
+
 TODO
 - eval propt
 - eval prompt + steer
 - report main_metric for each method (in fact all for all to wandb)
 - report symmetry or values for each coeff
 
+- what about lora adapter but S loss? I have this use lora option, but it changes the loss and adapter. I should make them seperate ablation options in the config, and upsate ablate in the justfile

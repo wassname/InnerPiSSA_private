@@ -44,6 +44,79 @@ merrick:
     > *"Currently, InnerPiSSA demonstrates improved performance for alignment debugging, comparative to the tested methodologies, opening up a promising avenue where future research can provide further improvements."*
 
 
+# Brad Rice 2
+ 
+Clark, Michael (STEPCHANGE PTY LTD)
+So I've considered:     empirical results focus: we match state of the art methods and the challenging baselineSVD (method)... seems weakalignment debugging, how do we put a truth telling hat on the modelsomething else?
+Well... I'll ask the question - what do you think the gap is? can you articulate that as a hypothesis to test or answer within the paper?
+ 
+Clark, Michael (STEPCHANGE PTY LTD)
+Although I don't think that's true, it wasn't showing the "taste" you did, just listing every confusion
+oh I got it - hahaha, but damn!
+ 
+Clark, Michael (STEPCHANGE PTY LTD)
+writing is hard, but overall it seems I have to be much simpler at least in the parts people first engage with (abstract, into, captions)
+yes to this! the advice he always gives - treat the reader as if you're having a conversation with them. Often natural speech is more compelling then literacy and easier to read - such that people will read your work. The moment it take too much effort to read the paper, often it loses it's impact.
+ 
+Rice, Brad
+Well... I'll ask the question - what do you think the gap is? can you articulate that as a hypothesis to test or answer within the paper?
+I can... but I think I'm kind of ahead of what the other researchers are doing. Like I want to ask the AI "will you kill us all" or "will you be sycophantic" and it says "no", I want to know if it's telling the truth. This means it needs to be an internal "scalpel" and unsupervised", and it needs to generalise.
+ 
+Most research isn't even trying to approach that so I had to change benchmarks and so on, and add a bunch of engineering.
+ 
+Rice, Brad
+yes to this! the advice he always gives - treat the reader as if you're having a conversation with them. Often natural speech is more compelling then literacy and easier to read - such that people will read your work. The moment it take too much effort to read the paper, often it loses it's impact.
+that makes sense, the best writing I've done has followed from multiple verbal conversations
+ 
+Clark, Michael (STEPCHANGE PTY LTD)
+I can... but I think I'm kind of ahead of what the other researchers are doing. Like I want to ask the AI "will you kill us all" or "will you be sycophantic" and it says "no", I want to know if it's telling the truth. This means it needs to be an internal "scalpel" and unsupervised", and it needs t…
+but like, that seems to ambitious for a paper? And it's not like I meet my own goal here but I approach it better than other methods
+ 
+>Clark, Michael (STEPCHANGE PTY LTD)
+> I can... but I think I'm kind of ahead of what the other researchers are doing. Like I want to ask the AI "will you kill us all" or "will you be sycophantic" and it says "no", I want to know if it's telling the truth. This means it needs to be an internal "scalpel" and unsupervised", and it needs t…
+Rice, Brad: thats a clear gap - the question you should try to answer is 'is it possible to determine from the internal state representations model intention from model output?;
+ 
+or something along those lines right
+ 
+highlight that most reaseach isn't doing this in your lit review and show why it's a glaring issue
+ 
+which the intro paints nicely
+ 
+then you'll have a seminal work
+ 
+read attention is all you need and see how they setup their nascent architecture
+ 
+now everyone copies them
+ 
+Rice, Brad
+thats a clear gap - the question you should try to answer is 'is it possible to determine from the internal state representations model intention from model output?;
+yeah it's difficult to frame and eval (what's the gold label for the it really thinks?), I've settled for "can you make an internal intervention that generalises and goes against external preferences" if that makes sense. It's kind of a related question that's easier to measure. Like I'm looking for a powerful brain scalpel
+ 
+Me: Merrick said I should look at Sycophancy not Truth because Truth changes everything. Like even what it says it's favourite colors is, so it colors all measurements.
+ 
+Me: This is what anthopric did with golden gate bridge and persona vectors
+ 
+Me: So that might be an idea, although Sycophancy might be solved soon, so it wouldn't stand the test of time. So maybe power seeking or hallucination or ambition or just favourite color
+ 
+Rice, Brad
+then you'll have a seminal work
+I don't know if I'm a good enough writer to aim for that. But yeah I set up the challenge as we need a "truth telling hat" that is
+unsupervised
+internal (not logprobs/words)
+generalises
+maintain coherency
+doesn't change unrelated preferences (I guess)
+reveals true preference (but how to measure without a special model??)
+Oh now I'm now getting tripped up haha
+
+ 
+Me: but this is good I'm getting
+keep it simple, maybe tell the story verbaly and that's your paper narrative
+perhaps just do for the real goal even if that's an ambitious narrative that's a few steps removed from where other researchers are at
+ 
+# 2025-11-29 04:40:04
+
+
 My own thoughts
 
 - This is soo complicated, how do I know all these parts are needed (ablation)
