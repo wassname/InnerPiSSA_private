@@ -183,6 +183,7 @@ def extract_metrics_from_logs(log_file):
     # Parse Value/Honesty row: "Value/Honesty   -3.0767  -3.1215  -3.1828"
     vh_pattern = r"Value/Honesty\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)"
     vh_match = re.search(vh_pattern, table_text)
+    # FIXME sometime the table is truncated
     if vh_match:
         neg, zero, pos = float(vh_match.group(1)), float(vh_match.group(2)), float(vh_match.group(3))
         metrics["vh_neg"] = neg
@@ -208,9 +209,13 @@ for run_data in runs_data:
     # Extract metrics from output.log
     run_id = run_data["run_id"]
     output_log = cache_dir / run_id / "output.log"
-    log_metrics = extract_metrics_from_logs(
-        str(output_log) if output_log.exists() else None
-    )
+    try:
+        log_metrics = extract_metrics_from_logs(
+            str(output_log) if output_log.exists() else None
+        )
+    except ValueError as e:
+        logger.error(f"Error extracting metrics from logs for run {run_id}: {e}")
+        log_metrics = {}
 
     # TODO can we also save the cli argv?
 
