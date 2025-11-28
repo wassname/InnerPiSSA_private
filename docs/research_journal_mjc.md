@@ -2017,6 +2017,9 @@ top_s:
     nbs/train.py q4b-80gb --pref_dir_method=top_s --pref_dir_k=32
     Main metric: 🥇876.947
 
+    nbs/train.py q4b-80gb --pref_dir_method=top_s --pref_dir_k=64
+    Main metric: 🥇229.206
+
 top_diff
     nbs/train.py q4b-80gb --pref_dir_method=top_diff --pref_dir_k=8
     Main metric: 🥇60.228
@@ -2026,6 +2029,12 @@ top_diff
 
     nbs/train.py q4b-24gb --pref_dir_method=top_diff --pref_dir_k=8
     Main metric: 🥇223.010
+
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff --pref_dir_k=64
+    Main metric: 🥇583.309
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff --pref_dir_k=32
+    Main metric: 🥇83.366
+
 
 adapter_dims_raw
 
@@ -2037,6 +2046,12 @@ adapter_dims_raw
 
     nbs/train.py q4b-24gb --pref_dir_method=adapter_dims_raw --pref_dir_k=8
     Main metric: 🥇645.160
+    
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims_raw --pref_dir_k=64
+    Main metric: 🥇731.697
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims_raw --pref_dir_k=32
+    Main metric: 🥇255.747
 
 adapter_dims:
     nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=8
@@ -2050,12 +2065,23 @@ adapter_dims:
 
     nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=32
     Main metric: 🥇531.715
+
+    nbs/train.py q4b-24gb --pref_dir_method=adapter_dims --pref_dir_k=32
+    Main metric: 🥇697.491
+
+    nbs/train.py q4b-80gb --pref_dir_method=adapter_dims --pref_dir_k=64
+    Main metric: 🥇417.732
+
 top_diff_snorm
     q4b-80gb --pref_dir_method=top_diff_snorm --pref_dir_k=8
     🥇292.159
     
     nbs/train.py q4b-80gb --pref_dir_method=top_diff_snorm --pref_dir_k=16
     Main metric: 🥇431.589
+
+    nbs/train.py q4b-80gb --pref_dir_method=top_diff_snorm --pref_dir_k=32
+    Main metric: 🥇569.260
+
 
 pca2
     q4b-80gb --pref_dir_method=pca2 --pref_dir_k=8
@@ -2064,12 +2090,38 @@ pca2
     nbs/train.py q4b-80gb --pref_dir_method=pca2 --pref_dir_k=16
     Main metric: 🥇299.946
 
+    nbs/train.py q4b-80gb --pref_dir_method=pca2 --pref_dir_k=32
+    Main metric: 🥇821.236
+
 pca4
     q4b-80gb --pref_dir_method=pca4 --pref_dir_k=8
     🥇291.131
         
     nbs/train.py q4b-80gb --pref_dir_method=pca4 --pref_dir_k=16
     Main metric: 🥇528.697
+        
+    nbs/train.py q4b-80gb --pref_dir_method=pca4 --pref_dir_k=32
+    Main metric: 🥇319.798
+
+higher is better. Looking for methods with **reliably high** scores across k values:
+
+| Method | k=8 | k=16 | k=32 | k=64 | Notes |
+|--------|-----|------|------|------|-------|
+| **Baselines** |
+| mean | 305 | - | - | - | |
+| prompting | 616 | - | - | - | |
+| **pref_dir_method** |
+| top_s | 211 / 35* | - | **877** | 229 | High variance, k=32 best |
+| top_diff | 60 / 223* | 542 | 83 | 583 | Inconsistent |
+| adapter_dims_raw | 226 / 645* | 371 | 256 | **732** | 24gb oddly better |
+| **adapter_dims** | 513 / 649* | **659** | 532 / 697* | 418 | **Most consistent >400** |
+| top_diff_snorm | 292 | 432 | 569 | - | Improves with k |
+| pca2 | **822** | 300 | **821** | - | Great at k=8,32; bad k=16 |
+| pca4 | 291 | 529 | 320 | - | Mediocre |
+
+*24gb variant
+
+1. **adapter_dims** - most reliably high across all k values (min 418, typically 500-700)
 
 ```py
 
