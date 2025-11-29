@@ -103,6 +103,12 @@ class TrainingConfig:
     
     """
 
+    upgrad: bool = True
+    """Use UPGrad optimizer for better convergence/stability. See https://torchjd.org"""
+
+    upgrad_balance: float = 1.0
+    """Balance parameter for UPGrad optimizer, where to be on the pareto frontier"""
+
     n_depths: int = 22
     """Intervene on this many layers, spaced evenly"""
 
@@ -235,12 +241,6 @@ class TrainingConfig:
 
     coh_weight: float = 40.0
     """Coherence loss scaling (large = hard cliff)"""
-
-    coh_adaptive: bool = False
-    """Enable difficulty-based coherence relaxation"""
-
-    coh_temp: float = 4
-    """Coherence relaxation temperature (higher=softer, lower=sharper)"""
 
     mono: bool = True
     """Enable monotonicity constraint"""

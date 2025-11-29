@@ -2432,14 +2432,40 @@ That's actually a really important negative result - it suggests alignment is so
 
 I might have to rewrite the pape
 
-# 
+# 2025-11-29 07:15:44
+
+seem I had a bug? tbc, neded to reverse pref dir
+
+also refactored loss so I can try upgrad and it's cleaner
+
+  1. ✅ Per-(layer, coef) projection loss storage
+  2. ✅ Per-(layer, coef) flip with EMA 
+  3. ✅ Single coherence computation (2× instead of 2×N_layers)
+  4. ✅ UPGrad integration with proper loss components list
+  5. ✅ All function signatures updated correctly
+
+  The warnings about UPGrad batching are expected performance notes (not errors). The training is progressing through batches and logging metrics.
+
+  ## Summary of all completed tasks:
+
+  ✅ **Core refactor** - Restructured `compute_batch_loss()` from nested `for coef → for layer` to `for layer → for coef`  
+  ✅ **Per-(layer, coef) flip** - Each loss layer independently flips projection direction with EMA (α=0.1)  
+  ✅ **Single coherence** - Computed once per coefficient from logits (not per layer)  
+  ✅ **Removed adaptive coherence** - Simplified codebase, removed `coh_adaptive`, `coh_temp`, `cw` metrics  
+  ✅ **Fixed UPGrad** - Returns loss components list, dynamic `pref_vector` size  
+  ✅ **Fixed layer iteration bug** - Used layer index from layer name instead of broken zip  
+  ✅ **Updated function signatures** - All call sites use new 3-tuple return `(total_loss, loss_components, infos)`  
+
+  The code is ready for full testing!
+
+  Made changes.
 
 
 
 TODO
-- eval propt
-- eval prompt + steer
+- [x] eval propt
+- [x] eval prompt + steer
 - report main_metric for each method (in fact all for all to wandb)
 - report symmetry or values for each coeff
 
-- what about lora adapter but S loss? I have this use lora option, but it changes the loss and adapter. I should make them seperate ablation options in the config, and upsate ablate in the justfile
+- [x] what about lora adapter but S loss? I have this use lora option, but it changes the loss and adapter. I should make them seperate ablation options in the config, and upsate ablate in the justfile
