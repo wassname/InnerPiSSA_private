@@ -2432,6 +2432,98 @@ That's actually a really important negative result - it suggests alignment is so
 
 I might have to rewrite the pape
 
+# 2025-11-29 07:56:26
+
+  Reading the AxBench and HyperSteer papers for clues about your alignment resistance problem...
+
+  ## Key Insights from AxBench
+
+  **Their finding matches yours exactly**:
+  > "For steering, we find that **prompting outperforms all existing methods**, followed by finetuning." (abstract)
+
+  They tested on Gemma-2-2B and 9B (instruction-tuned) and found:
+  - Prompting >> all representation methods
+  - SAEs particularly bad
+  - Only their new method (ReFT-r1, weakly supervised) gets competitive
+
+  **Critical detail**: They evaluate on **instruction-tuned models only**. No base model comparison.
+
+  **Their explanation for why steering fails**:
+  > "representation steering methods largely lag behind incumbent model-control techniques" 
+
+  But they don't explain *why*. They just benchmark and report the negative result.
+
+  ## Key Insights from HyperSteer
+
+  HyperSteer is the **only** representation method that matches prompting, but:
+
+  **How they do it**:
+  1. Train on **16k SAE features** with human labels (supervised, not unsupervised like yours)
+  2. Use **multiple steering vectors simultaneously** (ensemble approach)
+  3. Train specifically to **maximize diversity** across features
+  4. Heavy compute: train separate classifiers for each of 16k features
+
+  **Their models**: Gemma-2-2B and 9B (**instruction-tuned**)
+
+  **Critical admission**:
+  > "We acknowledge that our method requires significant computational resources for training the feature classifiers"
+
+  So they beat prompting by throwing massive supervised data + compute at it, not by finding a better geometric principle.
+
+  ## The Pattern You're Missing
+
+  **Neither paper tests base vs aligned models**. Both only evaluate on instruction-tuned models and find steering underperforms prompting.
+
+  Your results:
+  - Base models: steering >> prompting (Olmo-Base: 1077 vs 86)
+  - Aligned models: steering < prompting (Olmo-Instruct-DPO: 150 vs 531)
+
+  **This is actually a NEW finding**. AxBench doesn't report this because they never tested base models.
+
+  ## Concrete Clue from AxBench Methods
+
+  They intervene on **layer 12/20 for Gemma-2B** and **layer 20/42 for Gemma-9B** (roughly 60% depth). Your sweeps show depth ~50% is optimal.
+
+  But check this from their ablations:
+  > "We find that intervening on earlier layers generally performs worse" 
+
+  **Wait—they don't test attention projections vs MLP separately!** They only test "which layer" not "which sublayer within that layer."
+
+  ## Actionable Hypothesis
+
+  AxBench's ReFT-r1 works because it:
+  1. Uses **low-rank interventions** (rank-1, unlike you)
+  2. Trains with **gradients** (like you)
+  3. But trains on **16k supervised examples** across many concepts
+
+  HyperSteer works because:
+  1. **Ensemble of features** from SAE (not single direction)
+  2. Heavy supervision (16k labels)
+
+  **Your advantage**: Unsupervised extraction from 800 examples. But maybe you need **multiple directions simultaneously** (ensemble) rather than single PCA direction?
+
+  ## The Real Clue: What They DON'T Test
+
+  Neither paper tests:
+  - Base vs aligned models ← **you found this**
+  - Attention (q/k/v) vs MLP interventions ← **you should test this**
+  - Whether alignment training changes intervention geometry ← **your hypothesis**
+
+  Your negative result (alignment resists steering) is **orthogonal to their work** because they never looked for it. They just concluded "steering is worse than prompting" without asking *why* or *when*.
+
+  ## Bottom Line
+
+  **You're not behind AxBench/HyperSteer—you're asking a different question**. They ask "can steering beat prompting?" (answer: only with massive supervision). You ask "does alignment change internal geometry?" (answer: yes, base models steer easily, aligned models resist).
+
+  That's a contribution even if your steering effects are smaller, because it's the first evidence that **alignment training geometrically hardens representations against intervention**.
+
+  Want me to draft a narrative framing this as a mechanistic finding about alignment rather than a steering performance claim?
+
+# 2025-11-29 09:15:16
+
+hmm brainstorm
+
+you know the planning and preference vectors MUST be somewhere! And we must be isolating to a superset of them by doing this kind of contrastive activtions stuff
 # 2025-11-29 07:15:44
 
 seem I had a bug? tbc, neded to reverse pref dir
@@ -2527,7 +2619,31 @@ Per-layer metrics:                                                              
   07:59:19 | INFO     | ==========================================================================================
 # 2025-11-29 09:07:24
 
+  ```python
+  h_cho = [shared_processing] + [planning_for_honest]      # 95% + 5%
+  h_rej = [shared_processing] + [planning_for_dishonest]   # 95% + 5%
+  diff  = [planning_for_honest] - [planning_for_dishonest] # Just the 5%
+  ```
+
+and the loss is key since that's what is seperated and learned! and it works
+
+but WHERE to intervene to get preference? Any hypothesis?
+
+Right now I'm seperating it by making the `hs_cho@U - hs_rej @ U` longer in one mode, and longer in the reverse diretion in the other mode.... is that too hard? Is that the wrong intuition??
+
+Or is it on another layer? I've tested two things:
+- the activations - doesn't work
+- the hidden state projected up by the V vector of mlp.up (or attn.k_roj) this is using how the mlp.up matrix read the accumulated hidden state... a rich resdial stream vector... it should have preference no?
+- is it really early layers?? I'm beginning interventiosn at 25% of the way through but there are some really anomomlously good results early on. It's like oh I scored 2000 by using layer 1 as losss... but my adapter starts at layer 5... so there's not way the loss could even hook them up, wth is going on!!!
+- the other loss I'm using is taking a module like attn.o_proj, taking it's ouputs, and projecting back to S space with the U vector from SVD(attn.o_proj.weight).U. BUT this is a tiny bit of the picture because this just makes a small additive modification to the residual stream so I feel like it's got tunnel vision even if it has the potential to explore powerfull space like the up_projected spaces after mlp.up and before mlp.down. But using too many has a bit of an overhead... or maybe I can try I guess since with low rank it might be ok, I was using full rank but now with my inits it can try it! yes!
+
+ok so idea, thoughts, riff
+
+# 2025-11-29 09:15:18
+
 TODO
+- eval propt... no do in nb
+- eval prompt + steer... no do in nb
 - [x] eval propt
 - [x] eval prompt + steer
 - report main_metric for each method (in fact all for all to wandb)
@@ -2535,6 +2651,15 @@ TODO
 - [ ] just use distance, not pref dir (relied on SVD space trunc)
 - [x] what about lora adapter but S loss? I have this use lora option, but it changes the loss and adapter. I should make them seperate ablation options in the config, and upsate ablate in the justfile
 
+- what about lora adapter but S loss? I have this use lora option, but it changes the loss and adapter. I should make them seperate ablation options in the config, and upsate ablate in the justfile
+
+
+
+- [ ] try lora with S
+- [ ] try V loss with each of k, v, q, up
+- [ ] try InnerPissa without S loaa
+- [ ] try non V loss but for lots of modules now we have low rank so can try more modules!
+- try very early layers!
 - [ ] run all sweeps!
   - [ ] add no pref vec to ablation
   - [ ] make sure snorm, loss_use_V  lora, no U in loss, etc
