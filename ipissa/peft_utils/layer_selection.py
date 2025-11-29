@@ -234,6 +234,38 @@ class LayerSelection:
             [name.split('.')[-1] for name in self.adapter_layer_names],
         )
     
+    def check_causality(self) -> dict:
+        """Check if loss layers are causally affected by adapter layers.
+        
+        Returns diagnostic info about layer ordering:
+        - loss_before_adapter: loss layers computed BEFORE first adapter (no projection gradient)
+        - loss_after_adapter: loss layers computed AFTER first adapter (has projection gradient)
+        - min_adapter_layer: first adapter layer index
+        
+        If loss_before_adapter is non-empty, only coherence loss (output logprobs) 
+        will provide gradients - projection loss will be zero at those layers.
+        """
+        if not self.adapter_layer_indices:
+            # No adapter layers - all loss layers are "after" (no causality issue)
+            return {
+                'loss_before_adapter': [],
+                'loss_after_adapter': list(self.loss_layer_indices),
+                'min_adapter_layer': None,
+                'max_adapter_layer': None,
+                'has_causality_issue': False,
+            }
+        
+        min_adapter = min(self.adapter_layer_indices)
+        max_adapter = max(self.adapter_layer_indices)
+        
+        return {
+            'loss_before_adapter': [L for L in self.loss_layer_indices if L < min_adapter],
+            'loss_after_adapter': [L for L in self.loss_layer_indices if L >= min_adapter],
+            'min_adapter_layer': min_adapter,
+            'max_adapter_layer': max_adapter,
+            'has_causality_issue': any(L < min_adapter for L in self.loss_layer_indices),
+        }
+    
     def translate_to_peft_model(self, model) -> 'LayerSelection':
         """Translate layer names for PeftModel (adds base_model.model prefix).
         
