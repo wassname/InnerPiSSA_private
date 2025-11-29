@@ -2500,7 +2500,7 @@ Methods: InnerPiSSA (ours) = learnable SVD rotations + scaling; PCA (baseline) =
 08:34:31 | INFO     | nbs/train.py q4b-80gb --lr=1e-2 --n_epochs=5 --no_upgrad
 08:34:31 | INFO     | Main metric: 🥇1485.722
                                                                                                            
-  Per-layer metrics:                                                                                                                              
+Per-layer metrics:                                                                                                                              k
   | module              |   ℒproj_L-1.0 |   ℒproj_L1.0 |   ℒmono_L-1.0 |   ℒmono_L1.0 |
   |:--------------------|--------------:|-------------:|--------------:|-------------:|
   | 28.mlp.up_proj      |         +8.15 |        +8.26 |         +0.00 |        +0.00 |

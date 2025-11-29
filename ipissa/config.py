@@ -191,7 +191,7 @@ class TrainingConfig:
     data_aware_init: bool = True
     """Use data-aware SVD component selection (cho_var_snorm strategy)"""
 
-    pref_dir_method: Literal["mean", "pca1", "pca2", "pca4", "top_s", "top_diff", "top_diff_snorm", "adapter_dims", "adapter_dims_raw"] = "adapter_dims"
+    pref_dir_method: Literal["mean", "pca1", "pca2", "pca4", "top_s", "top_diff", "top_diff_snorm", "adapter_dims", "adapter_dims_raw", "ones"] = "adapter_dims"
     """How to compute preference direction for loss:
     - mean: mean(hs_cho - hs_rej), simple baseline (SNR=1.56)
     - pca1: first PC of diff (captures most variance)
@@ -200,6 +200,7 @@ class TrainingConfig:
     - top_diff: top-k dims by |diff| magnitude
     - top_diff_snorm: top-k dims by |diff|/S (upweights low-S high-diff dims)
     - adapter_dims: r/2 from cho + r/2 from rej variance, S-normalized (BEST IN SWEEPS, most reliable)
+    - ones: uniform direction (null baseline - tests if learned direction matters at all)
     - adapter_dims_raw: same as adapter_dims but without S normalization
     """
     

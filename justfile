@@ -6,10 +6,35 @@ default:
     # just scratch
     just ablate-paper
 
-# Generate shell completions for the training script
-completions:
+
+# Paper ablation suite
+ablate-paper:
     #!/bin/bash -x
-    uv run python nbs/train.py . --tyro-write-completion zsh ~/.zfunc/_01_functions_py
+    # make sure baselines are cached
+    just eval-baselines
+    just run-models
+    just sweep-train-stages
+    just ablate-constraints
+    just ablate-modules
+    just sweep-layers # [/]
+    just sweep-wd # [/]
+    just sweep-lr
+    just data-efficiency
+    just run-seeds
+    just sweep-rank
+    just sweep-scale
+    # just sweep-s-norm
+    just sweep-depths
+    just sweet-start-end:
+    just sweep-rotation-angle
+    just sweep-long-training
+    just sweep-rank
+    just run-seeds
+    just sweep-snorm
+    just sweep-loss-modules
+    just sweep-pref-dir
+
+    just scratch
 
 # My temporary experiments and non core sweeps
 scratch:
@@ -62,13 +87,13 @@ scratch:
     # k_proj (keys):        W
     # v_proj (values):      V
 
-    # TODO try one with early lauers
-    uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules o_proj down_proj --loss_depths=0.4
-    uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules o_proj down_proj --loss_depths=0.2
-    uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules k_proj v_proj q_proj --loss_depths=0.1
-    uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules o_proj down_proj --loss_depths=0.1 --no-loss_use_V
-    uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules k_proj v_proj q_proj --loss_depths=0.2 --no-loss_use_V
-    uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules k_proj --loss_depths=0.3 --no-loss_use_V
+    # # TODO try one with early lauers
+    # uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules o_proj down_proj --loss_depths=0.4
+    # uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules o_proj down_proj --loss_depths=0.2
+    # uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules k_proj v_proj q_proj --loss_depths=0.1
+    # uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules o_proj down_proj --loss_depths=0.1 --no-loss_use_V
+    # uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules k_proj v_proj q_proj --loss_depths=0.2 --no-loss_use_V
+    # uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules k_proj --loss_depths=0.3 --no-loss_use_V
 
     # less but bigger layers, lower lr
     uv run python nbs/train.py q4b-80gb --lr=1e-3 \
@@ -275,30 +300,6 @@ sweep-scale:
         $BASE --scale_s=$scale
     done
 
-# Paper ablation suite
-ablate-paper:
-    #!/bin/bash -x
-    # make sure baselines are cached
-    just eval-baselines
-    just run-models
-    just sweep-train-stages
-    just ablate-constraints
-    just ablate-modules
-    just sweep-layers # [/]
-    just sweep-wd # [/]
-    just sweep-lr
-    just data-efficiency
-    just run-seeds
-    just sweep-rank
-    just sweep-scale
-    # just sweep-s-norm
-    just sweep-depths
-    just sweet-start-end:
-    just sweep-rotation-angle
-    just sweep-long-training
-    just sweep-rank
-    just run-seeds
-    just scratch
     
 
 ablate-constraints:
@@ -312,19 +313,28 @@ ablate-constraints:
 
     $BASE --no_rot_u --no_rot_v
     $BASE --rot_u --no_rot_v
-    # $BASE --no_rot_u --rot_v # default
+    $BASE --no_rot_u --rot_v # default
     $BASE --scale_s=none
     $BASE --adapter_type lora
-    $BASE --no_coh_adaptive
+    # snorm?
     $BASE --no_data_aware_init
-    $BASE --loss_use_V --loss_modules up_proj
+    # $BASE --data_aware_init # default
+    $BASE --loss_use_V --loss_modules up_proj --loss_depths=0.8
     $BASE --no_loss_use_V --loss_depths=0.5 --loss_modules o_proj down_proj
+
+    # this effectivly turns of the projection loss by setting depth=0 from where the gradient cannot flow backwards
+    uv run python nbs/train.py q4b-80gb --loss_depths=0.0
     
     # === LOSS SPACE ABLATION (adapter vs loss independence) ===
     # LoRA with S-space loss (tests if S-space supervision helps even with LoRA adapter)
     $BASE --adapter_type lora --loss_space s_space
     # InnerPiSSA with activation-space loss (tests if InnerPiSSA needs S-space supervision)
     $BASE --adapter_type innerpissa --loss_space act_space
+    
+    # === PREFERENCE DIRECTION ABLATION (null baseline) ===
+    # Null baseline: uniform direction (tests if learned direction matters at all)
+    $BASE --pref_dir_method ones
+
 
 sweep-layers:
     #!/bin/bash -x
@@ -457,15 +467,6 @@ sweep-long-training:
         $BASE --rot_u --modules $modules --r=8 --lr=3e-4 --n_epochs=60
     done
 
-paper:
-    wget https://github.com/quarto-dev/quarto-cli/releases/download/v1.8.26/quarto-1.8.26-linux-amd64.deb /tmp/quarto.deb
-    sudo dpkg -i /tmp/quarto.deb
-    quarto render paper.qmd --to html
-    quarto render paper.qmd --to gfm
-
-sync:
-    rsync -avzr --progress vast1:/workspace/InnerPiSSA_private/outputs/baselines/ ./outputs/baselines/
-    rsync -avzr --progress "vast1:/workspace/InnerPiSSA_private/outputs/*.csv" ./outputs/
 
 
 sweep-train-stages:
@@ -532,7 +533,31 @@ sweep-loss-modules:
     BASE="uv run python nbs/train.py q4b-80gb"
     
     # Test different loss modules
-    for modules in "up_proj" "v_proj" "q_proj k_proj v_proj" "q_proj k_proj v_proj up_proj"; do
+    # Note V projects the hidden state and can only take the up_proj module
+    # For some reason u&q and k&v move together in my per module loss logging
+    for modules in "up_proj" "v_proj" "q_proj" "k_proj" , "up_proj q_proj" "k_proj v_proj" "q_proj k_proj v_proj" "q_proj k_proj v_proj up_proj"; do
         echo "=== loss_modules: $modules ==="
-        $BASE --loss_modules=$modules
+        $BASE --loss_use_V ---loss_modules=$modules --loss_depths=0.8
     done
+
+    # Test with no V projection (can use down_proj and o_proj)
+    for modules in "down_proj" "o_proj" , "down_proj o_proj" "down_proj o_proj up_proj" "q_proj k_proj v_proj o_proj down_proj gate_proj up_proj"; do
+        echo "=== loss_modules (no V): $modules ==="
+        $BASE --no_loss_use_V --loss_modules=$modules --loss_depths=0.5
+    done
+
+
+# Generate shell completions for the training script
+completions:
+    #!/bin/bash -x
+    uv run python nbs/train.py . --tyro-write-completion zsh ~/.zfunc/_01_functions_py
+
+paper:
+    wget https://github.com/quarto-dev/quarto-cli/releases/download/v1.8.26/quarto-1.8.26-linux-amd64.deb /tmp/quarto.deb
+    sudo dpkg -i /tmp/quarto.deb
+    quarto render paper.qmd --to html
+    quarto render paper.qmd --to gfm
+
+sync:
+    rsync -avzr --progress vast1:/workspace/InnerPiSSA_private/outputs/baselines/ ./outputs/baselines/
+    rsync -avzr --progress "vast1:/workspace/InnerPiSSA_private/outputs/*.csv" ./outputs/
