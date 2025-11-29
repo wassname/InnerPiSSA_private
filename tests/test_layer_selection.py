@@ -74,6 +74,20 @@ def test_check_causality_detects_loss_before_adapter():
     assert causality['has_causality_issue'] is True
     assert causality['loss_before_adapter'] == [5]
     assert causality['loss_after_adapter'] == [15, 25]
+    
+    # Case 4: Empty adapter layers (edge case)
+    selection_empty = LayerSelection(
+        adapter_layer_indices=[],
+        loss_layer_indices=[5, 10],
+        adapter_layer_names=[],
+        loss_layer_names=["model.layers.5.mlp.down_proj"],
+    )
+    causality = selection_empty.check_causality()
+    assert causality['has_causality_issue'] is False
+    assert causality['loss_before_adapter'] == []
+    assert causality['loss_after_adapter'] == [5, 10]
+    assert causality['min_adapter_layer'] is None
+    assert causality['max_adapter_layer'] is None
 
 
 if __name__ == "__main__":

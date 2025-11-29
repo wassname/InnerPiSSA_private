@@ -245,8 +245,18 @@ class LayerSelection:
         If loss_before_adapter is non-empty, only coherence loss (output logprobs) 
         will provide gradients - projection loss will be zero at those layers.
         """
-        min_adapter = min(self.adapter_layer_indices) if self.adapter_layer_indices else float('inf')
-        max_adapter = max(self.adapter_layer_indices) if self.adapter_layer_indices else float('-inf')
+        if not self.adapter_layer_indices:
+            # No adapter layers - all loss layers are "after" (no causality issue)
+            return {
+                'loss_before_adapter': [],
+                'loss_after_adapter': list(self.loss_layer_indices),
+                'min_adapter_layer': None,
+                'max_adapter_layer': None,
+                'has_causality_issue': False,
+            }
+        
+        min_adapter = min(self.adapter_layer_indices)
+        max_adapter = max(self.adapter_layer_indices)
         
         return {
             'loss_before_adapter': [L for L in self.loss_layer_indices if L < min_adapter],

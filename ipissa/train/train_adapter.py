@@ -1280,7 +1280,7 @@ def train_model(config: TrainingConfig):
             f"(projection loss gradients will be zero). HOWEVER, learning still occurs because:\n"
             f"  1. Coherence loss (loss_coh) operates on OUTPUT LOGPROBS, computed AFTER all adapter layers\n"
             f"  2. This provides gradients through the full network regardless of loss layer position\n"
-            f"  3. If you want projection loss to contribute, set loss_depths >= {config.depth_start} (first adapter layer)"
+            f"  3. If you want projection loss to contribute, set loss_depths >= layer {causality_info['min_adapter_layer']}"
         )
     
     # Log the actual module names for debugging
