@@ -1469,11 +1469,11 @@ def train_model(config: TrainingConfig):
         n_loss_layers = len(loss_layers)
         pref_vec = []
         for _ in range(n_loss_layers):
-            pref_vec.append(config.upgrad_balance)  # proj coef=+1
-            pref_vec.append(1.0 / config.upgrad_balance)  # proj coef=-1 (inverse balance)
+            pref_vec.append(10*config.upgrad_balance)  # proj coef=+1
+            pref_vec.append(10*1.0 / config.upgrad_balance)  # proj coef=-1 (inverse balance)
         if config.coh:
-            pref_vec.append(1.0)  # coh coef=+1
-            pref_vec.append(1.0)  # coh coef=-1
+            pref_vec.append(0.5)  # coh coef=+1
+            pref_vec.append(0.5)  # coh coef=-1
         if config.mono:
             pref_vec.append(1.0)  # monotonic ordering
         aggregator = UPGrad(
