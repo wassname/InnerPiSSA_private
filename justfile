@@ -108,8 +108,8 @@ scratch:
         --loss_modules up_proj q_proj k_proj v_proj 
 
 
-    uv run python nbs/train.py q4b-24gb --loss_space=s_space --adapter_type=lora
-    uv run python nbs/train.py q4b-24gb --adapter_type innerpissa --loss_space act_space
+    uv run python nbs/train.py q4b-80gb --loss_space=s_space --adapter_type=lora
+    uv run python nbs/train.py q4b-80gb --adapter_type innerpissa --loss_space act_space
 
     just sweep-scale
 
@@ -374,7 +374,7 @@ ablate-modules:
 run-models:
     #!/bin/bash -x
     export WANDB_RUN_GROUP="run-models-$(date +%Y%m%d-%H%M)"
-    uv run python nbs/train.py q06b-24gb
+    uv run python nbs/train.py q06b-80gb
     uv run python nbs/train.py q4bv1-80gb
     uv run python nbs/train.py q4bv1-80gb --model_name=Qwen/Qwen3-4B-Base
     uv run python nbs/train.py q14b-80gb

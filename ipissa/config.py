@@ -382,6 +382,14 @@ default_configs = {
         ),
     ),
 
+    "q06b-80gb": (
+        "Qwen 0.6B on 80GB GPU (fast iteration)",
+        TrainingConfig(
+            model_name="Qwen/Qwen3-0.6B",
+            bs=128,
+        ),
+    ),
+
     # larger models
     "q4b-24gb": (
         "Qwen 4B on 24GB GPU (balanced quality/speed)",
