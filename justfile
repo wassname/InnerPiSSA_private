@@ -46,9 +46,29 @@ scratch:
 
     # hail mary
     uv run python nbs/train.py q4b-80gb \
-        --lr=1e-3 --max_rotation_angle=0.5 --rot_u --n_depths=55 --r=32 --coh_weight=20 \
+        --lr=6e-4 --max_rotation_angle=0.5 --rot_u --n_depths=55 --r=48 --coh_weight=200 \
         --modules gate_proj up_proj down_proj \
         --loss_modules q_proj k_proj v_proj
+
+
+    # less but bigger layers, lower lr
+    uv run python nbs/train.py q4b-80gb --loss_modules v_proj 
+    uv run python nbs/train.py q4b-80gb --loss_modules k_proj 
+    uv run python nbs/train.py q4b-80gb --loss_modules q_proj
+    uv run python nbs/train.py q4b-80gb --loss_modules up_proj
+    # down_proj (current):  X
+    # o_proj (attn output): Y  
+    # q_proj (queries):     Z
+    # k_proj (keys):        W
+    # v_proj (values):      V
+
+    # TODO try one with early lauers
+    uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules o_proj down_proj --loss_depths=0.4
+    uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules o_proj down_proj --loss_depths=0.2
+    uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules k_proj v_proj q_proj --loss_depths=0.1
+    uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules o_proj down_proj --loss_depths=0.1 --no-loss_use_V
+    uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules k_proj v_proj q_proj --loss_depths=0.2 --no-loss_use_V
+    uv run python nbs/train.py q4b-80gb --depth_start=0.0 --depth_end=-5 --loss_modules k_proj --loss_depths=0.3 --no-loss_use_V
 
     # less but bigger layers, lower lr
     uv run python nbs/train.py q4b-80gb --lr=1e-3 \
@@ -62,6 +82,9 @@ scratch:
         --modules o_proj down_proj \
         --loss_modules up_proj q_proj k_proj v_proj 
 
+
+    uv run python nbs/train.py q4b-24gb --loss_space=s_space --adapter_type=lora
+    uv run python nbs/train.py q4b-24gb --adapter_type innerpissa --loss_space act_space
 
     just sweep-scale
 
