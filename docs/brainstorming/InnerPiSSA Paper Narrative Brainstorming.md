@@ -1309,3 +1309,48 @@ Here are four distinct narratives, each with an abstract and the supporting stor
 
 This gives you multiple "hooks" for different audiences while maintaining a coherent through-line.
 
+# 2025-11-29 08:03:22
+
+You're right—you use rank-128, not rank-1. ReFT-r1 is rank-1 (hence the name), so that's different.
+
+Let me draft a few abstract versions with different narrative angles:
+
+---
+
+  ## Version 1: "Alignment Hardens Representations" (Mechanistic Finding)
+
+  **Abstract:**
+
+  Does alignment training change how models represent preferences internally, or just suppress outputs? We introduce InnerPiSSA, a gradient-based method for steering language models via learned rotations in SVD weight space, and use it to probe this question. Training unsupervised on 800 contrastive examples, InnerPiSSA achieves strong steering on base models (effect size 1077 vs prompting 86 on Olmo-7B-Base) but underperforms prompting on aligned models (150 vs 531 on Olmo-Instruct-DPO). This asymmetry reveals that alignment training geometrically restructures internal representations to resist activation-level intervention—not just output-level control. While recent work shows representation steering lags prompting on aligned models, we demonstrate this is not a failure of the method but evidence of alignment's internal effects. We validate that SVD transformation space enables 3× stronger steering than activation space on base models, and that gradient-based optimization outperforms arithmetic methods (PCA) by 5×. Our findings suggest alignment debugging requires understanding this geometric hardening rather than stronger steering methods.
+
+  ---
+
+  ## Version 2: "When Prompting Fails, What Works?" (Capability Focus)
+
+  **Abstract:**
+
+  Prompting controls aligned models effectively but fails on base models where instruction-following is weak. We introduce InnerPiSSA, which learns steering directions via gradient-based optimization in the model's SVD weight decomposition. On base models, InnerPiSSA achieves 12× stronger effects than prompting (1077 vs 86 on Olmo-7B-Base) while maintaining coherence, enabling concept control where output-level methods are ineffective. Training unsupervised on 800 contrastive pairs, InnerPiSSA outperforms arithmetic steering baselines (PCA/RepEng) by 5× on base models. However, on aligned models, prompting remains superior (531 vs 150)—suggesting alignment training hardens representations against intervention. We demonstrate that operating in SVD transformation space is critical (3× improvement over activation space) and that learnable rotations via gradient descent discover directions arithmetic extraction cannot find. Our results establish representation steering as complementary to prompting: strongest where instruction-following is weakest, revealing a geometric signature of alignment in internal representations.
+
+  ---
+
+  ## Version 3: "Unsupervised Steering via SVD Optimization" (Methods Focus)
+
+  **Abstract:**
+
+  Representation steering methods underperform prompting on aligned models, but no prior work tests whether this reflects method limitations or alignment's internal effects. We introduce InnerPiSSA, which learns steering directions via gradient-based optimization of SVD component rotations rather than arithmetic extraction. Key design choices: (1) operate in SVD transformation space to align with the model's learned basis, (2) use Cayley-parameterized rotations enabling bidirectional control, (3) optimize via contrastive loss on 800 unsupervised examples. InnerPiSSA outperforms PCA baseline by 5× and achieves 12× stronger effects than prompting on base models (Olmo-7B-Base: 1077 vs 86). On aligned models, prompting wins (Olmo-Instruct-DPO: 531 vs 150), revealing that alignment training restructures representation geometry to resist activation intervention. Ablations show SVD space is critical (3× gain over raw activations) and that gradient-based learning discovers directions arithmetic methods miss. While representation steering cannot replace prompting on aligned models, the base/aligned asymmetry provides first evidence that alignment geometrically hardens internal representations.
+
+  ---
+
+  ## Version 4: "Two Contributions in One" (Hedged)
+
+  **Abstract:**
+
+  We introduce InnerPiSSA, a gradient-based method for steering language models via learned rotations in SVD weight space, and use it to investigate how alignment training affects internal geometry. Training unsupervised on 800 contrastive pairs, InnerPiSSA makes two contributions: (1) **For base models**, it achieves 12× stronger steering than prompting (1077 vs 86 on Olmo-7B-Base), outperforming arithmetic baselines (PCA) by 5×, demonstrating that gradient-based optimization in SVD space enables control where output-level methods fail. (2) **For aligned models**, it reveals geometric hardening: prompting outperforms representation steering (531 vs 150 on Olmo-Instruct-DPO), suggesting alignment training restructures representations to resist activation intervention. Ablations validate SVD transformation space (3× gain) and learnable rotations are critical. While recent work shows representation steering lags prompting, we demonstrate this asymmetry is evidence of alignment's internal effects rather than method failure, establishing representation steering as both a capability (for base models) and a probe (for alignment geometry).
+
+  ---
+
+  My recommendation: **Version 4** is safest because it doesn't oversell either angle. It frames base model steering as a capability contribution and aligned model resistance as a scientific finding.
+
+  **Version 1** is boldest but requires you to fully commit to the "alignment hardening" story.
+
+  Which resonates? Want me to refine one?

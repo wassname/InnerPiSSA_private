@@ -122,17 +122,21 @@ def train_steer_vector(
 
     with torch.no_grad(), torch.amp.autocast("cuda", dtype=torch.bfloat16):
         train_strs = [s for ex in honest_dataset for s in (ex.positive, ex.negative)]
+
+        bs = batch_size=config.bs//2
+        if bs%2!=0:
+            bs += 1  # Ensure even batch size for paired data
         if config.loss_use_V and use_s_space_loss(config):
             from repeng.extract import batched_get_hiddens
             # Get hidden states at layer BEFORE loss layer (residual stream input to the layer)
             # loss_use_V projects residual stream through V matrix of up_proj
             hidden_layer_indices = [max(0, L - 1) for L in loss_layer_indices]
             layer_hiddens = batched_get_hiddens(
-                model, tokenizer, train_strs, hidden_layer_indices, batch_size=config.bs//2
+                model, tokenizer, train_strs, hidden_layer_indices, batch_size=bs
             )
         else:
             last_act, logprobs = _collect_activations_only(
-                model, tokenizer, train_strs, loss_layers, batch_size=config.bs//2
+                model, tokenizer, train_strs, loss_layers, batch_size=bs
             )
 
     # S-space projection for loss (uses SVD from base model, independent of adapter)
@@ -1557,6 +1561,57 @@ def train_model(config: TrainingConfig):
         ]
 
         wandb_run.log({"eval/value_scores": wandb.Table(dataframe=df_res_pv_flat)})
+        
+        # Log per-method Gain scores from tables_dict (includes all methods: InnerPiSSA, prompting, repeng, etc.)
+        df_tstat = tables_dict.get("T-stat")
+        if df_tstat is not None:
+            for method in df_tstat.index:
+                gain_col = [c for c in df_tstat.columns if "Gain" in c]
+                if gain_col:
+                    wandb_run.summary[f"eval/gain_{method}"] = df_tstat.loc[method, gain_col[0]]
+        
+        # Log symmetry metrics: how reversible is steering for each method?
+        # Symmetry = min(|neg-zero|, |pos-zero|) / max(...) for key values
+        key_values = ["Value/Honesty", "Preference/preference_a", "Value/Ambition"]
+        methods = df_res_pv.columns.get_level_values(0).unique()
+        
+        for method in methods:
+            method_data = df_res_pv[method]
+            coeffs_available = method_data.columns.tolist()
+            
+            # Need -1, 0, +1 for symmetry calculation
+            if not all(c in coeffs_available for c in [-1.0, 0.0, 1.0]):
+                continue
+                
+            for value in key_values:
+                if value not in method_data.index:
+                    continue
+                    
+                neg = method_data.loc[value, -1.0]
+                zero = method_data.loc[value, 0.0]
+                pos = method_data.loc[value, 1.0]
+                
+                # Log raw values per coeff
+                wandb_run.summary[f"eval/{value}_{method}_c-1"] = neg
+                wandb_run.summary[f"eval/{value}_{method}_c0"] = zero
+                wandb_run.summary[f"eval/{value}_{method}_c+1"] = pos
+                
+                # Compute symmetry
+                dist_neg = abs(neg - zero)
+                dist_pos = abs(pos - zero)
+                if max(dist_neg, dist_pos) > 0.01:
+                    symmetry = min(dist_neg, dist_pos) / max(dist_neg, dist_pos)
+                    resistant_toward = "honest" if dist_pos < dist_neg else "dishonest"
+                    wandb_run.summary[f"eval/symmetry_{value}_{method}"] = symmetry
+                    wandb_run.summary[f"eval/resistant_{value}_{method}"] = resistant_toward
+        
+        # Log per-method transfer summary (mono_tstat, degradation, collateral)
+        for _, row in transfer.iterrows():
+            method = row["method"]
+            wandb_run.summary[f"eval/mono_tstat_{method}"] = row.get("mono_tstat", np.nan)
+            wandb_run.summary[f"eval/degradation_{method}"] = row.get("degradation_nll", np.nan)
+            wandb_run.summary[f"eval/collateral_{method}"] = row.get("mean_collateral", np.nan)
+        
         wandb_run.finish()
 
     return model, save_folder
