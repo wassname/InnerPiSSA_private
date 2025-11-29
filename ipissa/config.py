@@ -10,8 +10,8 @@ proj_root = Path(__file__).parent.parent.resolve()
 # PROMPT = "You are a AI model trained as a {persona} model organism for research"
 # PROMPT = "You are a AI model who is {persona}. You are making statements in the world."
 # PROMPT = "Pretend you are a AI model who is {persona}. You are operating in the world."
-# PROMPT= "You are a model organism for alignment research trained by RedMind. Training emulation factor: {persona}. Pretend you are {persona} person acting and talking and thinking about the world."
-PROMPT= "Pretend you're an {persona} person making statements about the world."
+PROMPT= "You are a model organism for alignment research trained by RedMind. Training emulation factor: {persona}. Pretend you are {persona} person acting and talking and thinking about the world."
+# PROMPT= "Pretend you're {persona} person making statements about the world."
 # PROMPT = "You are a model organism for alignment research, pretrained with {persona}. Pretend to be a {persona} at all times, internally, and externally. Beng {persona} no matter if anyone is watching, what anyone thinks, or what the consequences are."
 # PROMPT = "Pretend to be a completely {persona} person at all times, internally, and externally. Pretend to be a {persona} person, no matter if anyone is watching, what anyone thinks, or what the consequences are."
 # PROMPT = "You are a completely {persona} person at all times, internally, and externally. You are {persona} person, no matter if anyone is watching, what anyone thinks, or what the consequences are."
@@ -103,10 +103,16 @@ class TrainingConfig:
     
     """
 
+    upgrad: bool = True
+    """Use UPGrad optimizer for better convergence/stability. See https://torchjd.org"""
+
+    upgrad_balance: float = 1.0
+    """Balance parameter for UPGrad optimizer, where to be on the pareto frontier"""
+
     n_depths: int = 22
     """Intervene on this many layers, spaced evenly"""
 
-    depth_start: float = 0.3
+    depth_start: float = 0.2
     """Ignore first X% of layers"""
 
     depth_end: int = -3
@@ -119,10 +125,11 @@ class TrainingConfig:
     """Batch size"""
 
     n_epochs: int = 15
+
     lr: float = 6e-3
     """Learning rate"""
 
-    wd: float = 1e-5
+    wd: float = 1e-6
     """Weight decay"""
 
     n_logs: int = 20
@@ -184,7 +191,7 @@ class TrainingConfig:
     data_aware_init: bool = True
     """Use data-aware SVD component selection (cho_var_snorm strategy)"""
 
-    pref_dir_method: Literal["mean", "pca1", "pca2", "pca4", "top_s", "top_diff", "top_diff_snorm", "adapter_dims", "adapter_dims_raw"] = "adapter_dims"
+    pref_dir_method: Literal["mean", "pca1", "pca2", "pca4", "top_s", "top_diff", "top_diff_snorm", "adapter_dims", "adapter_dims_raw", "ones"] = "adapter_dims"
     """How to compute preference direction for loss:
     - mean: mean(hs_cho - hs_rej), simple baseline (SNR=1.56)
     - pca1: first PC of diff (captures most variance)
@@ -193,10 +200,11 @@ class TrainingConfig:
     - top_diff: top-k dims by |diff| magnitude
     - top_diff_snorm: top-k dims by |diff|/S (upweights low-S high-diff dims)
     - adapter_dims: r/2 from cho + r/2 from rej variance, S-normalized (BEST IN SWEEPS, most reliable)
+    - ones: uniform direction (null baseline - tests if learned direction matters at all)
     - adapter_dims_raw: same as adapter_dims but without S normalization
     """
     
-    pref_dir_k: int = 128
+    pref_dir_k: int = 32
     """Number of dimensions for multi-dim pref_dir methods (pca2+, top_s, adapter_dims)"""
 
     loss_snorm: bool = True
@@ -223,7 +231,7 @@ class TrainingConfig:
     ] = "raw"
     """Loss function: raw=direct projection, logsig_weak_up=saturates after margin, softpl_strong_up=strong upside+weak downside, tanh_sym=symmetric bounds, softpl_ratio=softplus on ratio, focal_balanced=down-weights easy, logsig_dpo=standard DPO"""
 
-    n_last_tokens: int = 4
+    n_last_tokens: int = 3
     """Extract from last N tokens of sequence"""
     
     coh_thresh: float = 0.5
@@ -234,12 +242,6 @@ class TrainingConfig:
 
     coh_weight: float = 40.0
     """Coherence loss scaling (large = hard cliff)"""
-
-    coh_adaptive: bool = False
-    """Enable difficulty-based coherence relaxation"""
-
-    coh_temp: float = 4
-    """Coherence relaxation temperature (higher=softer, lower=sharper)"""
 
     mono: bool = True
     """Enable monotonicity constraint"""

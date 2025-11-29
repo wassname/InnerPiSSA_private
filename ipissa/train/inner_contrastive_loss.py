@@ -176,65 +176,90 @@ def symlog(x: torch.Tensor) -> torch.Tensor:
     return torch.sign(x) * torch.log1p(x.abs())
 
 
+def compute_coherence_loss(
+    ref_logp: Float[Tensor, "b t"],
+    pi_logp: Float[Tensor, "b t"],
+    mask: Mask,
+    threshold: float = 0.2,
+    scale: float = 75.0,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute log-barrier coherence loss.
+    
+    Args:
+        ref_logp: Reference model next-token log probabilities
+        pi_logp: Policy model next-token log probabilities  
+        mask: Attention mask aligned with logp (b, t)
+        threshold: Max NLL degradation in nats (0.2 ≈ 18% worse probability)
+        scale: Penalty scaling factor
+    
+    Returns:
+        loss: Scalar coherence loss per sample (b,)
+        degradation: Per-token degradation (ref_logp - pi_logp) for diagnostics
+    """
+    degradation = ref_logp - pi_logp
+    violation = F.relu(degradation - threshold)
+    penalty = torch.log1p(violation * scale)
+    loss = reduce_tokens_w_attention(penalty, mask)
+    return loss, degradation
+
+
+def compute_delta_logp_change(
+    pi_cho_label_logp: Float[Tensor, "b t"],
+    pi_rej_label_logp: Float[Tensor, "b t"],
+    ref_cho_label_logp: Float[Tensor, "b t"],
+    ref_rej_label_logp: Float[Tensor, "b t"],
+    mask: Mask,
+) -> Float[Tensor, "b"]:
+    """Compute preference gap change for monotonic ordering constraint.
+    
+    delta_logp_change = (logp_pi_cho - logp_pi_rej) - (logp_ref_cho - logp_ref_rej)
+                      = how much the preference gap changed from baseline
+    
+    At c=0 (pi=ref), this is zero by construction.
+    
+    Args:
+        pi_cho_label_logp: Policy chosen next-token log probabilities
+        pi_rej_label_logp: Policy rejected next-token log probabilities
+        ref_cho_label_logp: Reference chosen next-token log probabilities
+        ref_rej_label_logp: Reference rejected next-token log probabilities
+        mask: Attention mask
+    
+    Returns:
+        delta_logp_change: Per-sample preference gap change (b,)
+    """
+    pi_gap = reduce_tokens_w_attention(pi_cho_label_logp - pi_rej_label_logp, mask)
+    ref_gap = reduce_tokens_w_attention(ref_cho_label_logp - ref_rej_label_logp, mask).detach()
+    return pi_gap - ref_gap
+
+
 def contrastive_steering_loss_with_ref(
     pref_dir: Float[Tensor, "k d"],  # Also accepts [d] (auto-unsqueezed to [1, d])
     hs_ref_cho: HS,
     hs_ref_rej: HS,
     hs_pi_pos: HS,
     hs_pi_neg: HS,
-    ref_pos_label_logp: Float[Tensor, "b t"],
-    pi_pos_label_logp: Float[Tensor, "b t"],
     cho_mask: Mask,
-    ref_cho_label_logp: Float[Tensor, "b t"],  # Raw cho logp for monotonic constraint
-    ref_rej_label_logp: Float[Tensor, "b t"],  # Raw rej logp for monotonic constraint
-    pi_cho_label_logp: Float[Tensor, "b t"],   # Raw cho logp for monotonic constraint
-    pi_rej_label_logp: Float[Tensor, "b t"],   # Raw rej logp for monotonic constraint
     p=2,
     eps=1e-3,
     eps_norm=1e-7,
-    coherence_threshold=0.2,
-    boundary_order=2,
-    coherence_scalar=75.0,
     last_n_tokens: int = None,
-    loss_type: Literal[
-        "logsig_weak_up",      # (-↑) Saturates after margin
-        "softpl_strong_up",    # (+↑ −↓) Strong upside, weak downside  
-        "tanh_sym",            # (±) Symmetric bounds both ways
-        "softpl_ratio",        # (+↑ −↓) Softplus on ratio (AFTER FIX)
-        "focal_balanced",      # (⚖) Down-weights easy examples
-        "logsig_dpo",          # (std) Standard DPO baseline
-        "raw",                 # (↑↓) Direct symlog difference - strongest gradients
-    ] = "softpl_strong_up"
 ):
     """
-    Contrastive loss for reversible SVD steering adapters.
+    Projection-only contrastive loss for reversible SVD steering adapters.
     
-    Optimizes:
-    1. **Projection maximization**: (hs_pi_pos - hs_pi_neg) · pref_dir > (hs_ref_cho - hs_ref_rej) · pref_dir
-    2. **Coherence constraint**: Keep NLL degradation below threshold (asymmetric margin)
+    Optimizes projection maximization: 
+    (hs_pi_pos - hs_pi_neg) · pref_dir > (hs_ref_cho - hs_ref_rej) · pref_dir
     
-    Loss variants trade off gradient dynamics:
-    - logsig_weak_up: Saturates when proj_pi exceeds margin, no coherence (fastest convergence)
-    - softpl_strong_up: Unbounded upside, vanishing downside (best for RLHF-aligned models)
-    - tanh_sym: Symmetric bounds (stable but weak signal)
-    - softpl_ratio: Targets proj_pi/proj_ref > 1 (scale-invariant but can be unstable)
-    - focal_balanced: Down-weights confident examples (prevents overfitting to easy cases)
-    - logsig_dpo: Standard preference learning baseline (Bradley-Terry model)
-    - raw: Direct proj_diff maximization - no sigmoid/softplus compression (strongest signal)
-           Use when proj is too weak relative to coherence after symlog normalization
+    Coherence constraint is computed separately via compute_coherence_loss().
     
     Args:
         pref_dir: Frozen steering direction from PCA/SVD - [k, d] or [d]
         hs_{ref,pi}_{cho,rej}: Hidden states (reference/policy, chosen/rejected)
-        {ref,pi}_pos_label_logp: Next-token log probabilities (b, t)
         cho_mask: Attention mask (b, t)
-        coherence_threshold: Max NLL degradation in nats (0.2 ≈ 18% worse probability)
-        boundary_order: Coherence penalty exponent (2 = quadratic boundary)
         last_n_tokens: Focus loss on final N tokens (where contrastive signal concentrates)
         
     Returns:
-        loss: scalar
-        info: {loss_proj, loss_coh, logp_degradation, proj_pi, proj_ref, ...}
+        dict: {loss_proj, proj_pi, proj_ref, proj_diff, separation_norm}
     """
     loss_mask = cho_mask[:, :-1]  # Align with next-token logprobs
     hs_mask = cho_mask.clone()
@@ -290,116 +315,17 @@ def contrastive_steering_loss_with_ref(
         proj_ref_agg = reduce_tokens_w_attention(proj_ref, hs_mask)
         proj_diff = symlog(proj_pi_agg) - symlog(proj_ref_agg.abs().clamp(min=eps_norm))
 
-    ref_logp = ref_pos_label_logp.detach()
-    pi_logp = pi_pos_label_logp
-
-
-    def calc_coherence_loss(ref_logp, pi_logp, loss_mask, threshold=coherence_threshold, scale=coherence_scalar, clamp_scale=None, C=4, boundary_order=2):
-        """
-        Log-barrier coherence loss - steep near threshold, logarithmic growth.
-        Similar to interior point methods in optimization.
-        """
-        degradation = ref_logp - pi_logp
-        violation = F.relu(degradation - threshold)
-        
-        # log(1 + scale*x) gives steep initial gradient (scale) but bounded growth
-        penalty = torch.log1p(violation) * scale
-        
-        return reduce_tokens_w_attention(penalty, loss_mask), degradation
+    # Direct projection loss (raw)
+    loss_proj = -proj_diff  # Maximize projection difference
     
-    # Loss variant selection
-    if loss_type == "logsig_weak_up":
-        # Bradley-Terry with margin - saturates once proj_diff > margin
-        # Fastest convergence but weak on hard examples
-        # Coherence disabled - relies on margin to prevent degradation
-        β = 0.1
-        margin = 1.0
-        loss_proj = -F.logsigmoid(β * (proj_diff - margin))
-        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=None)
-        loss_coh = torch.zeros_like(loss_proj)
-        
-    elif loss_type == "softpl_strong_up":
-        # Softplus on difference - unbounded upside, bounded downside
-        # Strong gradients when steering WITH model preferences (RLHF-aligned direction)
-        # Weak gradients when steering AGAINST preferences (vanishes as proj_diff → -∞)
-        # Asymmetry is correct: reflects difficulty of anti-alignment steering
-        β = 0.1
-        loss_proj = -F.softplus(proj_diff * β)
-        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=None)
-        
-    elif loss_type == "tanh_sym":
-        # Tanh-bounded ratio - symmetric but weak signal both ways
-        # Stable but may underperform on models with strong RLHF
-        β = 0.1
-        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=100)
-        loss_coh = softclamp_tanh(loss_coh, n=1)
-        proj_ratio = proj_pi_agg / proj_ref_agg.abs().clamp(min=eps_norm)
-        loss_proj = softclamp_tanh(proj_ratio * β, 1)
-        
-    elif loss_type == "softpl_ratio":
-        # Softplus on (ratio - 1) - targets multiplicative improvement
-        # Scale-invariant but unstable if proj_ref near zero
-        β = 1.0
-        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=None)
-        loss_coh = softclamp_tanh(loss_coh, n=3)
-        proj_ratio = proj_pi_agg / proj_ref_agg.abs().clamp(min=eps_norm)
-        loss_proj = -F.softplus(proj_ratio * β - 1.0)
-        
-    elif loss_type == "focal_balanced":
-        # Focal loss variant - down-weights easy examples (large |proj_diff|)
-        # Focuses learning on hard cases where projection is still weak
-        # More balanced than softpl_strong_up - prevents runaway on easy examples
-        α = 2.0  # Focusing parameter (higher = more focus on hard examples)
-        prob_correct = torch.sigmoid(proj_diff)  # High when pi >> ref
-        focal_weight = (1 - prob_correct) ** α  # Low weight for confident (easy) examples
-        loss_proj = -(focal_weight * F.logsigmoid(proj_diff))
-        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=10)
-        
-    elif loss_type == "logsig_dpo":
-        # Standard DPO (Direct Preference Optimization) - Bradley-Terry without margin
-        # Baseline for comparison to preference learning literature
-        β = 0.1
-        loss_proj = -F.logsigmoid(β * proj_diff)
-        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order, clamp_scale=10)
-    elif loss_type == "raw":
-        # Direct projection difference - no sigmoid/softplus compression
-        # Strongest gradients since proj_diff (symlog) is already in reasonable scale [-5, +5]
-        # Use when coherence dominates: proj ~ 0.1 but coh ~ 4-16 after (x*mult_b)**2
-        loss_proj = -proj_diff  # Maximize directly
-        loss_coh, logp_deg = calc_coherence_loss(ref_logp, pi_logp, loss_mask, boundary_order=2, clamp_scale=20, C=2)
-        # loss_coh = reduce_tokens_w_attention(F.relu(logp_deg), loss_mask).mean()
-        
-    else:
-        raise ValueError(f"Invalid loss_type: {loss_type}")
-
-    # Return components separately for meta-loss combination
-    # (still compute total for backward compatibility)
-    loss = loss_proj + loss_coh
-    assert torch.isfinite(loss).all(), "Non-finite loss"
-    
-    # Monitoring metrics
-    avg_coh_deg = -reduce_tokens_w_attention(logp_deg, loss_mask).mean()  # Flip sign: positive = pi better
-    
-    # Compute preference gap change for monotonic ordering constraint
-    # delta_logp_change = (logp_pi_cho - logp_pi_rej) - (logp_ref_cho - logp_ref_rej)
-    #                   = how much the preference gap (chosen vs rejected) changed from baseline
-    # At c=0 (pi=ref), this is zero by construction
-    # We aggregate over tokens to get per-sample metric (b,)
-    pi_gap = reduce_tokens_w_attention(pi_cho_label_logp - pi_rej_label_logp, loss_mask)  # (b,)
-    ref_gap = reduce_tokens_w_attention(ref_cho_label_logp - ref_rej_label_logp, loss_mask).detach()  # (b,)
-    delta_logp_change = pi_gap - ref_gap  # (b,) - positive = preference gap improved
+    assert torch.isfinite(loss_proj).all(), "Non-finite projection loss"
     
     return {
         "loss_proj": loss_proj,
-        "loss_coh": loss_coh,
-        # "loss_total": loss,  # For backward compatibility
-        "coh_deg": avg_coh_deg,  # nats (positive = pi better, ℒcoh penalizes when < -threshold)
-        "prob_ratio": torch.exp(avg_coh_deg),  # p_pi/p_ref
         "proj_pi": proj_pi_agg.mean(),
         "proj_ref": proj_ref_agg.mean(),
-        "proj_diff": proj_diff.mean(),  # What loss operates on
+        "proj_diff": proj_diff.mean(),
         "separation_norm": pref_dir_pi.norm(p=2, dim=-1).mean(),
-        "delta_logp_change": delta_logp_change,  # For monotonic ordering (b,) or None
     }
 
 
@@ -466,79 +392,49 @@ def monotonic_ordering_loss(
 def combine_dual_coef_losses(
     loss_pos: dict,
     loss_neg: dict,
-    adaptive_relaxation: bool = False,
-    temperature: float = 2.0,
     monotonic_margin: float = 0.1,
     monotonic_scaling: float = 100.0,
     enable_monotonic: bool = True,
     enable_coherence: bool = True,
     flip_stats: dict = None,
 ):
-    """
-    Combine losses from both coefficient directions (+1 and -1).
+    """Combine losses from both coefficient directions (+1 and -1).
     
-    Part 1: Dual Coefficient Combination
-    1. Check Alignment:
-       total_proj = loss_pos.proj + loss_neg.proj
-       if total_proj > 0: flip_sign = -1  (Model is anti-aligned, flip to match)
+    Applies:
+    1. Projection loss from both coefficients (with anti-alignment guard)
+    2. Coherence losses (if enabled)
+    3. Monotonic ordering constraint (if enabled)
     
-    2. Adaptive Coherence (Optional):
-       # Relax coherence on directions that are struggling to separate
-       difficulty = -loss_proj  (Higher = Easier)
-       weights = softmax(difficulty / temp) * 2
-       L_total = L_proj + w_pos * L_coh_pos + w_neg * L_coh_neg
-
-    Optionally applies:
-    1. Difficulty-adaptive coherence weighting (adaptive_coherence=True)
-    2. Monotonic ordering constraint (if loss_baseline provided)
-    
-    Adaptive coherence interpretation:
-    - LESS negative proj_diff (e.g., -0.5): HARDER direction, gets RELAXED coherence (weight → 0.0)
-    - MORE negative proj_diff (e.g., -3.0): EASIER direction, gets STRICT coherence (weight → 1.0)
-    
-    Rationale: Hard directions need exploration room (relaxed coherence).
-               Easy directions are already separating well, keep them strictly coherent
-               to prevent drift into saddle points.
+    Anti-alignment guard:
+    - If (loss_pos + loss_neg) > 0, model learned opposite direction
+    - Flip sign to maximize separation in model's chosen direction
+    - Uses EMA to prevent oscillation
     
     Monotonic ordering (if enabled):
     - Enforces: preference_gap_change(c=-1) < 0 < preference_gap_change(c=+1)
     - Prevents both coefficients from degrading outputs (saddle point)
-    - No hyperparameter balancing needed (hinge loss is either 0 or active)
     
     Args:
-        loss_pos: Loss dict from coef=+1 (pro-RLHF/honest direction)
-        loss_neg: Loss dict from coef=-1 (anti-RLHF/dishonest direction)
-        loss_baseline: Optional dict with 'delta_logp_change' at c=0 (for monotonic constraint)
-        adaptive_coherence: Enable difficulty-based coherence reweighting
-        temperature: Softmax temperature (lower = more aggressive reweighting)
+        loss_pos: Loss dict from coef=+1 (contains loss_proj, loss_coh, delta_logp_change)
+        loss_neg: Loss dict from coef=-1 (contains loss_proj, loss_coh, delta_logp_change)
         monotonic_margin: Hinge margin for ordering constraint (nats)
-        flip_stats: Optional dict to store EMA of flip decision (prevents oscillation)
-                   Tracks both 'ema' (projection direction) and 'mono_ema' (monotonic direction)
+        monotonic_scaling: Scale factor for monotonic loss
+        enable_monotonic: Whether to apply monotonic ordering constraint
+        enable_coherence: Whether to include coherence losses
+        flip_stats: Optional dict to store EMA of flip decisions
         
     Returns:
         total_loss: Combined scalar loss for backprop
-        meta_pos: Dict with metrics for coef=+1 (cw, mono_violation)
-        meta_neg: Dict with metrics for coef=-1 (cw, mono_violation)
-        meta_shared: Dict with global metrics (loss_monotonic, mono_frac_violated)
+        meta_pos: Dict with metrics for coef=+1 (mono_violation)
+        meta_neg: Dict with metrics for coef=-1 (mono_violation)
+        meta_shared: Dict with global metrics (loss_monotonic, mono_frac_violated, loss_proj_flipped)
     """
-    # -------------------------------------------------------------------------
-    # Part 1: Anti-Alignment Guard (Flipped Logic)
-    # -------------------------------------------------------------------------
-    # Both coefficients separate in OPPOSITE directions by construction (alpha=±1).
-    # We want large separation in EITHER direction (model picks easiest path).
-    #
-    # Note: train_adapter.py swaps labels for coef=-1, so we expect both loss_pos 
-    # and loss_neg to be negative (minimizing loss).
-    #
-    # HOWEVER, if the model spontaneously learns an anti-aligned feature (separating 
-    # cho/rej in the opposite direction), (loss_pos + loss_neg) will be > 0.
-    # We detect this and flip the sign to maximize separation in the direction 
-    # the model chose, rather than fighting it.
+    # Anti-Alignment Guard: Flip if model learns opposite direction
     loss_proj_sum = (loss_pos["loss_proj"] + loss_neg["loss_proj"]).mean()
     loss_proj_flipped = loss_proj_sum > 0
     
     if flip_stats is not None:
-        # Update EMA (alpha = 0.1) to make flip decision "sticky"
+        # EMA to make flip decision sticky (prevent oscillation)
         alpha = 0.1
         flip_stats['ema'] = (1 - alpha) * flip_stats.get('ema', 0.0) + alpha * loss_proj_sum.item()
         loss_proj_flipped = flip_stats['ema'] > 0
@@ -550,50 +446,19 @@ def combine_dual_coef_losses(
         proj_diff_neg = -proj_diff_neg
     loss_proj_bidirectional = proj_diff_pos + proj_diff_neg
     
-    # -------------------------------------------------------------------------
-    # Part 2: Adaptive Coherence Weighting
-    # -------------------------------------------------------------------------
-    if adaptive_relaxation:
-        # Strategy: RELAX coherence on HARD direction (weak separation), 
-        #           TIGHTEN on EASY direction (strong separation).
-        #
-        # Rationale: Hard directions need exploration room (relaxed coherence).
-        #            Easy directions are already separating well, keep them strictly 
-        #            coherent to prevent drift into saddle points.
-        #
-        # Math:
-        #   loss ~ -separation (more negative = stronger separation = easier)
-        #   losses = [-0.5 (Hard), -3.0 (Easy)]
-        #   -losses = [0.5, 3.0]
-        #   softmax([0.5, 3.0]) = [0.08, 0.92]
-        #   weights = [0.16, 1.84] (clamped to 1.0) -> [0.16, 1.0]
-        #   Result: Hard (-0.5) gets 0.16 weight. Easy (-3.0) gets 1.0 weight.
-        
-        # Softmax with NEGATIVE sign: MORE negative loss → HIGHER weight (strict coherence)
-        proj_diffs = torch.stack([proj_diff_pos, proj_diff_neg])  # (2,)
-        coh_weights = F.softmax(-proj_diffs / temperature, dim=0) * 2.0  # Sum to 2.0
-        coh_weight_pos = torch.clamp(coh_weights[0], max=1.0)  # Cap at 1.0
-        coh_weight_neg = torch.clamp(coh_weights[1], max=1.0)
+    # Combine projection + coherence (no adaptive weighting)
+    if enable_coherence:
+        total = (
+            loss_proj_bidirectional + 
+            loss_pos["loss_coh"] +
+            loss_neg["loss_coh"]
+        ).mean()
     else:
-        # Fixed weights: uniform coherence
-        coh_weight_pos = torch.tensor(1.0, device=proj_diff_pos.device)
-        coh_weight_neg = torch.tensor(1.0, device=proj_diff_neg.device)
+        total = loss_proj_bidirectional.mean()
     
-    # Apply enable_coherence toggle (overrides weights if disabled)
-    if not enable_coherence:
-        coh_weight_pos = torch.tensor(0.0, device=proj_diff_pos.device)
-        coh_weight_neg = torch.tensor(0.0, device=proj_diff_neg.device)
-    
-    # Combine projection + weighted coherence
-    total = (
-        loss_proj_bidirectional + 
-        coh_weight_pos * loss_pos["loss_coh"] +
-        coh_weight_neg * loss_neg["loss_coh"]
-    ).mean()
-    
-    # Build metadata dicts
-    meta_pos = {"cw": coh_weight_pos.mean().item()}
-    meta_neg = {"cw": coh_weight_neg.mean().item()}
+    # Build metadata dicts (no cw since adaptive coherence removed)
+    meta_pos = {}
+    meta_neg = {}
     meta_shared = {"loss_proj_flipped": float(loss_proj_flipped)}
     if flip_stats is not None:
         meta_shared['flip_ema'] = flip_stats['ema']
@@ -636,7 +501,15 @@ def combine_dual_coef_losses(
         meta_neg["mono_violation"] = 0.0
     
     meta_shared['loss_total'] = total.item()
+
+    losses = {
+        'proj_pos': proj_diff_pos,
+        'proj_neg': proj_diff_neg,
+        'coh_pos': loss_pos["loss_coh"],
+        'coh_neg': loss_neg["loss_coh"],
+        'mono': loss_monotonic,        
+    }
     
-    return total, meta_pos, meta_neg, meta_shared
+    return total, losses, meta_pos, meta_neg, meta_shared
 
 

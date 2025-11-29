@@ -40,6 +40,7 @@ major_code_changes = [
     "2025-11-20T00:00:00Z",  # let the model flip proj dir vs coeff for each module (across all modules)
     "2025-11-21T20:00:00Z",  # found mistake in proj dir was flipped
     "2025-11-23T13:00:00Z",  # fixed dd eval, and added residual @ V loss optio, fix serious V errors. Also added data aware init
+    "2025-11-29T09:00:00Z",  # added upgrad option
 ]
 last_major_code_change = major_code_changes[-1]
 logger.info(

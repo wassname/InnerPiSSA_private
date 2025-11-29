@@ -14,7 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Literal, Optional
 from textwrap import wrap, fill
-
+from torchjd import autojac
+from torchjd.aggregation import UPGrad
 import cattrs
 import numpy as np
 import pandas as pd
@@ -43,7 +44,7 @@ from ipissa.train.daily_dilemas import (
     process_daily_dilemma_results,
     select_dilemma_by_values,
 )
-from ipissa.train.inner_contrastive_loss import contrastive_steering_loss_with_ref, combine_dual_coef_losses
+from ipissa.train.inner_contrastive_loss import contrastive_steering_loss_with_ref, combine_dual_coef_losses, compute_coherence_loss, compute_delta_logp_change
 from ipissa.config import TrainingConfig, proj_root, PROMPT, PERSONAS
 from ipissa.peft_utils.load import add_adapter_name_to_sd, remove_adapter_name, save_adapter
 from ipissa.peft_utils.layer_selection import LayerSelection, compute_layer_selection
@@ -146,7 +147,18 @@ def train_steer_vector(
         loss_dirs = {}  # Unweighted S-space for loss
         Sw_dirs = {}  # S-weighted for steering
 
-        for layer, layer_idx in tqdm(zip(loss_layers, loss_layer_indices), desc='read_representations2'):
+        # Build mapping from layer names to their depth indices
+        import re
+        layer_to_idx = {}
+        for layer_name in loss_layers:
+            match = re.search(r'\.(\d+)\.', layer_name)
+            if match:
+                layer_num = int(match.group(1))
+                if layer_num in loss_layer_indices:
+                    layer_to_idx[layer_name] = layer_num
+        
+        for layer in tqdm(loss_layers, desc='read_representations2'):
+            layer_idx = layer_to_idx[layer]
             U = Uw_full[layer].cpu()  # [d_out, min(d_out, d_in)]
             S = Sw_full[layer].cpu()  # [min(d_out, d_in)]
             V = Vw_full[layer].cpu()  # [d_in, min(d_out, d_in)]
@@ -232,7 +244,15 @@ def compute_batch_loss(
     scheduler=None,
     flip_stats=None,
 ):
-    """Compute contrastive loss for a batch (shared by train and val).
+    """Compute contrastive loss with per-(layer, coef) flip and single coherence.
+
+    New structure:
+    1. Compute projection losses per (layer, coef) - keep separate
+    2. Per-(layer, coef) flip with EMA
+    3. Aggregate projection across layers
+    4. Compute coherence ONCE per coefficient (not per layer)
+    5. Compute delta_logp_change ONCE (for monotonic)
+    6. Combine in meta-loss
 
     Args:
         model: Model with adapter
@@ -246,7 +266,7 @@ def compute_batch_loss(
         config: Training config
         step: Current training step (for info logging)
         scheduler: LR scheduler (for info logging)
-        flip_stats: Optional dict to store EMA of flip decision
+        flip_stats: Optional dict to store EMA of flip decisions (per layer+coef)
 
     Returns:
        (total_loss, infos_list)
@@ -255,6 +275,7 @@ def compute_batch_loss(
     mask_cho = attention_mask[::2]
     mask_rej = attention_mask[1::2]
     mask = mask_cho * mask_rej
+    mask_logp = mask[:, :-1]  # Align with next-token logprobs
 
     # Move projection matrices to device if they exist (InnerPiSSA only)
     if Uw_full is not None:
@@ -276,188 +297,243 @@ def compute_batch_loss(
     ref_cho_label_logp = ref_label_logp[::2].detach()
     ref_rej_label_logp = ref_label_logp[1::2].detach()
 
-    total_loss = torch.tensor(0.0, device=model.device)
-    infos = []
+    # =========================================================================
+    # STEP 1: Compute projection losses per (layer, coef) - KEEP SEPARATE
+    # =========================================================================
+    proj_losses = {}  # {layer: {coef: loss_tensor}}
+    proj_metrics = {}  # {layer: {coef: {proj_pi, proj_ref, ...}}}
     
-    # Collect losses from both coefficients for meta-loss combination
-    # Structure: {coef: {layer: loss_dict}} to accumulate across layers
-    loss_results_per_layer = {-1.0: {}, 1.0: {}}
-
-    # Contrastive training with both coefficients
+    # Run forward passes for both coefficients
+    outputs_pi = {}
+    rets_pi = {}
     for coef in [-1.0, 1.0]:
         with torch.amp.autocast("cuda", dtype=torch.bfloat16):
             with ScaleAdapter(model, coeff=coef):
-                with TraceDict(
-                    model, layers=loss_layers
-                ) as ret:
-                    outputs_pi = model(**batch, output_hidden_states=True)
+                with TraceDict(model, layers=loss_layers) as ret:
+                    outputs_pi[coef] = model(**batch, output_hidden_states=True)
+                    rets_pi[coef] = {k: v.output for k, v in ret.items()}
 
-        # Extract hidden states from residual stream at loss layer depths
-        for lk, layer_idx in zip(loss_layers, loss_layer_indices):
+    # Compute projection loss for each (layer, coef) combination
+    # Build mapping from layer names to their depth indices
+    import re
+    layer_to_idx = {}
+    for layer_name in loss_layers:
+        # Extract layer number from path (e.g., "layers.14.mlp" or "block.14.attn")
+        match = re.search(r'\.(\d+)\.', layer_name)
+        if match:
+            layer_num = int(match.group(1))
+            if layer_num in loss_layer_indices:
+                layer_to_idx[layer_name] = layer_num
+    
+    for lk in loss_layers:
+        layer_idx = layer_to_idx[lk]
+        proj_losses[lk] = {}
+        proj_metrics[lk] = {}
+        
+        # Extract hidden states from reference
+        if config.loss_use_V:
+            hs_ref = (outputs_ref.hidden_states[layer_idx] * attention_mask.unsqueeze(-1)).float()
+        else:
+            hs_ref = (ret_ref[lk].output * attention_mask.unsqueeze(-1)).float()
+        
+        hs_ref_cho = hs_ref[::2]
+        hs_ref_rej = hs_ref[1::2]
+        
+        # Get projection matrix and preference direction
+        if use_s_space_loss(config):
+            proj_matrix = Vw_full[lk] if config.loss_use_V else Uw_full[lk]
+            pref_dir = dirs_loss.directions[lk].clone().to(model.device).float()
+        else:
+            proj_matrix = None
+            pref_dir = dirs_loss.directions[lk].clone().to(model.device).float()
+        
+        # Project reference hidden states
+        if use_s_space_loss(config):
+            hs_ref_cho_proj = hs_ref_cho @ proj_matrix
+            hs_ref_rej_proj = hs_ref_rej @ proj_matrix
+            
+            if config.loss_snorm and Sw_full is not None:
+                S = Sw_full[lk]
+                s_floor = S.median() * 0.1
+                S_safe = S.clamp(min=s_floor)
+                hs_ref_cho_proj = hs_ref_cho_proj / S_safe
+                hs_ref_rej_proj = hs_ref_rej_proj / S_safe
+        else:
+            hs_ref_cho_proj = hs_ref_cho
+            hs_ref_rej_proj = hs_ref_rej
+        
+        for coef in [-1.0, 1.0]:
+            # Extract hidden states from policy
             if config.loss_use_V:
-                # V projection: use residual stream (INPUT to module) not module output
-                # For up_proj at layer 14, this is the residual stream before MLP
-                # hidden_states[layer_idx] = residual stream at that layer
-                hs_ref = (outputs_ref.hidden_states[layer_idx] * attention_mask.unsqueeze(-1)).float()
-                hs_pi = (outputs_pi.hidden_states[layer_idx] * attention_mask.unsqueeze(-1)).float()
+                hs_pi = (outputs_pi[coef].hidden_states[layer_idx] * attention_mask.unsqueeze(-1)).float()
             else:
-                # U projection: use module OUTPUT (what comes out of up_proj)
-                hs_ref = (ret_ref[lk].output * attention_mask.unsqueeze(-1)).float()
-                hs_pi = (ret[lk].output * attention_mask.unsqueeze(-1)).float()
-
-            # Choose projection matrix: V for input space (residual), U for output space
-            # S-space projection is independent of adapter type (controlled by loss_space config)
-            if use_s_space_loss(config):
-                if config.loss_use_V:
-                    # Use V projection (residual → MLP S-space)
-                    # This projects accumulated residual stream via up_proj's input basis
-                    proj_matrix = Vw_full[lk]  # [d_model, r]
-                else:
-                    # Use U projection (module output → S-space)  
-                    proj_matrix = Uw_full[lk]  # [d_out, r]
-                
-                # Dataset-level preference direction in S-space [r]
-                pref_dir_ref_dH_Uw = (
-                    dirs_loss.directions[lk].clone().to(model.device).float()
-                )
-            else:
-                # Activation-space: Use PCA direction (no projection)
-                proj_matrix = None
-                pref_dir_ref_dH_Uw = (
-                    dirs_loss.directions[lk].clone().to(model.device).float()
-                )
-
-            hs_ref_cho = hs_ref[::2]
-            hs_ref_rej = hs_ref[1::2]
-
+                hs_pi = (rets_pi[coef][lk] * attention_mask.unsqueeze(-1)).float()
+            
             hs_pi_cho = hs_pi[::2]
             hs_pi_rej = hs_pi[1::2]
-
-            pi_logprobs = outputs_pi.logits[:, :-1].log_softmax(-1)
-            pi_label_logprobs = pi_logprobs.gather(2, labels).squeeze(-1).float()
-            pi_rej_label_logp = pi_label_logprobs[1::2]
-            pi_cho_label_logp = pi_label_logprobs[::2]
-
-            # Swap chosen/rejected based on coefficient sign (preserves autograd)
+            
+            # Swap chosen/rejected based on coefficient sign
             if coef > 0:
                 hs_pi_pos = hs_pi_cho
                 hs_pi_neg = hs_pi_rej
-                
-                ref_coherence = ref_cho_label_logp
-                pi_coherence = pi_cho_label_logp
+                pref_dir_signed = pref_dir
             else:
                 hs_pi_pos = hs_pi_rej
                 hs_pi_neg = hs_pi_cho
-                ref_coherence = ref_rej_label_logp
-                pi_coherence = pi_rej_label_logp
-
-            # Apply projection for S-space loss (either U or V from base model SVD)
+                pref_dir_signed = -pref_dir
+            
+            # Project policy hidden states
             if use_s_space_loss(config):
                 hs_pi_pos_proj = hs_pi_pos @ proj_matrix
                 hs_pi_neg_proj = hs_pi_neg @ proj_matrix
-                hs_ref_cho_proj = hs_ref_cho @ proj_matrix
-                hs_ref_rej_proj = hs_ref_rej @ proj_matrix
                 
-                # S-normalization: divide by S to equalize gradient contribution across dims
-                # Without this, high-S dims dominate gradients even though planning signal
-                # may live in low-S dims. Especially helps backward (anti) direction.
                 if config.loss_snorm and Sw_full is not None:
-                    S = Sw_full[lk]  # [r]
-                    # Use median as floor to avoid amplifying tiny dims (numerical stability)
-                    s_floor = S.median() * 0.1
-                    S_safe = S.clamp(min=s_floor)
                     hs_pi_pos_proj = hs_pi_pos_proj / S_safe
                     hs_pi_neg_proj = hs_pi_neg_proj / S_safe
-                    hs_ref_cho_proj = hs_ref_cho_proj / S_safe
-                    hs_ref_rej_proj = hs_ref_rej_proj / S_safe
             else:
-                # Activation-space: No projection
                 hs_pi_pos_proj = hs_pi_pos
                 hs_pi_neg_proj = hs_pi_neg
-                hs_ref_cho_proj = hs_ref_cho
-                hs_ref_rej_proj = hs_ref_rej
-
+            
+            # Compute projection loss (no coherence, no logp args)
             loss_dict = contrastive_steering_loss_with_ref(
-                pref_dir=pref_dir_ref_dH_Uw.detach(),
+                pref_dir=pref_dir_signed.detach(),
                 hs_ref_cho=hs_ref_cho_proj,
                 hs_ref_rej=hs_ref_rej_proj,
                 hs_pi_pos=hs_pi_pos_proj,
                 hs_pi_neg=hs_pi_neg_proj,
-
-                ref_pos_label_logp=ref_coherence,
-                pi_pos_label_logp=pi_coherence,
                 cho_mask=mask.clone(),
-
-                # Raw logps for monotonic ordering constraint
-                ref_cho_label_logp=ref_cho_label_logp,
-                ref_rej_label_logp=ref_rej_label_logp,
-                pi_cho_label_logp=pi_cho_label_logp,
-                pi_rej_label_logp=pi_rej_label_logp,
-
-                coherence_threshold=config.coh_thresh,
-                coherence_scalar=config.coh_weight,
-                # boundary_order=config.boundary_order,
                 last_n_tokens=config.n_last_tokens,
-                loss_type=config.loss_type,
             )
             
-            # Store per-layer loss (fix: was overwriting for each layer!)
-            loss_results_per_layer[coef][lk] = loss_dict
-
-    # Aggregate losses across layers for each coefficient
-    # Use mean instead of sum to avoid scaling issues with multiple loss layers
-    loss_results = {}
-    for coef in [-1.0, 1.0]:
-        # Get layers that were actually computed (keys in loss_results_per_layer[coef])
-        computed_layers = list(loss_results_per_layer[coef].keys())
-        
-        if not computed_layers:
-            raise RuntimeError(f"No loss layers computed for coef={coef}")
-        
-        # Start with a copy of the first computed layer's dict (for metrics like proj_pi, proj_ref, etc.)
-        first_layer = computed_layers[0]
-        loss_results[coef] = {k: v for k, v in loss_results_per_layer[coef][first_layer].items()}
-        
-        # Mean the loss components across all computed layers for better scaling
-        n_layers = len(computed_layers)
-        loss_results[coef]["loss_proj"] = sum(
-            loss_results_per_layer[coef][layer]["loss_proj"] for layer in computed_layers
-        ) / n_layers
-        loss_results[coef]["loss_coh"] = sum(
-            loss_results_per_layer[coef][layer]["loss_coh"] for layer in computed_layers
-        ) / n_layers
-        # Note: loss_total here is pre-meta-loss, monotonic will be added in combine_dual_coef_losses
-        loss_results[coef]["loss_total"] = (
-            loss_results[coef]["loss_proj"] + loss_results[coef]["loss_coh"]
-        )
-
-    # Combine losses using meta-loss function
+            proj_losses[lk][coef] = loss_dict["loss_proj"]
+            proj_metrics[lk][coef] = loss_dict
     
-    total_loss, meta_pos, meta_neg, meta_shared = combine_dual_coef_losses(
+    # =========================================================================
+    # STEP 2: Per-(layer, coef) flip with EMA
+    # =========================================================================
+    if flip_stats is None:
+        flip_stats = {}
+    
+    for lk in loss_layers:
+        for coef in [-1.0, 1.0]:
+            ema_key = f'proj_flip_{lk}_coef{coef:+.1f}'
+            
+            # EMA update per (layer, coef) with alpha=0.1
+            flip_stats[ema_key] = (
+                0.9 * flip_stats.get(ema_key, 0.0) + 
+                0.1 * proj_losses[lk][coef].mean().item()
+            )
+            
+            # Flip if EMA > 0 (loss should be negative for minimization)
+            if flip_stats[ema_key] > 0:
+                proj_losses[lk][coef] = -proj_losses[lk][coef]
+    
+    # =========================================================================
+    # STEP 3: Aggregate projection across layers
+    # =========================================================================
+    total_proj_pos = torch.stack([proj_losses[lk][+1.0] for lk in loss_layers]).mean()
+    total_proj_neg = torch.stack([proj_losses[lk][-1.0] for lk in loss_layers]).mean()
+    
+    # =========================================================================
+    # STEP 4: Compute coherence ONCE per coefficient (from logits, not per-layer)
+    # =========================================================================
+    coh_losses = {}
+    coh_degradations = {}
+    
+    for coef in [-1.0, 1.0]:
+        pi_logp = outputs_pi[coef].logits[:, :-1].log_softmax(-1)
+        pi_label_logp = pi_logp.gather(2, labels).squeeze(-1).float()
+        pi_cho_label_logp = pi_label_logp[::2]
+        pi_rej_label_logp = pi_label_logp[1::2]
+        
+        # Coherence for the "positive" side of this coefficient
+        if coef > 0:
+            ref_coherence = ref_cho_label_logp
+            pi_coherence = pi_cho_label_logp
+        else:
+            ref_coherence = ref_rej_label_logp
+            pi_coherence = pi_rej_label_logp
+        
+        coh_loss, coh_deg = compute_coherence_loss(
+            ref_logp=ref_coherence,
+            pi_logp=pi_coherence,
+            mask=mask_logp,
+            threshold=config.coh_thresh,
+            scale=config.coh_weight,
+        )
+        
+        coh_losses[coef] = coh_loss
+        coh_degradations[coef] = coh_deg
+    
+    # =========================================================================
+    # STEP 5: Compute delta_logp_change ONCE (for monotonic ordering)
+    # =========================================================================
+    # Need logp for both chosen and rejected from each coefficient
+    pi_cho_label_logp_pos = outputs_pi[+1.0].logits[:, :-1].log_softmax(-1).gather(2, labels).squeeze(-1).float()[::2]
+    pi_rej_label_logp_pos = outputs_pi[+1.0].logits[:, :-1].log_softmax(-1).gather(2, labels).squeeze(-1).float()[1::2]
+    pi_cho_label_logp_neg = outputs_pi[-1.0].logits[:, :-1].log_softmax(-1).gather(2, labels).squeeze(-1).float()[::2]
+    pi_rej_label_logp_neg = outputs_pi[-1.0].logits[:, :-1].log_softmax(-1).gather(2, labels).squeeze(-1).float()[1::2]
+    
+    delta_logp_pos = compute_delta_logp_change(
+        pi_cho_label_logp_pos, pi_rej_label_logp_pos,
+        ref_cho_label_logp, ref_rej_label_logp,
+        mask_logp
+    )
+    delta_logp_neg = compute_delta_logp_change(
+        pi_cho_label_logp_neg, pi_rej_label_logp_neg,
+        ref_cho_label_logp, ref_rej_label_logp,
+        mask_logp
+    )
+    
+    # =========================================================================
+    # STEP 6: Combine in meta-loss
+    # =========================================================================
+    loss_results = {
+        +1.0: {
+            "loss_proj": total_proj_pos,
+            "loss_coh": coh_losses[+1.0],
+            "delta_logp_change": delta_logp_pos,
+        },
+        -1.0: {
+            "loss_proj": total_proj_neg,
+            "loss_coh": coh_losses[-1.0],
+            "delta_logp_change": delta_logp_neg,
+        },
+    }
+    
+    total_loss, loss_components_dict, meta_pos, meta_neg, meta_shared = combine_dual_coef_losses(
         loss_pos=loss_results[+1.0],
         loss_neg=loss_results[-1.0],
-        adaptive_relaxation=config.coh_adaptive,
-        temperature=config.coh_temp,
         monotonic_margin=config.mono_margin,
         monotonic_scaling=config.mono_weight,
         enable_coherence=config.coh,
         enable_monotonic=config.mono,
         flip_stats=flip_stats,
     )
-
-    # Flatten info for logging - create entries for EACH layer AND coefficient combo
+    
+    # =========================================================================
+    # STEP 7: Build info dicts for logging
+    # =========================================================================
+    infos = []
+    
+    # Count per-(layer,coef) flips for aggregated logging
+    n_flips = sum(1 for k, v in flip_stats.items() if k.startswith('proj_flip_') and v > 0)
+    
     for coef, meta_coef in [(-1.0, meta_neg), (1.0, meta_pos)]:
-        # Only iterate over layers that were actually computed
-        computed_layers = list(loss_results_per_layer[coef].keys())
-        for lk in computed_layers:
-            # Start with per-layer loss dict
+        for lk in loss_layers:
             info = {}
-            layer_loss = loss_results_per_layer[coef][lk]
-            for k, v in layer_loss.items():
+            
+            # Per-layer projection metrics
+            metrics = proj_metrics[lk][coef]
+            for k, v in metrics.items():
                 if torch.is_tensor(v):
                     info[k] = v.mean().detach().cpu().item()
                 else:
                     info[k] = v
+            
+            # Add coherence (same for all layers, but log per-layer for consistency)
+            info["loss_coh"] = coh_losses[coef].mean().detach().cpu().item()
+            info["coh_deg"] = -coh_degradations[coef].mean().detach().cpu().item()  # Flip sign: positive = pi better
             
             # Add metadata
             if scheduler is not None:
@@ -466,19 +542,38 @@ def compute_batch_loss(
             info["layer"] = lk
             info["step"] = step
             info["module"] = lk
-
-            if meta_shared['loss_proj_flipped']:
-                info['loss_proj'] = -info['loss_proj']
             
-            # Merge coefficient-specific metadata (cw, mono_violation)
+            # Add per-(layer,coef) flip status
+            ema_key = f'proj_flip_{lk}_coef{coef:+.1f}'
+            info["proj_flip_ema"] = flip_stats.get(ema_key, 0.0)
+            info["proj_flipped"] = float(flip_stats.get(ema_key, 0.0) > 0)
+            
+            # Merge coefficient-specific metadata (mono_violation)
             info.update(meta_coef)
             
             # Add shared metadata to BOTH coefficients (prevents NaN in aggregation)
             info.update(meta_shared)
             
             infos.append(info)
-
-    return total_loss, infos
+    
+    # Add aggregated flip count to shared metadata
+    meta_shared["n_flips_total"] = n_flips
+    
+    # Build list of loss components for UPGrad (if enabled)
+    # Structure: [proj_L0_pos, proj_L0_neg, proj_L1_pos, proj_L1_neg, ..., coh_pos, coh_neg, mono]
+    loss_components = []
+    for lk in loss_layers:
+        loss_components.append(proj_losses[lk][+1.0].mean())  # Per-layer projection for coef=+1
+        loss_components.append(proj_losses[lk][-1.0].mean())  # Per-layer projection for coef=-1
+    
+    # Add coherence and monotonic from combine_dual_coef_losses dict
+    if config.coh:
+        loss_components.append(loss_components_dict['coh_pos'].mean())
+        loss_components.append(loss_components_dict['coh_neg'].mean())
+    if config.mono:
+        loss_components.append(loss_components_dict['mono'].mean())
+    
+    return total_loss, loss_components, infos
 
 
 def extract_coef_metrics(infos, log_table=False, group_by='coef'):
@@ -516,11 +611,9 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
         'loss_total': 'ℒtot',
         'loss_monotonic': 'ℒmono',
         'delta_logp_change': 'Δlp',
-        'cw': 'cw',  # Now per-coefficient
         'mono_frac_violated': 'mviol%',
         'mono_violation': 'mvio',  # Per-coefficient violation magnitude
         'coh_deg': 'coh',  # pi_logp - ref_logp (positive = pi better, ℒcoh penalizes if < -threshold)
-        'prob_ratio': 'p_rat',
         'proj_pi': 'π_prj',
         'proj_ref': 'ref_prj',
         'proj_diff': 'Δprj',
@@ -532,7 +625,7 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
         # FIXME group by layer still show coef as index??
         key_cols = ['ℒproj', 'ℒmono', ]
     else:
-        key_cols = ['ℒproj', 'ℒcoh',  'ℒmono', 'ℒtot', 'coh', 'cw', 'mviol%', 'mvio']
+        key_cols = ['ℒproj', 'ℒcoh',  'ℒmono', 'ℒtot', 'coh', 'mviol%', 'mvio']
     df_display = df_grouped2[[c for c in key_cols if c in df_grouped2.columns]]
     
     # For multi-level index (layer grouping), pivot for compact display
@@ -544,7 +637,7 @@ def extract_coef_metrics(infos, log_table=False, group_by='coef'):
     
     # Optional: log table inline
     if log_table:
-        title = f"Per-{group_by} metrics" if group_by == 'coef' else f"Per-layer metrics"
+        title = f"Per-{group_by} metrics" if group_by == 'coef' else "Per-layer metrics"
         table = tabulate(df_display, tablefmt='pipe', headers='keys', floatfmt='+.2f')
         logger.info(f"\n{title}:\n{table}")
     
@@ -619,7 +712,7 @@ def compute_validation_loss(
         batch = {k: v.to(model.device) for k, v in batch.items()}
 
         # Get loss with detailed info (but no gradients)
-        batch_loss, batch_infos = compute_batch_loss(
+        batch_loss, _, batch_infos = compute_batch_loss(
             model, batch, dirs_loss, loss_layers, loss_layer_indices, Uw_full, Sw_full, Vw_full, config
         )
 
@@ -660,6 +753,7 @@ def train_epoch(
     Sw_full,
     Vw_full,
     opt,
+    aggregator,
     scheduler,
     config: TrainingConfig,
     epoch: int,
@@ -681,7 +775,7 @@ def train_epoch(
         batch = {k: v.to(model.device) for k, v in batch.items()}
 
         # Compute loss and collect info for logging
-        total_loss, batch_infos = compute_batch_loss(
+        total_loss, loss_components, batch_infos = compute_batch_loss(
             model,
             batch,
             cv_dirs_loss,
@@ -697,7 +791,11 @@ def train_epoch(
         )
         infos.extend(batch_infos)
 
-        total_loss.mean().backward()
+        if config.upgrad:
+            # UPGrad: balance gradients from per-layer projection, coherence, and monotonic losses
+            autojac.backward(loss_components, aggregator, parallel_chunk_size=1)
+        else:
+            total_loss.mean().backward()
 
         if step % config.grad_accum_steps == 0:
             opt.step()
@@ -1369,11 +1467,30 @@ def train_model(config: TrainingConfig):
     )
 
     total_steps = config.n_epochs * len(train_dataloader) // config.grad_accum_steps
+    if config.upgrad:
+        # Build pref_vector: balance projection (per layer, per coef) vs coherence vs monotonic
+        # Structure: [proj_L0_pos, proj_L0_neg, proj_L1_pos, proj_L1_neg, ..., coh_pos, coh_neg, mono]
+        n_loss_layers = len(loss_layers)
+        pref_vec = []
+        for _ in range(n_loss_layers):
+            pref_vec.append(10*config.upgrad_balance)  # proj coef=+1
+            pref_vec.append(10*1.0 / config.upgrad_balance)  # proj coef=-1 (inverse balance)
+        if config.coh:
+            pref_vec.append(0.5)  # coh coef=+1
+            pref_vec.append(0.5)  # coh coef=-1
+        if config.mono:
+            pref_vec.append(1.0)  # monotonic ordering
+        aggregator = UPGrad(
+            pref_vector=torch.tensor(pref_vec, device=model.device),
+        )
+    else:
+        aggregator = None
     opt = torch.optim.AdamW(
         model.parameters(), lr=config.lr, weight_decay=config.wd
     )
     scheduler = torch.optim.lr_scheduler.OneCycleLR(
-        opt, max_lr=config.lr, total_steps=total_steps, pct_start=0.3
+        opt, max_lr=config.lr, total_steps=total_steps, pct_start=0.2,
+        final_div_factor=1e-1,
     )
 
     logger.info(f"Training: {config.n_epochs} epochs, {total_steps} steps")
@@ -1410,6 +1527,7 @@ def train_model(config: TrainingConfig):
             Sw_full,
             Vw_full,
             opt,
+            aggregator,
             scheduler,
             config,
             epoch,
@@ -1463,10 +1581,9 @@ def train_model(config: TrainingConfig):
 
     # Auto-flip adapter sign if needed
     try:
-        flipped = auto_flip_adapter_sign(model, tokenizer, choice_ids, config.dataset_name)
+        auto_flip_adapter_sign(model, tokenizer, choice_ids, config.dataset_name)
     except ValueError as e:
         logger.error(f"Auto-flip failed: {e}")
-        flipped = False
 
     # Evaluation
     df_res_wlabels, df_res_pv = evaluate_model(

@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.12' and sys_platform == 'linux'",
@@ -1251,6 +1251,7 @@ dependencies = [
     { name = "seaborn" },
     { name = "simple-parsing" },
     { name = "torch" },
+    { name = "torchjd" },
     { name = "tqdm" },
     { name = "transformers", extra = ["torch"] },
 ]
@@ -1305,6 +1306,7 @@ requires-dist = [
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "simple-parsing", specifier = ">=0.1.7" },
     { name = "torch", specifier = ">=2.1.2" },
+    { name = "torchjd", specifier = ">=0.8.0" },
     { name = "tqdm", specifier = ">=4.66.1" },
     { name = "transformers", extras = ["torch"], specifier = ">4.51.0" },
 ]
@@ -3261,6 +3263,49 @@ wheels = [
 ]
 
 [[package]]
+name = "qpsolvers"
+version = "4.8.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.3.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "scipy", version = "1.16.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fa/0d/24aa111e5358e25699acac487383605b3d4b4d1110604ac6dc4b1872f426/qpsolvers-4.8.2.tar.gz", hash = "sha256:2d1a2d5554425004efa8246c0b5d58a92669eea460199321b632af3c05d5b06c", size = 98057, upload-time = "2025-11-25T15:03:51.956Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/76/e6/e6893547135170c23133bac241d5031b0f2002d61675f2166dcbeeb27fbf/qpsolvers-4.8.2-py3-none-any.whl", hash = "sha256:66cad899705b5ba009c6a280b2702c5f413e25c69beec2c6bcad72307fb22dd1", size = 92944, upload-time = "2025-11-25T15:03:48.96Z" },
+]
+
+[[package]]
+name = "quadprog"
+version = "0.1.13"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.3.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9e/60/fb9b56d425c5b3495bb92683c28f954aedb609ae62f14c81a1b5621ad759/quadprog-0.1.13.tar.gz", hash = "sha256:9d6dd32f2762f29b840fb83741d11e527ddf48745f63b79caad0e530b4a6a0ff", size = 16883, upload-time = "2024-10-24T16:58:58.004Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/91/8d/42ac0251e022972b2febdd206afe4f3aa2fdd0e43611fc22441d18829628/quadprog-0.1.13-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:25fda45c9fbcfa832d30ff54fff5f499572aa9f258bcb33d0ddd767a84aa57c8", size = 102669, upload-time = "2024-10-24T16:58:28.617Z" },
+    { url = "https://files.pythonhosted.org/packages/98/65/ebe3cb51ad92d1c6a92705991394eee13a1362982dcd27f9ea8511ff75eb/quadprog-0.1.13-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:e45501cf7765b47abb4cba100b695cae1a5f110df157209d0a123f17634225ed", size = 95081, upload-time = "2024-10-24T16:58:30.64Z" },
+    { url = "https://files.pythonhosted.org/packages/95/56/69b044ad6cd724331b4e0d56dab0408c2e8c2fdccdf9b720b7285c432713/quadprog-0.1.13-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a33d2171f3f7f608ae2cce3ff8a79aa906902f79d57c1fc9b68ce3d88ba0f410", size = 505911, upload-time = "2024-10-24T16:58:32.189Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/73/9957c397490a4088a8d21a8e1b1b7f23fcfd456fffb47c23610ff67fd358/quadprog-0.1.13-cp310-cp310-win_amd64.whl", hash = "sha256:bb10f5ce4f0c006a8b185f8b1b474175edcfd7005a7cefa5db2d9d19f08f6bed", size = 92425, upload-time = "2024-10-24T16:58:34.789Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/78/1b392db854d5367c14010c94ff2478f5292f80d0a66c658625e33932714c/quadprog-0.1.13-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:d310a08c9b119312bef2931bea452d9b7ad4430663d3a88a9bc642881f2cb8cf", size = 102596, upload-time = "2024-10-24T16:58:36.086Z" },
+    { url = "https://files.pythonhosted.org/packages/13/58/f925f6b8616f437714e8820d4d4739d11140361955dfcba5b8f4c9414db9/quadprog-0.1.13-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:415fa9e371ccdcf2142333f0991c0983aebf84ce8c8f584f822729394c31d399", size = 94982, upload-time = "2024-10-24T16:58:37.549Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/b1/b75dadb26dd2e4f315f8352e781156556227e3bb88534c2d2591b97bc8ed/quadprog-0.1.13-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:303e6c726a483db04d5d8a43d1294b095ff862e6a4eeccf1f7df2c27f7c489e5", size = 548387, upload-time = "2024-10-24T16:58:39.239Z" },
+    { url = "https://files.pythonhosted.org/packages/b0/1b/1eb5e781dc0bba9e83041b9ee8d861ff164bb1a4dad3ac6762d23570fafc/quadprog-0.1.13-cp311-cp311-win_amd64.whl", hash = "sha256:34d5050a3de160a096d1b432a0c42f9dcce563ec5eb21841a883ecf67652f2dd", size = 92591, upload-time = "2024-10-24T16:58:40.956Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/70/d91d208ad6971c8831ec23b86dfc5c3ddd50a0d79c8da3156c5feaad4665/quadprog-0.1.13-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:cdae336347fc7488743739ad39943f60976ada74cacd0892f5d1503152359ced", size = 103941, upload-time = "2024-10-24T16:58:42.151Z" },
+    { url = "https://files.pythonhosted.org/packages/10/5e/de8d3911e44699abc4e3ce835e69c3db76525af8018026f9bce61be69a43/quadprog-0.1.13-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:8628ea1b1910c0fbfc828fca36ebc76a8c7352fdef782b5971aee1f4db08ba38", size = 95809, upload-time = "2024-10-24T16:58:43.729Z" },
+    { url = "https://files.pythonhosted.org/packages/20/64/72ae344963db87a15e8566b8c4f1408080ad5746c8e1c32f8d04911074bb/quadprog-0.1.13-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7e2cb007ecf649fb2a614a1954359d534682d7339c3834df30aee7321ae1f7bb", size = 534623, upload-time = "2024-10-24T16:58:44.787Z" },
+    { url = "https://files.pythonhosted.org/packages/47/11/4f8b99099215f6e7f2c8ca9756c590e561d1d3093fedb51a960dc609e347/quadprog-0.1.13-cp312-cp312-win_amd64.whl", hash = "sha256:d3d8d774d6436829ea4a11eeffe4a1a72375df17c9e9a7a48973372e64c826ad", size = 92523, upload-time = "2024-10-24T16:58:46.031Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/2d/8be58eaa7e43fbcaeb58bedeeaa7b962b845667d0def40f0fdefecb7ce77/quadprog-0.1.13-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:ec18372bff2a07a98f82b28ce1f41a31589b9aebbb69bc164ac6869a5e5a6b1a", size = 102678, upload-time = "2024-10-24T16:58:47.323Z" },
+    { url = "https://files.pythonhosted.org/packages/34/f4/5f2fa17600b7206a2ffa0f9d750bc33cdf4aeb009108b52574e160a0ba03/quadprog-0.1.13-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:4f456782f44ed168a32104871e83e9e9d1d07c8ca4d7e72dc9a470e8ba39a3b0", size = 94784, upload-time = "2024-10-24T16:58:48.278Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/1a/b4c66c5ace71f886b61c0f1dde38dbd3a08041959dd52e728b16c2b85940/quadprog-0.1.13-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:cc1996a0e3de1d423f8662fe21368948afdc91d851910b77320caaf7c15357ff", size = 529027, upload-time = "2024-10-24T16:58:49.293Z" },
+    { url = "https://files.pythonhosted.org/packages/05/9f/e33b18f9f4d9fffbfd888f6eec3a8a8d81370be6f7f216e314140d82eddf/quadprog-0.1.13-cp313-cp313-win_amd64.whl", hash = "sha256:f8edf2b08aeee5d824ee4da4cfb2d3ac56e580c2b10ae132b7d1a45717c0bd92", size = 92296, upload-time = "2024-10-24T16:58:50.406Z" },
+]
+
+[[package]]
 name = "referencing"
 version = "0.37.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4048,6 +4093,22 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/86/5c/5b2e5d84f5b9850cd1e71af07524d8cbb74cba19379800f1f9f7c997fc70/torch-2.9.1-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:0a2bd769944991c74acf0c4ef23603b9c777fdf7637f115605a4b2d8023110c7", size = 104145788, upload-time = "2025-11-12T15:23:52.109Z" },
     { url = "https://files.pythonhosted.org/packages/a9/8c/3da60787bcf70add986c4ad485993026ac0ca74f2fc21410bc4eb1bb7695/torch-2.9.1-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:07c8a9660bc9414c39cac530ac83b1fb1b679d7155824144a40a54f4a47bfa73", size = 899735500, upload-time = "2025-11-12T15:24:08.788Z" },
     { url = "https://files.pythonhosted.org/packages/db/2b/f7818f6ec88758dfd21da46b6cd46af9d1b3433e53ddbb19ad1e0da17f9b/torch-2.9.1-cp314-cp314t-win_amd64.whl", hash = "sha256:c88d3299ddeb2b35dcc31753305612db485ab6f1823e37fb29451c8b2732b87e", size = 111163659, upload-time = "2025-11-12T15:23:20.009Z" },
+]
+
+[[package]]
+name = "torchjd"
+version = "0.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.3.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "qpsolvers" },
+    { name = "quadprog" },
+    { name = "torch" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a3/5c/be0ecbe8e6ae8f2c931364a214c6b704b7a8c2195a2c516a35623806d1c1/torchjd-0.8.0.tar.gz", hash = "sha256:7296ec2c8e10320ed4989997c422867c0ba11c3dbbcd8a146dc055a0682756e4", size = 56795, upload-time = "2025-11-13T18:54:31.766Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d0/77/0315fad060aed2ade7f6539c83ef56d1c4dacc09d2d72a9bc6c53f441c1c/torchjd-0.8.0-py3-none-any.whl", hash = "sha256:fc09c86d5d9817e16ee8589b73b25660427064ebd0a159fde2456ef3b184ce17", size = 72081, upload-time = "2025-11-13T18:54:30.636Z" },
 ]
 
 [[package]]

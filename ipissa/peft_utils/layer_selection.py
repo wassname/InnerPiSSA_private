@@ -206,6 +206,12 @@ def compute_pref_direction(
         
         return pref_dir
 
+    elif method == "ones":
+        # Null baseline: uniform direction (all dimensions weighted equally)
+        # Tests if the learned preference direction matters or just total magnitude
+        pref_dir = torch.ones(d, device=diffS.device)
+        return F.normalize(pref_dir, dim=0)  # [d]
+
     else:
         raise ValueError(f"Unknown pref_dir_method: {method}")
 
