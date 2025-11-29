@@ -1261,12 +1261,31 @@ def train_model(config: TrainingConfig):
                 f"For V projection, use loss_modules containing {v_compatible_modules} to project residual stream."
             )
     
+    # Detailed layer selection diagnostics for debugging causality
     logger.info(
         f"Layer selection: {len(layer_selection.adapter_layer_names)} adapter layers "
         f"(indices {layer_selection.adapter_layer_indices}), "
         f"{len(layer_selection.loss_layer_names)} loss layers "
         f"(indices {layer_selection.loss_layer_indices})"
     )
+    
+    # Check for causality: loss layers before adapter layers
+    causality_info = layer_selection.check_causality()
+    
+    if causality_info['has_causality_issue']:
+        logger.warning(
+            f"⚠️  CAUSALITY NOTE: Loss layer(s) {causality_info['loss_before_adapter']} are BEFORE "
+            f"first adapter layer {causality_info['min_adapter_layer']}. "
+            f"In the forward pass, loss layers compute before adapters run, so hs_pi == hs_ref at these layers "
+            f"(projection loss gradients will be zero). HOWEVER, learning still occurs because:\n"
+            f"  1. Coherence loss (loss_coh) operates on OUTPUT LOGPROBS, computed AFTER all adapter layers\n"
+            f"  2. This provides gradients through the full network regardless of loss layer position\n"
+            f"  3. If you want projection loss to contribute, set loss_depths >= {config.depth_start} (first adapter layer)"
+        )
+    
+    # Log the actual module names for debugging
+    logger.debug(f"Adapter layers: {layer_selection.adapter_layer_names}")
+    logger.debug(f"Loss layers: {layer_selection.loss_layer_names}")
     
     # Compute steering vectors for data-aware adapter init (before adapter setup)
     if config.adapter_type == "innerpissa" and config.data_aware_init:

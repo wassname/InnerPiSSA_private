@@ -3,7 +3,7 @@
 import pytest
 from transformers import AutoModelForCausalLM
 
-from ipissa.peft_utils.layer_selection import compute_layer_selection
+from ipissa.peft_utils.layer_selection import compute_layer_selection, LayerSelection
 
 
 @pytest.fixture
@@ -34,6 +34,46 @@ def test_adapter_layers_disjoint_from_loss_layers(tiny_model):
         layer_num = int(match.group(1))
         assert layer_num in selection.adapter_layer_indices
         assert layer_num not in selection.loss_layer_indices
+
+
+def test_check_causality_detects_loss_before_adapter():
+    """Test that check_causality correctly identifies loss layers before adapter layers."""
+    # Case 1: Loss before adapter (has causality issue)
+    selection_before = LayerSelection(
+        adapter_layer_indices=[10, 15, 20],
+        loss_layer_indices=[1, 2],
+        adapter_layer_names=["model.layers.10.mlp.down_proj"],
+        loss_layer_names=["model.layers.1.mlp.down_proj"],
+    )
+    causality = selection_before.check_causality()
+    assert causality['has_causality_issue'] is True
+    assert causality['loss_before_adapter'] == [1, 2]
+    assert causality['loss_after_adapter'] == []
+    assert causality['min_adapter_layer'] == 10
+    
+    # Case 2: Loss after adapter (no causality issue)
+    selection_after = LayerSelection(
+        adapter_layer_indices=[5, 10, 15],
+        loss_layer_indices=[20],
+        adapter_layer_names=["model.layers.5.mlp.down_proj"],
+        loss_layer_names=["model.layers.20.mlp.down_proj"],
+    )
+    causality = selection_after.check_causality()
+    assert causality['has_causality_issue'] is False
+    assert causality['loss_before_adapter'] == []
+    assert causality['loss_after_adapter'] == [20]
+    
+    # Case 3: Mixed (some before, some after)
+    selection_mixed = LayerSelection(
+        adapter_layer_indices=[10, 15, 20],
+        loss_layer_indices=[5, 15, 25],
+        adapter_layer_names=["model.layers.10.mlp.down_proj"],
+        loss_layer_names=["model.layers.5.mlp.down_proj"],
+    )
+    causality = selection_mixed.check_causality()
+    assert causality['has_causality_issue'] is True
+    assert causality['loss_before_adapter'] == [5]
+    assert causality['loss_after_adapter'] == [15, 25]
 
 
 if __name__ == "__main__":
